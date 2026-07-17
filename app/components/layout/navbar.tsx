@@ -52,7 +52,7 @@ export function Navbar() {
 
       return () => window.removeEventListener("scroll", onScroll);
     },
-    { scope }
+    { scope },
   );
 
   return (
@@ -62,7 +62,7 @@ export function Navbar() {
         "sticky top-0 z-50 transition-colors duration-300",
         scrolled
           ? "border-b border-border bg-background/70 backdrop-blur-md"
-          : "border-b border-transparent bg-transparent"
+          : "border-b border-transparent bg-transparent",
       )}
     >
       <Container className="flex h-16 items-center justify-between gap-4">
@@ -82,13 +82,19 @@ export function Navbar() {
 
         {/* Right cluster — desktop */}
         <div data-nav-item className="hidden items-center gap-1.5 md:flex">
-          <LangToggle lang={lang} onToggle={() => setLang(lang === "ID" ? "EN" : "ID")} />
+          <LangToggle
+            lang={lang}
+            onToggle={() => setLang(lang === "ID" ? "EN" : "ID")}
+          />
           <Button size="sm">Login</Button>
         </div>
 
         {/* Mobile */}
         <div className="md:hidden">
-          <MobileMenu lang={lang} onToggleLang={() => setLang(lang === "ID" ? "EN" : "ID")} />
+          <MobileMenu
+            lang={lang}
+            onToggleLang={() => setLang(lang === "ID" ? "EN" : "ID")}
+          />
         </div>
       </Container>
     </header>
@@ -109,16 +115,8 @@ function NavItemLink({ href, label }: { href: string; label: string }) {
           <span
             aria-hidden
             className={cn(
-              "absolute inset-x-1.5 -bottom-0.5 -z-10 h-2/3 -rotate-1 rounded-md bg-brand-mint-soft transition-opacity duration-300",
-              isActive ? "opacity-100" : "opacity-0"
-            )}
-          />
-          {/* thin mint underline grows on hover for inactive links */}
-          <span
-            aria-hidden
-            className={cn(
-              "absolute inset-x-3 -bottom-0.5 h-px origin-left scale-x-0 bg-brand-mint transition-transform duration-300 ease-out group-hover:scale-x-100",
-              isActive && "hidden"
+              "absolute inset-x-1.5 bottom-1 -z-10 h-1/3 -rotate-1 rounded-md bg-brand-mint-soft transition-opacity duration-300",
+              isActive ? "opacity-100" : "opacity-0",
             )}
           />
           {label}
