@@ -55,6 +55,26 @@ function EmptyMedia({
   )
 }
 
+function EmptyIllustration({
+  className,
+  src = "/illustration/empty.svg",
+  alt = "Empty box with a cat",
+  ...props
+}: React.ComponentProps<"img">) {
+  return (
+    <img
+      data-slot="empty-illustration"
+      src={src}
+      alt={alt}
+      className={cn(
+        "pointer-events-none mb-2 aspect-square w-full max-w-55 select-none object-contain",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -101,4 +121,5 @@ export {
   EmptyDescription,
   EmptyContent,
   EmptyMedia,
+  EmptyIllustration,
 }
