@@ -7,6 +7,8 @@ import {
   ScrollRestoration,
 } from "react-router";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { Navbar } from "./components/layout/navbar";
+import { Footer } from "./components/layout/footer";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -21,7 +23,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          {/* Global site chrome — wraps every route. */}
+          <div className="flex min-h-screen flex-col">
+            <Navbar />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
+        </TooltipProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -50,7 +59,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="pt-16 p-4 container mx-auto">
+    <div className="pt-16 p-4 container mx-auto">
       <h1>{message}</h1>
       <p>{details}</p>
       {stack && (
@@ -58,6 +67,6 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
           <code>{stack}</code>
         </pre>
       )}
-    </main>
+    </div>
   );
 }
