@@ -67,7 +67,7 @@ function EmptyIllustration({
       src={src}
       alt={alt}
       className={cn(
-        "pointer-events-none mb-2 aspect-square w-full max-w-55 select-none object-contain",
+        "pointer-events-none mb-2 aspect-square w-full max-w-45 select-none object-contain",
         className
       )}
       {...props}

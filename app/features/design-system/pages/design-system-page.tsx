@@ -1,4 +1,4 @@
-import { InboxIcon, InfoIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { InfoIcon, PlusIcon, SearchIcon } from "lucide-react";
 
 import { Container } from "~/components/layout/container";
 import { Button } from "~/components/ui/button";
@@ -44,6 +44,7 @@ import {
   EmptyContent,
   EmptyDescription,
   EmptyHeader,
+  EmptyIllustration,
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
@@ -364,9 +365,7 @@ export function DesignSystemPage() {
             </div>
             <Empty className="rounded-xl border">
               <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <InboxIcon />
-                </EmptyMedia>
+                <EmptyIllustration />
                 <EmptyTitle>No tests yet</EmptyTitle>
                 <EmptyDescription>Start one to see it here.</EmptyDescription>
               </EmptyHeader>
