@@ -36,7 +36,6 @@ export function SessionActions({ grow = false }: { grow?: boolean }) {
     return (
       <Button
         variant="ghost"
-        size="sm"
         className={cn(grow && "flex-1")}
         disabled
       >
@@ -49,7 +48,6 @@ export function SessionActions({ grow = false }: { grow?: boolean }) {
   if (!session) {
     return (
       <Button
-        size="sm"
         className={cn(grow && "flex-1")}
         render={<Link to="/login" />}
       >
@@ -66,7 +64,6 @@ export function SessionActions({ grow = false }: { grow?: boolean }) {
       <Button
         type="button"
         variant="outline"
-        size="sm"
         className={cn(grow && "flex-1")}
         onClick={handleSignOut}
         disabled={isSigningOut}

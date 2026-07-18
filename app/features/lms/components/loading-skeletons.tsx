@@ -148,32 +148,70 @@ export function CoursesPageSkeleton() {
 export function CourseDetailPageSkeleton() {
   return (
     <LoadingRegion label="Memuat detail course">
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-8 lg:gap-10">
         <BreadcrumbSkeleton />
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end">
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-6 w-28 rounded-full" />
-            <Skeleton className="h-11 w-xl max-w-full" />
-            <Skeleton className="h-5 w-2xl max-w-full" />
-          </div>
-          <ActivityListSkeleton />
-        </div>
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_23rem]">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-44" />
-              <Skeleton className="h-4 w-64 max-w-full" />
-            </CardHeader>
-            <CardContent className="flex flex-col gap-5">
+
+        <div>
+          <Skeleton className="min-h-[28rem] rounded-3xl" />
+          <Card className="relative z-10 mx-4 -mt-8 sm:mx-8 lg:mx-12">
+            <CardContent className="grid grid-cols-2 p-0 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-16 w-full" />
+                <div
+                  key={index}
+                  className={`flex items-center gap-3 px-4 py-4 sm:px-5 ${
+                    index % 2 !== 0 ? "border-l" : ""
+                  } ${index >= 2 ? "border-t lg:border-t-0" : ""} ${index > 0 ? "lg:border-l" : ""}`}
+                >
+                  <Skeleton className="size-9 shrink-0 rounded-xl" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <Skeleton className="h-5 w-12" />
+                    <Skeleton className="h-3 w-full max-w-24" />
+                  </div>
+                </div>
               ))}
             </CardContent>
           </Card>
-          <div className="flex flex-col gap-5">
-            <ActivityListSkeleton />
-            <ActivityListSkeleton />
+        </div>
+
+        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_23rem] xl:gap-10">
+          <div className="flex min-w-0 flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-7 w-44" />
+              <Skeleton className="h-4 w-72 max-w-full" />
+            </div>
+            <Card>
+              <CardContent className="flex flex-col gap-5">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-4 border-b py-4 last:border-0">
+                    <Skeleton className="h-8 w-10 shrink-0" />
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                      <Skeleton className="h-4 w-2/3" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                    <Skeleton className="h-6 w-14 rounded-full" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-4 w-full max-w-64" />
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <Skeleton className="h-8 w-full rounded-lg" />
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="flex flex-col gap-3 border-b pb-4 last:border-0">
+                  <Skeleton className="h-4 w-4/5" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-8 w-full rounded-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </LoadingRegion>

@@ -21,16 +21,9 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "~/components/ui/field";
+import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
-import {
-  QuizAttempt,
-  QuizAttemptExpired,
-} from "../components/quiz-attempt";
+import { QuizAttempt, QuizAttemptExpired } from "../components/quiz-attempt";
 import type { QuizData } from "../types";
 import { formatDateTime } from "../lib/format";
 
@@ -65,7 +58,9 @@ export function QuizPage({
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink render={<Link to={`/courses/${loaderData.quiz.courseId}`} />}>
+            <BreadcrumbLink
+              render={<Link to={`/courses/${loaderData.quiz.courseId}`} />}
+            >
               {loaderData.quiz.courseName}
             </BreadcrumbLink>
           </BreadcrumbItem>
@@ -84,7 +79,9 @@ export function QuizPage({
             {formatDateTime(loaderData.quiz.dueAt)}
           </Badge>
           {loaderData.quiz.timeLimitMinutes && (
-            <Badge variant="outline">{loaderData.quiz.timeLimitMinutes} menit</Badge>
+            <Badge variant="outline">
+              {loaderData.quiz.timeLimitMinutes} menit
+            </Badge>
           )}
         </div>
         <h1 className="font-heading text-3xl font-semibold tracking-tight md:text-4xl">
@@ -109,8 +106,9 @@ export function QuizPage({
           <CardHeader>
             <CardTitle>Siap mulai?</CardTitle>
             <CardDescription className="max-w-xl">
-              Quiz terdiri dari {loaderData.questions.length} soal: {multipleChoiceCount} pilihan
-              ganda dan {shortAnswerCount} isian singkat. Quiz hanya bisa dikerjakan satu kali.
+              Quiz terdiri dari {loaderData.questions.length} soal:{" "}
+              {multipleChoiceCount} pilihan ganda dan {shortAnswerCount} isian
+              singkat. Quiz hanya bisa dikerjakan satu kali.
             </CardDescription>
             <CardAction>
               <img
@@ -139,10 +137,6 @@ export function QuizPage({
               <QuizStartUnavailable data={loaderData} />
             )}
           </CardContent>
-          <CardFooter className="flex-wrap gap-2">
-            <Badge variant="lavender">Satu soal per layar</Badge>
-            <Badge variant="mint">Navigator progres</Badge>
-          </CardFooter>
         </Card>
       ) : submitted ? (
         <QuizReview data={loaderData} />
@@ -264,13 +258,21 @@ function QuizReview({ data }: { data: QuizData }) {
         </AlertDescription>
       </Alert>
       {data.questions.map((question, index) => {
-        const answer = attempt.answers.find((item) => item.questionId === question.id);
-        const selected = question.options.find((option) => option.id === answer?.selectedOptionId);
+        const answer = attempt.answers.find(
+          (item) => item.questionId === question.id,
+        );
+        const selected = question.options.find(
+          (option) => option.id === answer?.selectedOptionId,
+        );
         const correct = question.options.find((option) => option.isCorrect);
         const studentAnswer =
-          question.type === "short_answer" ? answer?.textAnswer : selected?.label;
+          question.type === "short_answer"
+            ? answer?.textAnswer
+            : selected?.label;
         const correctAnswer =
-          question.type === "short_answer" ? question.correctAnswer : correct?.label;
+          question.type === "short_answer"
+            ? question.correctAnswer
+            : correct?.label;
         return (
           <Card key={question.id}>
             <CardHeader>
@@ -278,12 +280,18 @@ function QuizReview({ data }: { data: QuizData }) {
                 {index + 1}. {question.prompt}
               </CardTitle>
               <CardDescription>
-                {question.type === "multiple_choice" ? "Pilihan ganda" : "Isian singkat"} ·{" "}
-                {Number(question.points)} poin
+                {question.type === "multiple_choice"
+                  ? "Pilihan ganda"
+                  : "Isian singkat"}{" "}
+                · {Number(question.points)} poin
               </CardDescription>
               <CardAction>
                 <Badge variant={answer?.isCorrect ? "mint" : "destructive"}>
-                  {answer?.isCorrect ? <Check data-icon="inline-start" /> : <X data-icon="inline-start" />}
+                  {answer?.isCorrect ? (
+                    <Check data-icon="inline-start" />
+                  ) : (
+                    <X data-icon="inline-start" />
+                  )}
                   {answer?.isCorrect ? "Benar" : "Belum tepat"}
                 </Badge>
               </CardAction>
@@ -291,12 +299,16 @@ function QuizReview({ data }: { data: QuizData }) {
             <CardContent className="flex flex-col gap-3">
               <Field>
                 <FieldLabel>Jawabanmu</FieldLabel>
-                <FieldDescription>{studentAnswer ?? "Tidak dijawab"}</FieldDescription>
+                <FieldDescription>
+                  {studentAnswer ?? "Tidak dijawab"}
+                </FieldDescription>
               </Field>
               {!answer?.isCorrect && (
                 <Field>
                   <FieldLabel>Jawaban benar</FieldLabel>
-                  <FieldDescription>{correctAnswer ?? "Tidak tersedia"}</FieldDescription>
+                  <FieldDescription>
+                    {correctAnswer ?? "Tidak tersedia"}
+                  </FieldDescription>
                 </Field>
               )}
               {question.explanation && (

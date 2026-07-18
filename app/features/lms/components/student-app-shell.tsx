@@ -150,7 +150,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 flex h-16 items-center justify-between border-b bg-background/90 px-5 backdrop-blur-sm sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b bg-background px-5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <SidebarTrigger aria-label="Buka navigasi" />
             <div className="hidden min-w-0 sm:block">

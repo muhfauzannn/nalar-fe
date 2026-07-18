@@ -286,7 +286,6 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
                   onClick={() => setRetryToken((value) => value + 1)}
                 >
                   Coba lagi

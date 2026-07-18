@@ -200,7 +200,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
               </p>
             </div>
             {data.courses.length > 0 && (
-              <Button variant="ghost" size="sm" render={<Link to="/courses" />}>
+              <Button variant="ghost" render={<Link to="/courses" />}>
                 Lihat semua
                 <ArrowRight data-icon="inline-end" />
               </Button>

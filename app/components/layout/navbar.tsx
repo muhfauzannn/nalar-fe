@@ -141,7 +141,6 @@ function LangToggle({
   return (
     <Button
       variant="ghost"
-      size="sm"
       onClick={onToggle}
       aria-label={`Language: ${lang}. Switch language.`}
     >

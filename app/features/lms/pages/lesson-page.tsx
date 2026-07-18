@@ -117,7 +117,6 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                     {resource.url && (
                       <Button
                         variant="outline"
-                        size="sm"
                         render={
                           <a href={resource.url} target="_blank" rel="noreferrer" />
                         }

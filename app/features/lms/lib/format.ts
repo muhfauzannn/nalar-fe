@@ -27,5 +27,7 @@ export function sentenceStatus(value: string | null) {
     archived: "Diarsipkan",
     expired: "Waktu habis",
   };
-  return value ? (labels[value] ?? value.replaceAll("_", " ")) : "Belum dimulai";
+  return value
+    ? (labels[value] ?? value.replaceAll("_", " "))
+    : "Belum dimulai";
 }

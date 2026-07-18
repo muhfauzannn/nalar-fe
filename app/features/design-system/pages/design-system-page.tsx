@@ -361,7 +361,9 @@ export function DesignSystemPage() {
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-1/2" />
               <Separator className="my-2" />
-              <p className="text-sm text-muted-foreground">Loading placeholder</p>
+              <p className="text-sm text-muted-foreground">
+                Loading placeholder
+              </p>
             </div>
             <Empty className="rounded-xl border">
               <EmptyHeader>
@@ -390,9 +392,7 @@ export function DesignSystemPage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Delete test?</DialogTitle>
-                  <DialogDescription>
-                    This can't be undone.
-                  </DialogDescription>
+                  <DialogDescription>This can't be undone.</DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
                   <Button variant="destructive">Delete</Button>
@@ -401,7 +401,9 @@ export function DesignSystemPage() {
             </Dialog>
 
             <Popover>
-              <PopoverTrigger render={<Button variant="outline">Popover</Button>} />
+              <PopoverTrigger
+                render={<Button variant="outline">Popover</Button>}
+              />
               <PopoverContent>
                 <PopoverTitle>Quick tip</PopoverTitle>
                 <PopoverDescription>
