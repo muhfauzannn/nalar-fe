@@ -1,4 +1,4 @@
-import type { Route } from "./+types/design-system";
+import type { Route } from "./+types/_site.design-system";
 import { DesignSystemPage } from "~/features/design-system";
 
 export function meta(_: Route.MetaArgs) {

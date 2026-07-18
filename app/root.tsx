@@ -7,8 +7,6 @@ import {
   ScrollRestoration,
 } from "react-router";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { Navbar } from "./components/layout/navbar";
-import { Footer } from "./components/layout/footer";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -23,14 +21,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <TooltipProvider>
-          {/* Global site chrome — wraps every route. */}
-          <div className="flex min-h-screen flex-col">
-            <Navbar />
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </div>
-        </TooltipProvider>
+        {/*
+          Site chrome (Navbar/Footer) is NOT mounted here — it lives in the
+          `_site` pathless layout route so bare pages (e.g. the 404 splat
+          route) can opt out of it. Root only owns app-wide providers.
+        */}
+        <TooltipProvider>{children}</TooltipProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

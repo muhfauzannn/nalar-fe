@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { NavLink } from "react-router";
+import { Link, NavLink } from "react-router";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Languages, Menu } from "lucide-react";
@@ -86,7 +86,9 @@ export function Navbar() {
             lang={lang}
             onToggle={() => setLang(lang === "ID" ? "EN" : "ID")}
           />
-          <Button size="sm">Login</Button>
+          <Button size="sm" render={<Link to="/login" />}>
+            Login
+          </Button>
         </div>
 
         {/* Mobile */}
@@ -188,7 +190,7 @@ function MobileMenu({
             <Languages data-icon="inline-start" />
             {lang}
           </Button>
-          <Button size="sm" className="flex-1">
+          <Button size="sm" className="flex-1" render={<Link to="/login" />}>
             Login
           </Button>
         </div>

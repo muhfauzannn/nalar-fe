@@ -1,4 +1,4 @@
-import type { Route } from "./+types/_index";
+import type { Route } from "./+types/_site._index";
 import { getHomeContent, HomePage } from "~/features/home";
 import { siteConfig } from "~/config";
 
