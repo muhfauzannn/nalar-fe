@@ -1,4 +1,4 @@
-import { Check, Clock3, X } from "lucide-react";
+import { Check, Clock3, TimerOff, X } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -27,20 +27,34 @@ import {
   FieldLabel,
 } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
-import { QuizAttempt } from "../components/quiz-attempt";
+import {
+  QuizAttempt,
+  QuizAttemptExpired,
+} from "../components/quiz-attempt";
 import type { QuizData } from "../types";
 import { formatDateTime } from "../lib/format";
 
 export function QuizPage({
   data: loaderData,
   actionError,
+  actionCode,
 }: {
   data: QuizData;
   actionError?: string;
+  actionCode?: string;
 }) {
   const navigation = useNavigation();
   const working = navigation.state === "submitting";
   const submitted = loaderData.attempt?.status === "submitted";
+  const expired =
+    loaderData.attempt?.isExpired || actionCode === "QUIZ_ATTEMPT_EXPIRED";
+  const terminalActionError =
+    actionCode === "QUIZ_ATTEMPT_EXPIRED" ||
+    actionCode === "QUIZ_ATTEMPT_SUBMITTED" ||
+    actionCode === "QUIZ_ALREADY_STARTED" ||
+    actionCode === "QUIZ_ENROLLMENT_INACTIVE" ||
+    actionCode === "QUIZ_NOT_AVAILABLE" ||
+    actionCode === "QUIZ_NOT_READY";
   const multipleChoiceCount = loaderData.questions.filter(
     (question) => question.type === "multiple_choice",
   ).length;
@@ -83,7 +97,7 @@ export function QuizPage({
         )}
       </header>
 
-      {actionError && (
+      {actionError && !terminalActionError && (
         <Alert variant="destructive">
           <AlertTitle>Quiz belum dapat diproses</AlertTitle>
           <AlertDescription>{actionError}</AlertDescription>
@@ -122,12 +136,7 @@ export function QuizPage({
                 </Button>
               </Form>
             ) : (
-              <Alert>
-                <AlertTitle>Quiz belum dapat dimulai</AlertTitle>
-                <AlertDescription>
-                  Quiz belum tersedia, sudah ditutup, atau belum memiliki soal.
-                </AlertDescription>
-              </Alert>
+              <QuizStartUnavailable data={loaderData} />
             )}
           </CardContent>
           <CardFooter className="flex-wrap gap-2">
@@ -137,10 +146,107 @@ export function QuizPage({
         </Card>
       ) : submitted ? (
         <QuizReview data={loaderData} />
+      ) : expired ? (
+        <QuizAttemptExpired data={loaderData} message={actionError} />
+      ) : !loaderData.attempt.canContinue ? (
+        <QuizAttemptLocked data={loaderData} message={actionError} />
       ) : (
         <QuizAttempt data={loaderData} working={working} />
       )}
     </div>
+  );
+}
+
+function QuizAttemptLocked({
+  data,
+  message,
+}: {
+  data: QuizData;
+  message?: string;
+}) {
+  const readOnly = data.availability === "read_only";
+  const notReady = data.availability === "not_ready";
+  return (
+    <Card className="max-w-4xl">
+      <CardHeader>
+        <CardTitle>
+          {readOnly
+            ? "Quiz hanya dapat dilihat"
+            : notReady
+              ? "Quiz belum siap"
+              : "Quiz sudah ditutup"}
+        </CardTitle>
+        <CardDescription>
+          Attempt tidak dapat diubah atau dikumpulkan.
+        </CardDescription>
+        <CardAction>
+          <Badge variant="outline">Read-only</Badge>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <Alert>
+          <AlertTitle>Progres dikunci</AlertTitle>
+          <AlertDescription>
+            {message ??
+              `${data.attempt?.answers.length ?? 0} jawaban tersimpan. Hubungi pengajar jika status ini tidak sesuai.`}
+          </AlertDescription>
+        </Alert>
+      </CardContent>
+      <CardFooter>
+        <Button render={<Link to={`/courses/${data.quiz.courseId}`} />}>
+          Kembali ke course
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+function QuizStartUnavailable({ data }: { data: QuizData }) {
+  if (data.availability === "upcoming") {
+    return (
+      <Alert>
+        <Clock3 />
+        <AlertTitle>Quiz belum tersedia</AlertTitle>
+        <AlertDescription>
+          Dapat dimulai pada {formatDateTime(data.quiz.availableAt)}.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  if (data.availability === "closed") {
+    return (
+      <Alert variant="destructive">
+        <TimerOff />
+        <AlertTitle>Quiz sudah ditutup</AlertTitle>
+        <AlertDescription>Attempt baru tidak dapat dimulai.</AlertDescription>
+      </Alert>
+    );
+  }
+  if (data.availability === "read_only") {
+    return (
+      <Alert>
+        <AlertTitle>Course hanya dapat dilihat</AlertTitle>
+        <AlertDescription>
+          Enrollment tidak aktif sehingga quiz tidak dapat dimulai.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  if (data.availability === "not_ready") {
+    return (
+      <Alert>
+        <AlertTitle>Quiz belum siap</AlertTitle>
+        <AlertDescription>
+          Konfigurasi soal belum lengkap. Coba lagi setelah diperbarui pengajar.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  return (
+    <Alert>
+      <AlertTitle>Quiz belum siap</AlertTitle>
+      <AlertDescription>Belum ada soal yang dapat dikerjakan.</AlertDescription>
+    </Alert>
   );
 }
 

@@ -9,6 +9,7 @@ export class HttpError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = "HttpError";
@@ -23,12 +24,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const payload = (await res.json().catch(() => null)) as { error?: unknown } | null;
+    const payload = (await res.json().catch(() => null)) as {
+      error?: unknown;
+      code?: unknown;
+    } | null;
     const message =
       typeof payload?.error === "string"
         ? payload.error
         : `Request failed: ${res.status} ${path}`;
-    throw new HttpError(res.status, message);
+    throw new HttpError(
+      res.status,
+      message,
+      typeof payload?.code === "string" ? payload.code : undefined,
+    );
   }
 
   // 204 No Content

@@ -78,6 +78,7 @@ export type CourseData = {
     status: string;
     timeLimitMinutes: number | null;
     attemptStatus: string | null;
+    attemptStartedAt: string | null;
     score: string | null;
   }>;
   announcements: Array<{
@@ -160,6 +161,22 @@ export type QuizAnswerSaveResult = {
   savedAt?: string;
 };
 
+export type QuizErrorCode =
+  | "QUIZ_NOT_FOUND"
+  | "QUIZ_ENROLLMENT_INACTIVE"
+  | "QUIZ_NOT_AVAILABLE"
+  | "QUIZ_ALREADY_STARTED"
+  | "QUIZ_EMPTY"
+  | "QUIZ_NOT_READY"
+  | "QUIZ_ATTEMPT_NOT_FOUND"
+  | "QUIZ_ATTEMPT_SUBMITTED"
+  | "QUIZ_ATTEMPT_EXPIRED"
+  | "QUIZ_QUESTION_INVALID"
+  | "QUIZ_ANSWER_INVALID"
+  | "QUIZ_ANSWERS_INCOMPLETE"
+  | "QUIZ_START_CONFLICT"
+  | "QUIZ_SUBMIT_CONFLICT";
+
 export type QuizData = {
   quiz: {
     id: string;
@@ -194,7 +211,17 @@ export type QuizData = {
     score: string | null;
     startedAt: string;
     submittedAt: string | null;
+    expiresAt: string | null;
+    isExpired: boolean;
+    remainingSeconds: number | null;
+    canContinue: boolean;
     answers: QuizAnswer[];
   };
+  availability:
+    | "available"
+    | "upcoming"
+    | "closed"
+    | "read_only"
+    | "not_ready";
   canStart: boolean;
 };

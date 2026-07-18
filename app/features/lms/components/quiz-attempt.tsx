@@ -13,8 +13,11 @@ import {
   CircleAlert,
   CloudCheck,
   ClipboardCheck,
+  Clock3,
+  RefreshCw,
+  TimerOff,
 } from "lucide-react";
-import { Form, useFetcher } from "react-router";
+import { Form, Link, useFetcher, useRevalidator } from "react-router";
 
 import {
   Alert,
@@ -60,7 +63,18 @@ type SaveAnswerActionData = {
   savedAt?: string;
   questionId?: string | null;
   error?: string;
+  code?: string;
 };
+type BlockingError = { code: string; message: string };
+
+const terminalAttemptCodes = new Set([
+  "QUIZ_ATTEMPT_EXPIRED",
+  "QUIZ_ATTEMPT_SUBMITTED",
+  "QUIZ_ATTEMPT_NOT_FOUND",
+  "QUIZ_ENROLLMENT_INACTIVE",
+  "QUIZ_NOT_AVAILABLE",
+  "QUIZ_NOT_READY",
+]);
 
 function savedAnswerValue(data: QuizData, question: QuizQuestion) {
   const savedAnswer = data.attempt?.answers.find(
@@ -85,8 +99,37 @@ function hasAnswer(answers: Record<string, string>, questionId: string) {
   return Boolean(answers[questionId]?.trim());
 }
 
+function useAttemptRemainingSeconds(initialSeconds: number | null) {
+  const [remainingSeconds, setRemainingSeconds] = useState(initialSeconds);
+  const deadlineRef = useRef(
+    initialSeconds === null ? null : Date.now() + initialSeconds * 1_000,
+  );
+
+  useEffect(() => {
+    deadlineRef.current =
+      initialSeconds === null ? null : Date.now() + initialSeconds * 1_000;
+    setRemainingSeconds(initialSeconds);
+  }, [initialSeconds]);
+
+  useEffect(() => {
+    if (deadlineRef.current === null) return;
+
+    const updateRemaining = () => {
+      const deadline = deadlineRef.current;
+      if (deadline === null) return;
+      setRemainingSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1_000)));
+    };
+    updateRemaining();
+    const interval = window.setInterval(updateRemaining, 1_000);
+    return () => window.clearInterval(interval);
+  }, [initialSeconds]);
+
+  return remainingSeconds;
+}
+
 export function QuizAttempt({ data, working }: { data: QuizData; working: boolean }) {
   const attempt = data.attempt;
+  const revalidator = useRevalidator();
   const [answers, setAnswers] = useState<Record<string, string>>(() => initialAnswerMap(data));
   const [saveStatuses, setSaveStatuses] = useState<Record<string, SaveStatus>>(() =>
     Object.fromEntries(
@@ -97,6 +140,11 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
     ),
   );
   const [retryToken, setRetryToken] = useState(0);
+  const [blockingError, setBlockingError] = useState<BlockingError | null>(null);
+  const revalidatedCode = useRef<string | null>(null);
+  const remainingSeconds = useAttemptRemainingSeconds(
+    attempt?.remainingSeconds ?? null,
+  );
   const [activeStep, setActiveStep] = useState(() => {
     const savedAnswers = initialAnswerMap(data);
     const firstUnanswered = data.questions.findIndex(
@@ -105,7 +153,65 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
     return firstUnanswered === -1 ? data.questions.length : firstUnanswered;
   });
 
+  const updateSaveStatus = useCallback((questionId: string, status: SaveStatus) => {
+    setSaveStatuses((current) =>
+      current[questionId] === status
+        ? current
+        : { ...current, [questionId]: status },
+    );
+  }, []);
+
+  const handleBlocked = useCallback((error: BlockingError) => {
+    setBlockingError(error);
+  }, []);
+
+  useEffect(() => {
+    if (!blockingError || revalidatedCode.current === blockingError.code) return;
+    revalidatedCode.current = blockingError.code;
+    void revalidator.revalidate();
+  }, [blockingError, revalidator]);
+
   if (!attempt) return null;
+  if (
+    attempt.isExpired ||
+    remainingSeconds === 0 ||
+    blockingError?.code === "QUIZ_ATTEMPT_EXPIRED"
+  ) {
+    const savedAnswerCount = data.questions.filter(
+      (question) =>
+        hasAnswer(answers, question.id) &&
+        saveStatuses[question.id] === "saved",
+    ).length;
+    return (
+      <QuizAttemptExpired
+        data={data}
+        message={blockingError?.message}
+        savedAnswerCount={savedAnswerCount}
+      />
+    );
+  }
+  if (blockingError) {
+    return (
+      <Card className="max-w-4xl">
+        <CardHeader>
+          <CardTitle>Attempt tidak lagi aktif</CardTitle>
+          <CardDescription>{blockingError.message}</CardDescription>
+          <CardAction>
+            <Badge variant="destructive">Ditutup</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <RefreshCw />
+            <AlertTitle>Memperbarui status quiz</AlertTitle>
+            <AlertDescription>
+              Halaman sedang menyinkronkan status terbaru dari server.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const questionCount = data.questions.length;
   const reviewStep = questionCount;
@@ -118,14 +224,6 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
     (question) => !hasAnswer(answers, question.id),
   );
   const hasSaveError = Object.values(saveStatuses).includes("error");
-
-  const updateSaveStatus = useCallback((questionId: string, status: SaveStatus) => {
-    setSaveStatuses((current) =>
-      current[questionId] === status
-        ? current
-        : { ...current, [questionId]: status },
-    );
-  }, []);
 
   function updateAnswer(questionId: string, value: string) {
     setAnswers((current) => ({ ...current, [questionId]: value }));
@@ -171,6 +269,7 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
           initialValue={savedAnswerValue(data, question)}
           retryToken={retryToken}
           onStatusChange={updateSaveStatus}
+          onBlocked={handleBlocked}
         />
       ))}
 
@@ -232,11 +331,58 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
           activeStep={activeStep}
           answeredCount={answeredCount}
           saveStatuses={saveStatuses}
+          remainingSeconds={remainingSeconds}
           onSelectQuestion={goToQuestion}
           onReview={() => setActiveStep(reviewStep)}
         />
       </div>
     </Form>
+  );
+}
+
+export function QuizAttemptExpired({
+  data,
+  message,
+  savedAnswerCount: savedAnswerCountProp,
+}: {
+  data: QuizData;
+  message?: string;
+  savedAnswerCount?: number;
+}) {
+  const savedAnswerCount =
+    savedAnswerCountProp ?? data.attempt?.answers.length ?? 0;
+
+  return (
+    <Card className="max-w-4xl">
+      <CardHeader>
+        <CardTitle>Waktu pengerjaan berakhir</CardTitle>
+        <CardDescription>
+          Attempt ditutup otomatis saat mencapai batas waktu.
+        </CardDescription>
+        <CardAction>
+          <Badge variant="destructive">
+            <TimerOff data-icon="inline-start" />
+            Waktu habis
+          </Badge>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <Alert variant="destructive">
+          <TimerOff />
+          <AlertTitle>Quiz tidak dapat dilanjutkan</AlertTitle>
+          <AlertDescription>
+            {message ??
+              `${savedAnswerCount} jawaban sempat tersimpan, tetapi attempt tidak dapat dikumpulkan setelah batas waktu.`}
+          </AlertDescription>
+        </Alert>
+      </CardContent>
+      <CardFooter>
+        <Button render={<Link to={`/courses/${data.quiz.courseId}`} />}>
+          <ArrowLeft data-icon="inline-start" />
+          Kembali ke course
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -247,6 +393,7 @@ function QuizAnswerAutosave({
   initialValue,
   retryToken,
   onStatusChange,
+  onBlocked,
 }: {
   attemptId: string;
   question: QuizQuestion;
@@ -254,6 +401,7 @@ function QuizAnswerAutosave({
   initialValue: string;
   retryToken: number;
   onStatusChange: (questionId: string, status: SaveStatus) => void;
+  onBlocked: (error: BlockingError) => void;
 }) {
   const fetcher = useFetcher<SaveAnswerActionData>();
   const lastSavedValue = useRef(normalizedAnswerValue(question, initialValue));
@@ -279,6 +427,13 @@ function QuizAnswerAutosave({
 
     if (fetcher.data?.error) {
       failedValue.current = submittedValue;
+      if (
+        fetcher.data.code &&
+        terminalAttemptCodes.has(fetcher.data.code)
+      ) {
+        onBlocked({ code: fetcher.data.code, message: fetcher.data.error });
+        return;
+      }
       onStatusChange(question.id, "error");
       return;
     }
@@ -287,7 +442,7 @@ function QuizAnswerAutosave({
       failedValue.current = null;
       onStatusChange(question.id, "saved");
     }
-  }, [fetcher.data, fetcher.state, onStatusChange, question.id]);
+  }, [fetcher.data, fetcher.state, onBlocked, onStatusChange, question.id]);
 
   useEffect(() => {
     if (
@@ -473,6 +628,7 @@ function QuizNavigator({
   activeStep,
   answeredCount,
   saveStatuses,
+  remainingSeconds,
   onSelectQuestion,
   onReview,
 }: {
@@ -481,6 +637,7 @@ function QuizNavigator({
   activeStep: number;
   answeredCount: number;
   saveStatuses: Record<string, SaveStatus>;
+  remainingSeconds: number | null;
   onSelectQuestion: (index: number) => void;
   onReview: () => void;
 }) {
@@ -506,6 +663,12 @@ function QuizNavigator({
               <Badge variant="mint">
                 {answeredCount}/{questions.length} terjawab
               </Badge>
+              {remainingSeconds !== null && (
+                <Badge variant={remainingSeconds <= 60 ? "destructive" : "outline"}>
+                  <Clock3 data-icon="inline-start" />
+                  {formatRemainingTime(remainingSeconds)}
+                </Badge>
+              )}
               <QuizSaveStatus status={progressSaveStatus} />
             </div>
           </CardAction>
@@ -561,6 +724,16 @@ function QuizNavigator({
       </Card>
     </aside>
   );
+}
+
+function formatRemainingTime(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds]
+    .filter((_, index) => hours > 0 || index > 0)
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
 }
 
 function QuizAnswerReview({

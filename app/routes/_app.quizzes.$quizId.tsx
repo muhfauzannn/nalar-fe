@@ -29,7 +29,11 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
       const attemptId = formData.get("attemptId");
       const questionId = formData.get("questionId");
       if (typeof attemptId !== "string" || typeof questionId !== "string") {
-        return { error: "Jawaban tidak dapat disimpan.", questionId: null };
+        return {
+          error: "Jawaban tidak dapat disimpan.",
+          code: "QUIZ_ANSWER_INVALID" as const,
+          questionId: null,
+        };
       }
 
       if (intent === "delete-answer") {
@@ -44,7 +48,11 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
       const questionType = formData.get("questionType");
       const value = formData.get("answer");
       if (typeof value !== "string" || !value.trim()) {
-        return { error: "Jawaban kosong tidak dapat disimpan.", questionId };
+        return {
+          error: "Jawaban kosong tidak dapat disimpan.",
+          code: "QUIZ_ANSWER_INVALID" as const,
+          questionId,
+        };
       }
       const answer: QuizAnswerSubmission =
         questionType === "multiple_choice"
@@ -57,7 +65,12 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
       const questionIds = formData
         .getAll("questionId")
         .filter((value): value is string => typeof value === "string");
-      if (typeof attemptId !== "string") return { error: "Attempt quiz tidak valid." };
+      if (typeof attemptId !== "string") {
+        return {
+          error: "Attempt quiz tidak valid.",
+          code: "QUIZ_ATTEMPT_NOT_FOUND" as const,
+        };
+      }
       const answers: QuizAnswerSubmission[] = [];
       for (const questionId of questionIds) {
         const questionType = formData.get(`questionType:${questionId}`);
@@ -70,7 +83,10 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
           answers.push({ questionId, textAnswer: value.trim() });
           continue;
         }
-        return { error: "Jawab semua soal sebelum mengumpulkan quiz." };
+        return {
+          error: "Jawab semua soal sebelum mengumpulkan quiz.",
+          code: "QUIZ_ANSWERS_INCOMPLETE" as const,
+        };
       }
       await studentApi.submitQuiz(request, attemptId, answers);
     }
@@ -81,6 +97,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
       const questionId = formData.get("questionId");
       return {
         error: error.message,
+        code: error.code,
         questionId: typeof questionId === "string" ? questionId : null,
       };
     }
@@ -88,7 +105,14 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
       const questionId = formData.get("questionId");
       return {
         error: "Koneksi terputus. Jawaban belum tersimpan.",
+        code: undefined,
         questionId: typeof questionId === "string" ? questionId : null,
+      };
+    }
+    if (error instanceof TypeError) {
+      return {
+        error: "Koneksi terputus. Perubahan belum diproses.",
+        code: undefined,
       };
     }
     throw error;
@@ -114,5 +138,11 @@ export function meta(_: Route.MetaArgs) {
 
 export default function QuizRoute({ loaderData }: Route.ComponentProps) {
   const actionData = useActionData<typeof clientAction>();
-  return <QuizPage data={loaderData} actionError={actionData?.error} />;
+  return (
+    <QuizPage
+      data={loaderData}
+      actionError={actionData?.error}
+      actionCode={actionData?.code}
+    />
+  );
 }
