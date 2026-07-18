@@ -1,7 +1,7 @@
 import type { Config } from "@react-router/dev/config";
 
 export default {
-  // Config options...
-  // Server-side render by default, to enable SPA mode set this to `false`
+  // Keep SSR for public/SEO routes. Authenticated `_app*` routes opt into
+  // CSR individually with clientLoader/clientAction + HydrateFallback.
   ssr: true,
 } satisfies Config;

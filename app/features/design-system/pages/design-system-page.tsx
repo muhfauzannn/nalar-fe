@@ -72,7 +72,7 @@ import {
 
 import { Row, Section } from "../components/section";
 import { Swatch } from "../components/swatch";
-import { ThemeToggle } from "../components/theme-toggle";
+import { ThemeToggle } from "~/components/layout/theme-toggle";
 
 const SEMANTIC_TOKENS = [
   { name: "background", className: "bg-background" },

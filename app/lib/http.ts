@@ -18,12 +18,17 @@ export class HttpError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${env.apiUrl}${path}`, {
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    headers: { "Content-Type": "application/json", ...init?.headers },
   });
 
   if (!res.ok) {
-    throw new HttpError(res.status, `Request failed: ${res.status} ${path}`);
+    const payload = (await res.json().catch(() => null)) as { error?: unknown } | null;
+    const message =
+      typeof payload?.error === "string"
+        ? payload.error
+        : `Request failed: ${res.status} ${path}`;
+    throw new HttpError(res.status, message);
   }
 
   // 204 No Content
@@ -43,3 +48,8 @@ export const http = {
   delete: <T>(path: string, init?: RequestInit) =>
     request<T>(path, { ...init, method: "DELETE" }),
 };
+
+export function forwardedRequestInit(request: Request): RequestInit {
+  const cookie = request.headers.get("cookie");
+  return cookie ? { headers: { cookie } } : {};
+}

@@ -8,12 +8,15 @@ export type NavItem = {
   href: string;
 };
 
-/** Primary top-nav links (centered in the navbar). */
+/** Public top-nav links shown before a student signs in. */
 export const mainNav: readonly NavItem[] = [
-  { label: "Home", href: "/" },
-  { label: "About Us", href: "/about" },
-  { label: "Features", href: "/features" },
-  { label: "Blog", href: "/blog" },
+  { label: "Beranda", href: "/" },
+] as const;
+
+/** Primary student navigation shared by the public navbar and LMS shell. */
+export const studentNav: readonly NavItem[] = [
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Course saya", href: "/courses" },
 ] as const;
 
 /** Footer link columns — three groups beside the brand block. */

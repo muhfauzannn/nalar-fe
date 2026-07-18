@@ -4,7 +4,7 @@ import { MoonIcon, SunIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
-/** Client-side light/dark preview toggle (not persisted — this is a preview page). */
+/** Client-side light/dark toggle for shared application chrome. */
 export function ThemeToggle() {
   const [dark, setDark] = useState(false);
 

@@ -16,7 +16,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/components/ui/sheet";
-import { mainNav } from "~/config";
+import { mainNav, studentNav, type NavItem } from "~/config";
+import { useSession } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 
 /**
@@ -31,6 +32,8 @@ export function Navbar() {
   const scope = useRef<HTMLElement>(null);
   const [scrolled, setScrolled] = useState(false);
   const [lang, setLang] = useState<"ID" | "EN">("ID");
+  const { data: session } = useSession();
+  const navigation = session ? studentNav : mainNav;
 
   useGSAP(
     () => {
@@ -76,7 +79,7 @@ export function Navbar() {
           aria-label="Primary"
           className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex"
         >
-          {mainNav.map((item) => (
+          {navigation.map((item) => (
             <NavItemLink key={item.href} href={item.href} label={item.label} />
           ))}
         </nav>
@@ -93,6 +96,7 @@ export function Navbar() {
         {/* Mobile */}
         <div className="md:hidden">
           <MobileMenu
+            navigation={navigation}
             lang={lang}
             onToggleLang={() => setLang(lang === "ID" ? "EN" : "ID")}
           />
@@ -148,9 +152,11 @@ function LangToggle({
 }
 
 function MobileMenu({
+  navigation,
   lang,
   onToggleLang,
 }: {
+  navigation: readonly NavItem[];
   lang: "ID" | "EN";
   onToggleLang: () => void;
 }) {
@@ -169,7 +175,7 @@ function MobileMenu({
           <Brand />
         </SheetHeader>
         <nav aria-label="Primary" className="mt-2 flex flex-col px-4">
-          {mainNav.map((item) => (
+          {navigation.map((item) => (
             <SheetClose
               key={item.href}
               render={
