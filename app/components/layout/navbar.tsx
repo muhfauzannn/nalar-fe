@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
-import { Link, NavLink } from "react-router";
+import { NavLink } from "react-router";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Languages, Menu } from "lucide-react";
 
 import { Brand } from "./brand";
 import { Container } from "./container";
+import { SessionActions } from "./session-actions";
 import { Button } from "~/components/ui/button";
 import {
   Sheet,
@@ -86,9 +87,7 @@ export function Navbar() {
             lang={lang}
             onToggle={() => setLang(lang === "ID" ? "EN" : "ID")}
           />
-          <Button size="sm" render={<Link to="/login" />}>
-            Login
-          </Button>
+          <SessionActions />
         </div>
 
         {/* Mobile */}
@@ -190,9 +189,7 @@ function MobileMenu({
             <Languages data-icon="inline-start" />
             {lang}
           </Button>
-          <Button size="sm" className="flex-1" render={<Link to="/login" />}>
-            Login
-          </Button>
+          <SessionActions grow />
         </div>
       </SheetContent>
     </Sheet>

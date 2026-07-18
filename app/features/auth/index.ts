@@ -5,3 +5,9 @@
 export { AuthShell } from "./components/auth-shell";
 export { LoginPage } from "./pages/login-page";
 export { RegisterPage } from "./pages/register-page";
+export {
+  continueWithGoogle,
+  loginWithEmail,
+  registerWithEmail,
+} from "./api/auth";
+export type { AuthActionData, AuthSubmission } from "./types";

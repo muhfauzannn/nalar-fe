@@ -1,20 +1,39 @@
-import { Link } from "react-router";
+import { Form } from "react-router";
+import { CircleAlert } from "lucide-react";
 
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { Checkbox } from "~/components/ui/checkbox";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "~/components/ui/field";
+import { Input } from "~/components/ui/input";
+import { Spinner } from "~/components/ui/spinner";
 import { AuthLink } from "../components/auth-shell";
 import { AuthFormPanel } from "../components/auth-form-panel";
+import { GoogleAuthButton } from "../components/google-auth-button";
 import { PasswordField } from "../components/password-field";
-import { SocialAuth } from "../components/social-auth";
+import type { AuthActionData, AuthSubmission } from "../types";
 
 /**
- * Login page for the `auth` feature. Renders only the form column — the shared
- * illustration chrome is owned by the `_auth` layout. Static UI only: the form
- * does not submit anywhere yet (`preventDefault`); wire a route `action` later.
+ * Login page for the `auth` feature. Submission is handled by the route's
+ * browser-side action so Better Auth can set its cross-origin session cookie.
  */
-export function LoginPage() {
+export function LoginPage({
+  actionData,
+  submission,
+}: {
+  actionData?: AuthActionData;
+  submission: AuthSubmission;
+}) {
+  const isSubmitting = submission !== null;
+  const emailError = actionData?.fieldErrors?.email;
+  const passwordError = actionData?.fieldErrors?.password;
+
   return (
     <AuthFormPanel
       title="Selamat datang kembali"
@@ -25,42 +44,78 @@ export function LoginPage() {
         </>
       }
     >
-      <SocialAuth label="Lanjutkan dengan Google" />
+      <FieldGroup>
+        {actionData?.formError ? (
+          <Alert variant="destructive">
+            <CircleAlert />
+            <AlertDescription>{actionData.formError}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      <form className="mt-6 flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="nama@email.com"
+        <Form method="post">
+          <GoogleAuthButton
+            label="Lanjutkan dengan Google"
+            disabled={isSubmitting}
+            isLoading={submission === "google"}
           />
-        </div>
+        </Form>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Kata sandi</Label>
-            <Link
-              to="/forgot-password"
-              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              Lupa kata sandi?
-            </Link>
-          </div>
-          <PasswordField id="password" autoComplete="current-password" />
-        </div>
+        <FieldSeparator>atau</FieldSeparator>
 
-        <Label htmlFor="remember" className="mt-1">
-          <Checkbox id="remember" name="remember" />
-          <span className="text-muted-foreground">Ingat saya</span>
-        </Label>
+        <Form method="post" className="flex flex-col gap-5">
+          <FieldGroup>
+            <Field data-invalid={Boolean(emailError)}>
+              <FieldLabel htmlFor="email">Email</FieldLabel>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="nama@email.com"
+                required
+                aria-invalid={Boolean(emailError)}
+                disabled={isSubmitting}
+              />
+              <FieldError>{emailError}</FieldError>
+            </Field>
 
-        <Button type="submit" size="lg" className="mt-2 w-full">
-          Masuk
-        </Button>
-      </form>
+            <Field data-invalid={Boolean(passwordError)}>
+              <FieldLabel htmlFor="password">Kata sandi</FieldLabel>
+              <PasswordField
+                id="password"
+                autoComplete="current-password"
+                required
+                minLength={8}
+                maxLength={128}
+                aria-invalid={Boolean(passwordError)}
+                disabled={isSubmitting}
+              />
+              <FieldError>{passwordError}</FieldError>
+            </Field>
+          </FieldGroup>
+
+          <Field orientation="horizontal">
+            <Checkbox id="remember" name="remember" disabled={isSubmitting} />
+            <FieldLabel htmlFor="remember" className="text-muted-foreground">
+              Ingat saya
+            </FieldLabel>
+          </Field>
+
+          <Button
+            type="submit"
+            name="intent"
+            value="email"
+            size="lg"
+            className="w-full"
+            disabled={isSubmitting}
+          >
+            {submission === "email" ? (
+              <Spinner data-icon="inline-start" />
+            ) : null}
+            {submission === "email" ? "Memproses" : "Masuk"}
+          </Button>
+        </Form>
+      </FieldGroup>
     </AuthFormPanel>
   );
 }

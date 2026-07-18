@@ -18,23 +18,6 @@ import { Brand } from "~/components/layout/brand";
 export function AuthShell({ children }: { children: ReactNode }) {
   const scope = useRef<HTMLDivElement>(null);
 
-  useGSAP(
-    () => {
-      const mm = gsap.matchMedia();
-      mm.add("(prefers-reduced-motion: no-preference)", () => {
-        // Gentle, endless float on the (persistent) illustration.
-        gsap.to("[data-auth-art]", {
-          y: -10,
-          duration: 3,
-          ease: "sine.inOut",
-          repeat: -1,
-          yoyo: true,
-        });
-      });
-    },
-    { scope },
-  );
-
   return (
     <div ref={scope} className="grid min-h-screen lg:grid-cols-2">
       {/* Brand panel — desktop only, persists across auth routes */}
@@ -73,7 +56,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
 }
 
 /** Inline link used in the auth footer switch line. */
-export function AuthLink({ to, children }: { to: string; children: ReactNode }) {
+export function AuthLink({
+  to,
+  children,
+}: {
+  to: string;
+  children: ReactNode;
+}) {
   return (
     <Link
       to={to}

@@ -8,6 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { cn } from "~/lib/utils";
 
 /**
  * Password input with a show/hide toggle. Local UI state only — no auth logic.
@@ -16,12 +17,14 @@ import {
  */
 export function PasswordField({
   id,
+  name = id,
   autoComplete = "current-password",
   placeholder = "••••••••",
-}: {
+  className,
+  disabled,
+  ...props
+}: Omit<React.ComponentProps<typeof Input>, "type"> & {
   id: string;
-  autoComplete?: string;
-  placeholder?: string;
 }) {
   const [show, setShow] = useState(false);
 
@@ -29,11 +32,13 @@ export function PasswordField({
     <div className="relative">
       <Input
         id={id}
-        name={id}
+        name={name}
         type={show ? "text" : "password"}
         autoComplete={autoComplete}
         placeholder={placeholder}
-        className="pr-10"
+        className={cn("pr-10", className)}
+        disabled={disabled}
+        {...props}
       />
       <Tooltip>
         <TooltipTrigger
@@ -43,8 +48,9 @@ export function PasswordField({
               variant="ghost"
               size="icon-sm"
               onClick={() => setShow((v) => !v)}
+              disabled={disabled}
               aria-label={show ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
-              className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground"
+              className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground active:not-aria-[haspopup]:-translate-y-1/2"
             >
               {show ? <EyeOff /> : <Eye />}
             </Button>

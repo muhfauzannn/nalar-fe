@@ -6,16 +6,27 @@
  * receive plain data, never fetch it themselves.
  */
 export interface HomeContent {
-  title: string;
-  description: string;
+  hero: {
+    /** Headline. `{highlight}` marks the phrase drawn over the mint motif. */
+    title: string;
+    highlight: string;
+    titleTail: string;
+    description: string;
+    cta: { label: string; href: string };
+  };
 }
 
 export async function getHomeContent(): Promise<HomeContent> {
   // Placeholder. Replace with a real `http.get<HomeContent>("/home")` call
   // (see `~/lib/http`) once the backend endpoint exists.
   return {
-    title: "Bernalar",
-    description:
-      "A structured, maintainable React Router starter with a feature-based architecture and shadcn/ui.",
+    hero: {
+      title: "Pakai AI",
+      highlight: "Tanpa Kehilangan",
+      titleTail: "Cara Berpikirmu.",
+      description:
+        "NALAR memandu siswa lewat 5 tahap terstruktur — bukan sekadar mengecek kemiripan teks — supaya guru bisa melihat proses berpikir siswa yang sebenarnya, bukan cuma hasil akhirnya.",
+      cta: { label: "Daftar Sekarang", href: "/register" },
+    },
   };
 }
