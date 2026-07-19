@@ -111,6 +111,7 @@ function NavItemLink({ href, label }: { href: string; label: string }) {
     <NavLink
       to={href}
       end={href === "/"}
+      prefetch="intent"
       data-nav-item
       className="group relative px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:text-foreground"
     >
@@ -181,6 +182,7 @@ function MobileMenu({
                 <NavLink
                   to={item.href}
                   end={item.href === "/"}
+                  prefetch="intent"
                   className="border-b border-border/60 py-3 text-base font-medium text-foreground/80 transition-colors hover:text-foreground aria-[current=page]:text-foreground"
                 >
                   {item.label}
