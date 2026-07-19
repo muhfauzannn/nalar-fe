@@ -125,6 +125,9 @@ export type AssignmentData = {
   closesAt: string | null;
   courseId: string;
   courseName: string;
+  availability: "available" | "upcoming" | "closed" | "read_only";
+  canStart: boolean;
+  canContinue: boolean;
   criteria: Array<{
     id: string;
     label: string;
@@ -142,6 +145,18 @@ export type AssignmentData = {
     assessment: null | { score: string; feedback: string | null };
   };
 };
+
+export type AssignmentErrorCode =
+  | "ASSIGNMENT_NOT_FOUND"
+  | "ASSIGNMENT_ENROLLMENT_INACTIVE"
+  | "ASSIGNMENT_NOT_AVAILABLE"
+  | "ASSIGNMENT_SUBMISSION_NOT_FOUND"
+  | "ASSIGNMENT_SUBMISSION_SUBMITTED"
+  | "ASSIGNMENT_SUBMISSION_EXPIRED"
+  | "ASSIGNMENT_STAGE_INVALID"
+  | "ASSIGNMENT_STAGE_OUT_OF_ORDER"
+  | "ASSIGNMENT_CONTENT_INVALID"
+  | "ASSIGNMENT_SUBMIT_CONFLICT";
 
 export type QuizAnswer = {
   questionId: string;

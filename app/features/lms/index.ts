@@ -2,10 +2,12 @@ export { studentApi } from "./api/student";
 export { StudentAppShell } from "./components/student-app-shell";
 export {
   ActivityPageSkeleton,
+  AssignmentPageSkeleton,
   CourseDetailPageSkeleton,
   CoursesPageSkeleton,
   DashboardPageSkeleton,
   LessonPageSkeleton,
+  QuizPageSkeleton,
   StudentAppShellSkeleton,
 } from "./components/loading-skeletons";
 export { DashboardPage } from "./pages/dashboard-page";

@@ -6,8 +6,8 @@ import {
 
 import type { Route } from "./+types/_app.quizzes.$quizId";
 import {
-  ActivityPageSkeleton,
   QuizPage,
+  QuizPageSkeleton,
   studentApi,
   type QuizAnswerSubmission,
 } from "~/features/lms";
@@ -129,7 +129,7 @@ export function shouldRevalidate({
 }
 
 export function HydrateFallback() {
-  return <ActivityPageSkeleton />;
+  return <QuizPageSkeleton />;
 }
 
 export function meta(_: Route.MetaArgs) {

@@ -6,6 +6,8 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,6 +29,12 @@ import {
 } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  useCarousel,
+} from "~/components/ui/carousel";
 import {
   Card,
   CardAction,
@@ -54,6 +62,8 @@ import {
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Spinner } from "~/components/ui/spinner";
 import type { QuizData } from "../types";
+
+gsap.registerPlugin(useGSAP);
 
 type QuizQuestion = QuizData["questions"][number];
 type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
@@ -129,6 +139,7 @@ function useAttemptRemainingSeconds(initialSeconds: number | null) {
 
 export function QuizAttempt({ data, working }: { data: QuizData; working: boolean }) {
   const attempt = data.attempt;
+  const stepMotionTarget = useRef<HTMLDivElement>(null);
   const revalidator = useRevalidator();
   const [answers, setAnswers] = useState<Record<string, string>>(() => initialAnswerMap(data));
   const [saveStatuses, setSaveStatuses] = useState<Record<string, SaveStatus>>(() =>
@@ -152,6 +163,24 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
     );
     return firstUnanswered === -1 ? data.questions.length : firstUnanswered;
   });
+
+  useGSAP(
+    () => {
+      if (!stepMotionTarget.current) return;
+      const media = gsap.matchMedia();
+      media.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.from(stepMotionTarget.current, {
+          x: 16,
+          opacity: 0,
+          duration: 0.28,
+          ease: "power2.out",
+          clearProps: "transform,opacity",
+        });
+      });
+      return () => media.revert();
+    },
+    { dependencies: [activeStep], revertOnUpdate: true },
+  );
 
   const updateSaveStatus = useCallback((questionId: string, status: SaveStatus) => {
     setSaveStatuses((current) =>
@@ -192,7 +221,7 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
   }
   if (blockingError) {
     return (
-      <Card className="max-w-4xl">
+      <Card>
         <CardHeader>
           <CardTitle>Attempt tidak lagi aktif</CardTitle>
           <CardDescription>{blockingError.message}</CardDescription>
@@ -273,8 +302,12 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
         />
       ))}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
-        <main id="quiz-workspace" className="min-w-0">
+      <div className="grid grid-flow-dense items-start gap-5 lg:grid-cols-12 lg:gap-8">
+        <section
+          id="quiz-workspace"
+          className="min-w-0 lg:col-span-8"
+          aria-label="Ruang kerja quiz"
+        >
           {hasSaveError && (
             <Alert variant="destructive" className="mb-5">
               <CircleAlert />
@@ -293,36 +326,44 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
               </AlertAction>
             </Alert>
           )}
-          {reviewing ? (
-            <QuizAnswerReview
-              questions={data.questions}
-              answers={answers}
-              unansweredQuestions={unansweredQuestions}
-              working={working}
-              onSelectQuestion={goToQuestion}
-            />
-          ) : activeQuestion ? (
-            <QuestionWorkspace
-              key={activeQuestion.id}
-              question={activeQuestion}
-              questionIndex={activeStep}
-              questionCount={questionCount}
-              answer={answers[activeQuestion.id] ?? ""}
-              saveStatus={saveStatuses[activeQuestion.id] ?? "idle"}
-              onAnswerChange={(value) => updateAnswer(activeQuestion.id, value)}
-              onPrevious={() => goToQuestion(activeStep - 1)}
-              onNext={() =>
-                setActiveStep(activeStep === questionCount - 1 ? reviewStep : activeStep + 1)
-              }
-            />
-          ) : (
-            <Alert>
-              <CircleAlert />
-              <AlertTitle>Soal belum tersedia</AlertTitle>
-              <AlertDescription>Quiz ini belum memiliki soal yang dapat dikerjakan.</AlertDescription>
-            </Alert>
-          )}
-        </main>
+          <div ref={stepMotionTarget} data-quiz-step>
+            {reviewing ? (
+              <QuizAnswerReview
+                questions={data.questions}
+                answers={answers}
+                unansweredQuestions={unansweredQuestions}
+                working={working}
+                onSelectQuestion={goToQuestion}
+              />
+            ) : activeQuestion ? (
+              <QuestionWorkspace
+                key={activeQuestion.id}
+                question={activeQuestion}
+                questionIndex={activeStep}
+                questionCount={questionCount}
+                answer={answers[activeQuestion.id] ?? ""}
+                saveStatus={saveStatuses[activeQuestion.id] ?? "idle"}
+                onAnswerChange={(value) => updateAnswer(activeQuestion.id, value)}
+                onPrevious={() => goToQuestion(activeStep - 1)}
+                onNext={() =>
+                  setActiveStep(
+                    activeStep === questionCount - 1
+                      ? reviewStep
+                      : activeStep + 1,
+                  )
+                }
+              />
+            ) : (
+              <Alert>
+                <CircleAlert />
+                <AlertTitle>Soal belum tersedia</AlertTitle>
+                <AlertDescription>
+                  Quiz ini belum memiliki soal yang dapat dikerjakan.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        </section>
 
         <QuizNavigator
           questions={data.questions}
@@ -352,7 +393,7 @@ export function QuizAttemptExpired({
     savedAnswerCountProp ?? data.attempt?.answers.length ?? 0;
 
   return (
-    <Card className="max-w-4xl">
+    <Card>
       <CardHeader>
         <CardTitle>Waktu pengerjaan berakhir</CardTitle>
         <CardDescription>
@@ -516,20 +557,26 @@ function QuestionWorkspace({
   const lastQuestion = questionIndex === questionCount - 1;
 
   return (
-    <Card className="min-h-[30rem]">
+    <Card className="min-h-[32rem] overflow-hidden">
       <CardHeader>
-        <CardTitle className="max-w-3xl text-balance">
+        <div className="flex flex-wrap items-center gap-2">
+          <QuizSaveStatus status={saveStatus} />
+          <Badge
+            variant={
+              question.type === "multiple_choice" ? "lavender" : "mint"
+            }
+          >
+            {question.type === "multiple_choice"
+              ? "Pilihan ganda"
+              : "Isian singkat"}
+          </Badge>
+        </div>
+        <CardTitle className="max-w-4xl text-xl leading-snug text-balance sm:text-2xl">
           {question.prompt}
         </CardTitle>
         <CardDescription>
-          Soal {questionIndex + 1} dari {questionCount} · {Number(question.points)} poin
+          {questionIndex + 1} dari {questionCount} · {Number(question.points)} poin
         </CardDescription>
-        <CardAction className="flex flex-wrap justify-end gap-2">
-          <QuizSaveStatus status={saveStatus} />
-          <Badge variant={question.type === "multiple_choice" ? "lavender" : "mint"}>
-            {question.type === "multiple_choice" ? "Pilihan ganda" : "Isian singkat"}
-          </Badge>
-        </CardAction>
       </CardHeader>
 
       <CardContent className="flex-1">
@@ -542,11 +589,17 @@ function QuestionWorkspace({
               aria-label={`Jawaban soal ${questionIndex + 1}`}
             >
               {question.options.map((option) => (
-                <FieldLabel key={option.id} htmlFor={option.id}>
-                  <Field orientation="horizontal">
+                <FieldLabel
+                  key={option.id}
+                  htmlFor={option.id}
+                  className="group cursor-pointer transition-transform duration-300 ease-out hover:-translate-y-0.5"
+                >
+                  <Field orientation="horizontal" className="min-h-14">
                     <RadioGroupItem value={option.id} id={option.id} />
                     <FieldContent>
-                      <FieldTitle>{option.label}</FieldTitle>
+                      <FieldTitle className="text-sm/relaxed">
+                        {option.label}
+                      </FieldTitle>
                     </FieldContent>
                   </Field>
                 </FieldLabel>
@@ -563,6 +616,7 @@ function QuestionWorkspace({
               placeholder="Ketik istilah atau jawaban singkat"
               autoComplete="off"
               maxLength={500}
+              className="h-12"
               aria-describedby={`answer-help-${question.id}`}
             />
             <FieldDescription id={`answer-help-${question.id}`}>
@@ -652,7 +706,7 @@ function QuizNavigator({
         : "idle";
 
   return (
-    <aside className="order-first xl:order-last xl:sticky xl:top-24">
+    <aside className="order-first lg:order-last lg:col-span-4 lg:sticky lg:top-24">
       <Card size="sm">
         <CardHeader>
           <CardTitle>Navigasi quiz</CardTitle>
@@ -678,30 +732,36 @@ function QuizNavigator({
             <ProgressValue />
           </Progress>
 
-          <nav
+          <Carousel
+            opts={{ align: "start", dragFree: true }}
             aria-label="Navigasi soal"
-            className="grid grid-cols-5 gap-2 sm:grid-cols-8 xl:grid-cols-5"
           >
-            {questions.map((question, index) => {
-              const answered = hasAnswer(answers, question.id);
-              const active = activeStep === index;
-              return (
-                <Button
-                  key={question.id}
-                  type="button"
-                  size="icon"
-                  variant={active ? "default" : answered ? "secondary" : "outline"}
-                  aria-label={`Buka soal ${index + 1}${
-                    answered ? ", sudah dijawab" : ", belum dijawab"
-                  }`}
-                  aria-current={active ? "step" : undefined}
-                  onClick={() => onSelectQuestion(index)}
-                >
-                  {index + 1}
-                </Button>
-              );
-            })}
-          </nav>
+            <CarouselContent className="-ml-2">
+              {questions.map((question, index) => {
+                const answered = hasAnswer(answers, question.id);
+                const active = activeStep === index;
+                return (
+                  <CarouselItem key={question.id} className="basis-auto pl-2">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={
+                        active ? "default" : answered ? "secondary" : "outline"
+                      }
+                      aria-label={`Buka soal ${index + 1}${
+                        answered ? ", sudah dijawab" : ", belum dijawab"
+                      }`}
+                      aria-current={active ? "step" : undefined}
+                      onClick={() => onSelectQuestion(index)}
+                    >
+                      {index + 1}
+                    </Button>
+                  </CarouselItem>
+                );
+              })}
+            </CarouselContent>
+            <QuestionRailControls />
+          </Carousel>
 
           <div className="flex flex-wrap gap-2" aria-label="Keterangan navigator">
             <Badge>Aktif</Badge>
@@ -722,6 +782,35 @@ function QuizNavigator({
         </CardFooter>
       </Card>
     </aside>
+  );
+}
+
+function QuestionRailControls() {
+  const { canScrollNext, canScrollPrev, scrollNext, scrollPrev } = useCarousel();
+
+  return (
+    <div className="mt-3 flex items-center justify-between gap-2">
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost"
+        disabled={!canScrollPrev}
+        onClick={scrollPrev}
+      >
+        <ArrowLeft data-icon="inline-start" />
+        Sebelumnya
+      </Button>
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost"
+        disabled={!canScrollNext}
+        onClick={scrollNext}
+      >
+        Berikutnya
+        <ArrowRight data-icon="inline-end" />
+      </Button>
+    </div>
   );
 }
 
@@ -775,7 +864,7 @@ function QuizAnswerReview({
           </AlertDescription>
         </Alert>
 
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
           {questions.map((question, index) => {
             const answered = hasAnswer(answers, question.id);
             return (
@@ -783,10 +872,15 @@ function QuizAnswerReview({
                 key={question.id}
                 type="button"
                 variant="outline"
-                className="h-auto justify-between py-3"
+                className="h-auto justify-between py-3 text-left"
                 onClick={() => onSelectQuestion(index)}
               >
-                <span>Soal {index + 1}</span>
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary font-heading text-xs font-semibold tabular-nums">
+                    {index + 1}
+                  </span>
+                  <span className="truncate">{question.prompt}</span>
+                </span>
                 <Badge variant={answered ? "mint" : "outline"}>
                   {answered ? "Terjawab" : "Belum dijawab"}
                 </Badge>
