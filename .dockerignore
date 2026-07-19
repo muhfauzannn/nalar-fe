@@ -1,4 +1,11 @@
 .react-router
 build
 node_modules
+.git
+.gitignore
+.env
+.env.*
+!.env.example
 README.md
+AGENTS.md
+DESIGN.md
