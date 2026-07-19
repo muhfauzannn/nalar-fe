@@ -31,6 +31,11 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
   try {
     if (intent === "start") {
       await studentApi.startAssignment(request, params.assignmentId);
+    } else if (intent === "analyze") {
+      const submissionId = formData.get("submissionId");
+      if (typeof submissionId === "string") {
+        await studentApi.analyzeSubmission(request, submissionId);
+      }
     } else if (intent === "complete-stage") {
       const submissionId = formData.get("submissionId");
       if (

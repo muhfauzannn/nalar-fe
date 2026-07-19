@@ -1,19 +1,24 @@
 import {
   ArrowRight,
+  Brain,
   Check,
   CheckCircle2,
   Clock3,
   FileCheck2,
+  Lightbulb,
   ListChecks,
   LockKeyhole,
   MessageCircleQuestion,
-  RotateCcw,
+  RefreshCw,
   Send,
   ShieldCheck,
   Sparkles,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 
+import { MathText } from "~/components/math-text";
 import {
   Accordion,
   AccordionContent,
@@ -47,7 +52,8 @@ import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { formatDateTime } from "../lib/format";
-import type { AssignmentData, WorkflowStage } from "../types";
+import type { AssignmentData, OffloadingLevel, OffloadingResult, WorkflowStage } from "../types";
+import { AiTutorPanel } from "../components/ai-tutor-panel";
 
 const stageCopy: Record<
   WorkflowStage,
@@ -74,7 +80,7 @@ const stageCopy: Record<
     shortTitle: "Bertanya",
     description: "Gunakan bantuan untuk memperluas cara berpikir, bukan mengambil jawaban jadi.",
     prompt: "Diskusikan pertanyaanmu bersama AI Tutor",
-    guidance: "Tahap ini opsional dan dapat dilewati jika AI Tutor belum tersedia.",
+    guidance: "Minta petunjuk atau umpan balik. Tutor akan menjaga agar pekerjaan tetap milikmu.",
   },
   "3_ai_evaluation": {
     number: "03",
@@ -218,7 +224,7 @@ function AssignmentHeader({
             {data.title}
           </h1>
           <p className="max-w-3xl whitespace-pre-wrap text-sm/relaxed text-muted-foreground sm:text-base/relaxed">
-            {data.instructions}
+            <MathText>{data.instructions}</MathText>
           </p>
         </div>
       </header>
@@ -249,7 +255,7 @@ function AssignmentHeader({
           {data.title}
         </h1>
         <p className="max-w-2xl whitespace-pre-wrap text-sm/relaxed text-primary-foreground/70 sm:text-base/relaxed">
-          {data.instructions}
+          <MathText>{data.instructions}</MathText>
         </p>
       </div>
 
@@ -401,37 +407,30 @@ function AssignmentWorkspace({
   const submission = assignment.submission;
   if (!submission) return null;
   const completedCount = submission.stages.filter((stage) => stage.status === "completed").length;
+  const guidedQuestioning = submission.currentStage === "2_guided_questioning";
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="grid items-start gap-6 xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem]">
       <StageNavigator assignment={assignment} completedCount={completedCount} />
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-8">
+      <div className="order-1 min-w-0 xl:order-2">
         <ActiveStage assignment={assignment} working={working} actionDraft={actionDraft} />
-        <aside className="flex flex-col gap-5 xl:sticky xl:top-24">
-          <Card>
-            <CardHeader>
-              <CardTitle>Rubrik penilaian</CardTitle>
-              <CardDescription>Gunakan sebagai checklist sebelum melanjutkan.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RubricAccordion criteria={assignment.criteria} />
-            </CardContent>
-          </Card>
-          <Card size="sm">
-            <CardContent className="flex items-start gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-lavender-soft text-brand-lavender-foreground">
-                <RotateCcw className="size-4" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="font-medium">Progres aman per tahap</p>
-                <p className="mt-1 text-xs/relaxed text-muted-foreground">
-                  Tahap yang sudah selesai tetap tersimpan jika halaman dimuat ulang.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
       </div>
+      <aside className="order-3 flex min-w-0 flex-col gap-5 xl:sticky xl:top-24">
+        {guidedQuestioning && (
+          <AiTutorPanel
+            target={{ targetType: "assignment", targetId: submission.id }}
+          />
+        )}
+        <Card>
+          <CardHeader>
+            <CardTitle>Rubrik penilaian</CardTitle>
+            <CardDescription>Gunakan sebagai checklist sebelum melanjutkan.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RubricAccordion criteria={assignment.criteria} />
+          </CardContent>
+        </Card>
+      </aside>
     </div>
   );
 }
@@ -448,49 +447,67 @@ function StageNavigator({
   const progress = (completedCount / submission.stages.length) * 100;
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-5">
-        <Progress value={progress} aria-label="Progres assignment">
-          <ProgressLabel>Progres assignment</ProgressLabel>
-          <ProgressValue>
-            {() => `${completedCount} dari 5 tahap selesai`}
-          </ProgressValue>
-        </Progress>
-        <div className="grid grid-cols-5 gap-2">
-          {submission.stages.map((stage) => {
-            const active = stage.status === "in_progress";
-            const complete = stage.status === "completed";
-            return (
-              <div
-                key={stage.stage}
-                className="flex min-w-0 flex-col items-center gap-2 text-center"
-                aria-current={active ? "step" : undefined}
-              >
-                <span
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-xl border text-xs font-semibold transition-colors",
-                    complete && "border-brand-mint bg-brand-mint-soft text-brand-mint-foreground",
-                    active && "border-primary bg-primary text-primary-foreground",
-                    stage.status === "locked" && "border-border bg-muted text-muted-foreground",
-                  )}
-                >
-                  {complete ? (
-                    <Check className="size-4" aria-hidden="true" />
-                  ) : stage.status === "locked" ? (
-                    <LockKeyhole className="size-3.5" aria-hidden="true" />
-                  ) : (
-                    stageCopy[stage.stage].number
-                  )}
-                </span>
-                <span className={cn("hidden truncate text-xs sm:block", active ? "font-medium" : "text-muted-foreground")}>
-                  {stageCopy[stage.stage].shortTitle}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+    <aside
+      className="order-2 min-w-0 xl:order-1 xl:sticky xl:top-24"
+      aria-label="Tahapan assignment"
+    >
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Alur assignment</CardTitle>
+          <CardDescription>Selesaikan tahap secara berurutan.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <Progress value={progress} aria-label="Progres assignment">
+            <ProgressLabel>Progres</ProgressLabel>
+            <ProgressValue>
+              {() => `${completedCount} dari 5 tahap selesai`}
+            </ProgressValue>
+          </Progress>
+          <ol className="flex flex-col">
+            {submission.stages.map((stage, index) => {
+              const active = stage.status === "in_progress";
+              const complete = stage.status === "completed";
+              return (
+                <li key={stage.stage} aria-current={active ? "step" : undefined}>
+                  {index > 0 && <Separator className="my-3" />}
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-semibold transition-colors",
+                        complete && "border-brand-mint bg-brand-mint-soft text-brand-mint-foreground",
+                        active && "border-primary bg-primary text-primary-foreground",
+                        stage.status === "locked" && "border-border bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {complete ? (
+                        <Check className="size-4" aria-hidden="true" />
+                      ) : stage.status === "locked" ? (
+                        <LockKeyhole className="size-3.5" aria-hidden="true" />
+                      ) : (
+                        stageCopy[stage.stage].number
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <p
+                        className={cn(
+                          "truncate text-sm",
+                          active ? "font-medium" : "text-muted-foreground",
+                        )}
+                      >
+                        {stageCopy[stage.stage].shortTitle}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {complete ? "Selesai" : active ? "Sedang dikerjakan" : "Terkunci"}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </CardContent>
+      </Card>
+    </aside>
   );
 }
 
@@ -545,13 +562,6 @@ function ActiveStage({
 
         {stage === "2_guided_questioning" ? (
           <div className="flex flex-col gap-5">
-            <Alert>
-              <MessageCircleQuestion />
-              <AlertTitle>AI Tutor belum tersedia untuk assignment ini</AlertTitle>
-              <AlertDescription>
-                Tahap opsional ini dapat dilewati. Sistem tidak akan membuat respons tutor palsu.
-              </AlertDescription>
-            </Alert>
             <Form method="post">
               <input type="hidden" name="intent" value="complete-stage" />
               <input type="hidden" name="submissionId" value={submission.id} />
@@ -559,7 +569,7 @@ function ActiveStage({
               <input type="hidden" name="content" value="" />
               <Button type="submit" disabled={working}>
                 {working ? <Spinner data-icon="inline-start" /> : <ArrowRight data-icon="inline-end" />}
-                {working ? "Menyimpan tahap..." : "Lanjut tanpa AI Tutor"}
+                {working ? "Menyimpan tahap..." : "Selesai dan lanjutkan"}
               </Button>
             </Form>
           </div>
@@ -656,6 +666,183 @@ function RubricAccordion({
   );
 }
 
+const offloadingLevelCopy: Record<
+  OffloadingLevel,
+  { title: string; caption: string; badge: "mint" | "lavender" | "outline" | "destructive" }
+> = {
+  "1_ai_as_tool": {
+    title: "AI sebagai alat",
+    caption: "Upaya awal kuat, pertanyaan reflektif, dan revisi yang substansial.",
+    badge: "mint",
+  },
+  "2_ai_as_scaffold": {
+    title: "AI sebagai penyangga",
+    caption: "Bantuan AI signifikan, tetapi kamu tetap aktif mengevaluasi.",
+    badge: "lavender",
+  },
+  "3_partial_offloading": {
+    title: "Sebagian dialihkan",
+    caption: "Sebagian penalaran didelegasikan dan revisi cenderung kosmetik.",
+    badge: "outline",
+  },
+  "4_full_offloading": {
+    title: "Sepenuhnya dialihkan",
+    caption: "Upaya awal minim, prompt meminta jawaban, dan nyaris tanpa revisi.",
+    badge: "destructive",
+  },
+};
+
+function humanizeFactor(factor: string) {
+  const label = factor.replace(/[_-]+/g, " ").trim();
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function OffloadingReport({
+  offloading,
+  submissionId,
+}: {
+  offloading: OffloadingResult | null;
+  submissionId: string;
+}) {
+  const navigation = useNavigation();
+  const analyzing =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "analyze";
+
+  if (!offloading) {
+    return (
+      <Card className="border-dashed">
+        <CardHeader>
+          <CardTitle>Refleksi penggunaan AI</CardTitle>
+          <CardDescription>
+            Laporan ini menganalisis cara kamu memakai AI selama mengerjakan —
+            terpisah dari nilai akademik.
+          </CardDescription>
+          <CardAction>
+            <Badge variant="outline">
+              <Brain data-icon="inline-start" />
+              Belum tersedia
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-start gap-4 rounded-2xl bg-muted/60 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm/relaxed text-muted-foreground">
+              Analisis belum selesai dibuat. Coba buat ulang laporannya.
+            </p>
+            <Form method="post">
+              <input type="hidden" name="intent" value="analyze" />
+              <input type="hidden" name="submissionId" value={submissionId} />
+              <Button type="submit" variant="outline" disabled={analyzing}>
+                {analyzing ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <RefreshCw data-icon="inline-start" />
+                )}
+                {analyzing ? "Menganalisis..." : "Buat laporan"}
+              </Button>
+            </Form>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const copy = offloadingLevelCopy[offloading.level];
+
+  return (
+    <Card className="overflow-hidden border-brand-lavender/60">
+      <CardHeader className="border-b bg-brand-lavender-soft/40">
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="size-5" aria-hidden="true" />
+          Refleksi penggunaan AI
+        </CardTitle>
+        <CardDescription>
+          Umpan balik proses belajar dari AI — bukan nilai akademik dan tidak
+          memengaruhi nilai.
+        </CardDescription>
+        <CardAction>
+          <Badge variant={copy.badge}>{copy.title}</Badge>
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 rounded-2xl bg-muted/60 p-5 sm:flex-row sm:items-center">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-card text-foreground shadow-sm ring-1 ring-border/60">
+            <Brain className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-heading text-lg font-semibold">{copy.title}</p>
+            <p className="mt-1 text-sm/relaxed text-muted-foreground">{copy.caption}</p>
+          </div>
+          <div className="w-full sm:w-44">
+            <Progress value={offloading.score}>
+              <ProgressLabel>Ketergantungan AI</ProgressLabel>
+              <ProgressValue>{() => `${Math.round(offloading.score)}/100`}</ProgressValue>
+            </Progress>
+          </div>
+        </div>
+
+        <p className="whitespace-pre-wrap text-sm/relaxed">{offloading.studentReport}</p>
+
+        {offloading.factors.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Yang memengaruhi
+            </p>
+            <ul className="flex flex-col gap-3">
+              {offloading.factors.map((factor) => {
+                const pushesOffloading = factor.contribution > 0;
+                return (
+                  <li key={factor.factor} className="flex items-start gap-3">
+                    <span
+                      className={cn(
+                        "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg",
+                        pushesOffloading
+                          ? "bg-destructive/10 text-destructive"
+                          : "bg-brand-mint-soft text-brand-mint-foreground",
+                      )}
+                    >
+                      {pushesOffloading ? (
+                        <TrendingUp className="size-4" aria-hidden="true" />
+                      ) : (
+                        <TrendingDown className="size-4" aria-hidden="true" />
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{humanizeFactor(factor.factor)}</p>
+                      <p className="text-sm/relaxed text-muted-foreground">
+                        {factor.plainExplanation}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {offloading.recommendations.length > 0 && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-brand-mint/40 bg-brand-mint-soft/30 p-5">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Lightbulb className="size-4" aria-hidden="true" />
+              Rekomendasi
+            </p>
+            <ul className="flex flex-col gap-2">
+              {offloading.recommendations.map((recommendation) => (
+                <li key={recommendation} className="flex items-start gap-2 text-sm/relaxed">
+                  <Check className="mt-0.5 size-4 shrink-0 text-brand-mint-foreground" aria-hidden="true" />
+                  <span>{recommendation}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function AssignmentUnavailable({
   data,
   message,
@@ -711,6 +898,11 @@ function SubmissionResult({ assignment }: { assignment: AssignmentData }) {
             Submission tersimpan pada {formatDateTime(submission.submittedAt)} dan kini hanya dapat dibaca.
           </AlertDescription>
         </Alert>
+
+        <OffloadingReport
+          offloading={submission.offloading}
+          submissionId={submission.id}
+        />
 
         {submission.assessment && (
           <Card>

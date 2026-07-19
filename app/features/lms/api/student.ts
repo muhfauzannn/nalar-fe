@@ -90,6 +90,14 @@ export const studentApi = {
         forwardedRequestInit(request),
       ),
     ),
+  analyzeSubmission: (request: Request, submissionId: string) =>
+    studentRequest(request, () =>
+      http.post(
+        `/api/student/submissions/${submissionId}/offloading`,
+        {},
+        forwardedRequestInit(request),
+      ),
+    ),
   quiz: (request: Request, quizId: string) =>
     studentRequest(request, () =>
       http.get<QuizData>(`/api/student/quizzes/${quizId}`, forwardedRequestInit(request)),
@@ -136,6 +144,14 @@ export const studentApi = {
       http.post(
         `/api/student/quiz-attempts/${attemptId}/submit`,
         { answers },
+        forwardedRequestInit(request),
+      ),
+    ),
+  analyzeQuizReflection: (request: Request, attemptId: string) =>
+    studentRequest(request, () =>
+      http.post(
+        `/api/student/quiz-attempts/${attemptId}/reflection`,
+        {},
         forwardedRequestInit(request),
       ),
     ),

@@ -9,6 +9,7 @@ import {
 import { TooltipProvider } from "./components/ui/tooltip";
 
 import type { Route } from "./+types/root";
+import "katex/dist/katex.min.css";
 import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {

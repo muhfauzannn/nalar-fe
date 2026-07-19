@@ -115,6 +115,41 @@ export type WorkflowStage =
   | "4_revision_finalization"
   | "5_reflection";
 
+export type OffloadingLevel =
+  | "1_ai_as_tool"
+  | "2_ai_as_scaffold"
+  | "3_partial_offloading"
+  | "4_full_offloading";
+
+export type OffloadingResult = {
+  level: OffloadingLevel;
+  score: number;
+  intentInput: number;
+  effortInput: number;
+  studentReport: string;
+  recommendations: string[];
+  factors: Array<{
+    factor: string;
+    contribution: number;
+    plainExplanation: string;
+  }>;
+  computedAt: string;
+};
+
+export type AiRelianceLevel = "none" | "low" | "moderate" | "high";
+
+export type QuizUsageReflection = {
+  relianceLevel: AiRelianceLevel;
+  studentReport: string;
+  recommendations: string[];
+  promptTurnCount: number;
+  directCount: number;
+  hintCount: number;
+  reflectiveCount: number;
+  redirectedCount: number;
+  computedAt: string;
+};
+
 export type AssignmentData = {
   id: string;
   title: string;
@@ -143,6 +178,7 @@ export type AssignmentData = {
     stages: Array<{ stage: WorkflowStage; status: "locked" | "in_progress" | "completed" }>;
     artifacts: Array<{ stage: WorkflowStage; content: string; version: number }>;
     assessment: null | { score: string; feedback: string | null };
+    offloading: OffloadingResult | null;
   };
 };
 
@@ -231,6 +267,7 @@ export type QuizData = {
     remainingSeconds: number | null;
     canContinue: boolean;
     answers: QuizAnswer[];
+    reflection?: QuizUsageReflection | null;
   };
   availability:
     | "available"
@@ -239,4 +276,47 @@ export type QuizData = {
     | "read_only"
     | "not_ready";
   canStart: boolean;
+};
+
+export type AiTutorMode = "hint" | "feedback";
+export type AiTutorChannel = "chat" | "voice";
+export type AiTutorTarget =
+  | { targetType: "assignment"; targetId: string }
+  | { targetType: "quiz"; targetId: string; questionId: string };
+
+export type AiTutorMessage = {
+  id: string;
+  clientEventId: string;
+  author: "student" | "tutor" | "system";
+  content: string;
+  mode: AiTutorMode | null;
+  wasRedirected: boolean;
+  modelVersion: string | null;
+  quizQuestionId: string | null;
+  sequence: number;
+  createdAt: string;
+  intent:
+    | "direct_answer"
+    | "explanation_hint"
+    | "reflective_evaluative"
+    | null;
+};
+
+export type AiTutorSessionData = {
+  conversationId: string;
+  token: string;
+  model: string;
+  expiresAt: string;
+  mode: AiTutorMode;
+  questionId: string | null;
+  messages: AiTutorMessage[];
+};
+
+export type AiTutorClassification = {
+  messageId: string;
+  intent: "direct_answer" | "explanation_hint" | "reflective_evaluative";
+  confidence: number;
+  isFallback: boolean;
+  wasRedirected: boolean;
+  responseInstruction: string;
 };

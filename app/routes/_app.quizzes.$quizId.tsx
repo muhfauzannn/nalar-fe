@@ -25,6 +25,11 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
   try {
     if (intent === "start") {
       await studentApi.startQuiz(request, params.quizId);
+    } else if (intent === "analyze") {
+      const attemptId = formData.get("attemptId");
+      if (typeof attemptId === "string") {
+        await studentApi.analyzeQuizReflection(request, attemptId);
+      }
     } else if (intent === "save-answer" || intent === "delete-answer") {
       const attemptId = formData.get("attemptId");
       const questionId = formData.get("questionId");

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Form, Link, useFetcher, useRevalidator } from "react-router";
 
+import { MathText } from "~/components/math-text";
 import {
   Alert,
   AlertAction,
@@ -29,12 +30,6 @@ import {
 } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  useCarousel,
-} from "~/components/ui/carousel";
 import {
   Card,
   CardAction,
@@ -60,7 +55,9 @@ import {
   ProgressValue,
 } from "~/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import { ScrollArea } from "~/components/ui/scroll-area";
 import { Spinner } from "~/components/ui/spinner";
+import { AiTutorPanel } from "./ai-tutor-panel";
 import type { QuizData } from "../types";
 
 gsap.registerPlugin(useGSAP);
@@ -302,10 +299,23 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
         />
       ))}
 
-      <div className="grid grid-flow-dense items-start gap-5 lg:grid-cols-12 lg:gap-8">
+      <div className="grid items-start gap-5 xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem] xl:gap-6">
+        <QuizNavigator
+          questions={data.questions}
+          answers={answers}
+          activeStep={activeStep}
+          answeredCount={answeredCount}
+          saveStatuses={saveStatuses}
+          remainingSeconds={remainingSeconds}
+          onSelectQuestion={goToQuestion}
+          onReview={() => setActiveStep(reviewStep)}
+        />
+
         <section
           id="quiz-workspace"
-          className="min-w-0 lg:col-span-8"
+          className={`order-1 min-w-0 xl:order-2 ${
+            reviewing || !activeQuestion ? "xl:col-span-2" : ""
+          }`}
           aria-label="Ruang kerja quiz"
         >
           {hasSaveError && (
@@ -365,16 +375,21 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
           </div>
         </section>
 
-        <QuizNavigator
-          questions={data.questions}
-          answers={answers}
-          activeStep={activeStep}
-          answeredCount={answeredCount}
-          saveStatuses={saveStatuses}
-          remainingSeconds={remainingSeconds}
-          onSelectQuestion={goToQuestion}
-          onReview={() => setActiveStep(reviewStep)}
-        />
+        {!reviewing && activeQuestion && (
+          <aside
+            className="order-3 min-w-0 xl:sticky xl:top-24"
+            aria-label="Tutor untuk soal aktif"
+          >
+            <AiTutorPanel
+              key={activeQuestion.id}
+              target={{
+                targetType: "quiz",
+                targetId: attempt.id,
+                questionId: activeQuestion.id,
+              }}
+            />
+          </aside>
+        )}
       </div>
     </Form>
   );
@@ -572,14 +587,14 @@ function QuestionWorkspace({
           </Badge>
         </div>
         <CardTitle className="max-w-4xl text-xl leading-snug text-balance sm:text-2xl">
-          {question.prompt}
+          <MathText>{question.prompt}</MathText>
         </CardTitle>
         <CardDescription>
           {questionIndex + 1} dari {questionCount} · {Number(question.points)} poin
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex-1">
+      <CardContent className="flex flex-1 flex-col gap-8">
         {question.type === "multiple_choice" ? (
           <FieldSet>
             <FieldLegend className="sr-only">Pilih satu jawaban</FieldLegend>
@@ -598,7 +613,7 @@ function QuestionWorkspace({
                     <RadioGroupItem value={option.id} id={option.id} />
                     <FieldContent>
                       <FieldTitle className="text-sm/relaxed">
-                        {option.label}
+                        <MathText>{option.label}</MathText>
                       </FieldTitle>
                     </FieldContent>
                   </Field>
@@ -704,77 +719,75 @@ function QuizNavigator({
       : answeredCount > 0
         ? "saved"
         : "idle";
+  const questionButtons = (
+    <div
+      className="grid grid-cols-6 gap-2 sm:grid-cols-10 xl:grid-cols-3"
+      aria-label="Daftar soal"
+    >
+      {questions.map((question, index) => {
+        const answered = hasAnswer(answers, question.id);
+        const active = activeStep === index;
+        return (
+          <Button
+            key={question.id}
+            type="button"
+            size="icon"
+            variant={active ? "default" : answered ? "secondary" : "outline"}
+            aria-label={`Buka soal ${index + 1}${
+              answered ? ", sudah dijawab" : ", belum dijawab"
+            }`}
+            aria-current={active ? "step" : undefined}
+            onClick={() => onSelectQuestion(index)}
+          >
+            {index + 1}
+          </Button>
+        );
+      })}
+    </div>
+  );
 
   return (
-    <aside className="order-first lg:order-last lg:col-span-4 lg:sticky lg:top-24">
+    <aside
+      className="order-2 min-w-0 xl:order-1 xl:sticky xl:top-24"
+      aria-label="Navigasi quiz"
+    >
       <Card size="sm">
         <CardHeader>
           <CardTitle>Navigasi quiz</CardTitle>
-          <CardDescription>Pilih nomor soal untuk berpindah.</CardDescription>
-          <CardAction>
-            <div className="flex flex-col items-end gap-2">
-              <Badge variant="mint">
-                {answeredCount}/{questions.length} terjawab
-              </Badge>
-              {remainingSeconds !== null && (
-                <Badge variant={remainingSeconds <= 60 ? "destructive" : "outline"}>
-                  <Clock3 data-icon="inline-start" />
-                  {formatRemainingTime(remainingSeconds)}
-                </Badge>
-              )}
-              <QuizSaveStatus status={progressSaveStatus} />
-            </div>
-          </CardAction>
+          <CardDescription>Pindah soal tanpa kehilangan jawaban.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
+          <div className="flex flex-wrap gap-2 xl:flex-col xl:items-start">
+            {remainingSeconds !== null && (
+              <Badge variant={remainingSeconds <= 60 ? "destructive" : "outline"}>
+                <Clock3 data-icon="inline-start" />
+                {formatRemainingTime(remainingSeconds)}
+              </Badge>
+            )}
+            <QuizSaveStatus status={progressSaveStatus} />
+          </div>
+
           <Progress value={progress}>
-            <ProgressLabel>Progres jawaban</ProgressLabel>
-            <ProgressValue />
+            <ProgressLabel>Terjawab</ProgressLabel>
+            <ProgressValue>
+              {() => `${answeredCount}/${questions.length}`}
+            </ProgressValue>
           </Progress>
 
-          <Carousel
-            opts={{ align: "start", dragFree: true }}
-            aria-label="Navigasi soal"
-          >
-            <CarouselContent className="-ml-2">
-              {questions.map((question, index) => {
-                const answered = hasAnswer(answers, question.id);
-                const active = activeStep === index;
-                return (
-                  <CarouselItem key={question.id} className="basis-auto pl-2">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant={
-                        active ? "default" : answered ? "secondary" : "outline"
-                      }
-                      aria-label={`Buka soal ${index + 1}${
-                        answered ? ", sudah dijawab" : ", belum dijawab"
-                      }`}
-                      aria-current={active ? "step" : undefined}
-                      onClick={() => onSelectQuestion(index)}
-                    >
-                      {index + 1}
-                    </Button>
-                  </CarouselItem>
-                );
-              })}
-            </CarouselContent>
-            <QuestionRailControls />
-          </Carousel>
-
-          <div className="flex flex-wrap gap-2" aria-label="Keterangan navigator">
-            <Badge>Aktif</Badge>
-            <Badge variant="lavender">Terjawab</Badge>
-            <Badge variant="outline">Belum dijawab</Badge>
-          </div>
+          {questions.length > 18 ? (
+            <ScrollArea className="h-36 pr-3 xl:h-72">
+              {questionButtons}
+            </ScrollArea>
+          ) : (
+            questionButtons
+          )}
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex-col items-stretch gap-3">
           <Button
             type="button"
             variant={reviewing ? "default" : "outline"}
-            className="w-full"
             onClick={onReview}
+            className="w-full"
           >
             <ClipboardCheck data-icon="inline-start" />
             Tinjau jawaban
@@ -782,35 +795,6 @@ function QuizNavigator({
         </CardFooter>
       </Card>
     </aside>
-  );
-}
-
-function QuestionRailControls() {
-  const { canScrollNext, canScrollPrev, scrollNext, scrollPrev } = useCarousel();
-
-  return (
-    <div className="mt-3 flex items-center justify-between gap-2">
-      <Button
-        type="button"
-        size="xs"
-        variant="ghost"
-        disabled={!canScrollPrev}
-        onClick={scrollPrev}
-      >
-        <ArrowLeft data-icon="inline-start" />
-        Sebelumnya
-      </Button>
-      <Button
-        type="button"
-        size="xs"
-        variant="ghost"
-        disabled={!canScrollNext}
-        onClick={scrollNext}
-      >
-        Berikutnya
-        <ArrowRight data-icon="inline-end" />
-      </Button>
-    </div>
   );
 }
 

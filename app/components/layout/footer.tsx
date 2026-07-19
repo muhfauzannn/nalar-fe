@@ -24,9 +24,6 @@ export function Footer() {
           {/* Brand block */}
           <div className="flex flex-col gap-4">
             <Brand className="h-9" isDark={true} />
-            <p className="max-w-xs text-sm/relaxed text-primary-foreground/60">
-              {siteConfig.description}
-            </p>
             <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
               {socialLinks.map((s) => (
                 <li key={s.href}>

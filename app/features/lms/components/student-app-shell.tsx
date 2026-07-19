@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   NavLink,
@@ -46,11 +46,19 @@ const navigationIcons: Record<string, LucideIcon> = {
   "/courses": BookOpen,
 };
 
+function isFocusedActivityRoute(pathname: string) {
+  return pathname.startsWith("/assignments/") || pathname.startsWith("/quizzes/");
+}
+
 export function StudentAppShell({ data }: { data: StudentShellData }) {
   const location = useLocation();
   const navigate = useNavigate();
   const navigation = useNavigation();
   const [signingOut, setSigningOut] = useState(false);
+  const focusedActivity = isFocusedActivityRoute(location.pathname);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !focusedActivity);
+  const previousSidebarOpen = useRef(true);
+  const wasFocusedActivity = useRef(focusedActivity);
   const nextPathname = navigation.state === "loading" ? navigation.location.pathname : null;
   const loadingPathname =
     nextPathname &&
@@ -62,6 +70,18 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
       nextPathname.startsWith("/quizzes/"))
       ? nextPathname
       : null;
+
+  useEffect(() => {
+    if (focusedActivity === wasFocusedActivity.current) return;
+
+    if (focusedActivity) {
+      previousSidebarOpen.current = sidebarOpen;
+      setSidebarOpen(false);
+    } else {
+      setSidebarOpen(previousSidebarOpen.current);
+    }
+    wasFocusedActivity.current = focusedActivity;
+  }, [focusedActivity, sidebarOpen]);
 
   async function signOut() {
     setSigningOut(true);
@@ -78,7 +98,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
     .toUpperCase();
 
   return (
-    <SidebarProvider>
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
           <div className="flex h-12 items-center px-3 group-data-[collapsible=icon]:px-0">

@@ -3,17 +3,22 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import {
   ArrowLeft,
+  Brain,
   Check,
   Clock3,
   FileQuestion,
+  Lightbulb,
   ListChecks,
+  RefreshCw,
   ShieldCheck,
+  Sparkles,
   TextCursorInput,
   TimerOff,
   X,
 } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 
+import { MathText } from "~/components/math-text";
 import {
   Accordion,
   AccordionContent,
@@ -46,7 +51,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import { QuizAttempt, QuizAttemptExpired } from "../components/quiz-attempt";
 import { formatDateTime } from "../lib/format";
-import type { QuizData } from "../types";
+import type { AiRelianceLevel, QuizData, QuizUsageReflection } from "../types";
 
 gsap.registerPlugin(useGSAP);
 
@@ -471,6 +476,138 @@ function QuizStartUnavailable({ data }: { data: QuizData }) {
   );
 }
 
+const relianceCopy: Record<
+  AiRelianceLevel,
+  { title: string; badge: "mint" | "lavender" | "outline" | "destructive" }
+> = {
+  none: { title: "Tanpa AI Tutor", badge: "outline" },
+  low: { title: "Pemakaian sehat", badge: "mint" },
+  moderate: { title: "Campuran", badge: "lavender" },
+  high: { title: "Cenderung meminta jawaban", badge: "destructive" },
+};
+
+function AiUsageReflection({
+  reflection,
+  attemptId,
+}: {
+  reflection: QuizUsageReflection | null;
+  attemptId: string;
+}) {
+  const navigation = useNavigation();
+  const analyzing =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "analyze";
+
+  if (!reflection) {
+    return (
+      <Card className="border-dashed">
+        <CardHeader>
+          <CardTitle>Refleksi penggunaan AI</CardTitle>
+          <CardDescription>
+            Cara kamu memakai AI Tutor saat quiz — bukan nilai dan tidak
+            memengaruhi skor.
+          </CardDescription>
+          <CardAction>
+            <Badge variant="outline">
+              <Brain data-icon="inline-start" />
+              Belum tersedia
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-start gap-4 rounded-2xl bg-muted/60 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm/relaxed text-muted-foreground">
+              Analisis belum selesai dibuat. Coba buat ulang refleksinya.
+            </p>
+            <Form method="post">
+              <input type="hidden" name="intent" value="analyze" />
+              <input type="hidden" name="attemptId" value={attemptId} />
+              <Button type="submit" variant="outline" disabled={analyzing}>
+                {analyzing ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <RefreshCw data-icon="inline-start" />
+                )}
+                {analyzing ? "Menganalisis..." : "Buat refleksi"}
+              </Button>
+            </Form>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const copy = relianceCopy[reflection.relianceLevel];
+  const stats =
+    reflection.promptTurnCount > 0
+      ? [
+          { label: "Total tanya", value: reflection.promptTurnCount },
+          { label: "Minta jawaban", value: reflection.directCount },
+          { label: "Minta petunjuk", value: reflection.hintCount },
+          { label: "Reflektif", value: reflection.reflectiveCount },
+        ]
+      : [];
+
+  return (
+    <Card className="overflow-hidden border-brand-lavender/60">
+      <CardHeader className="border-b bg-brand-lavender-soft/40">
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="size-5" aria-hidden="true" />
+          Refleksi penggunaan AI
+        </CardTitle>
+        <CardDescription>
+          Cara kamu memakai AI Tutor saat quiz — bukan nilai dan tidak
+          memengaruhi skor.
+        </CardDescription>
+        <CardAction>
+          <Badge variant={copy.badge}>{copy.title}</Badge>
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-6">
+        <div className="flex items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-muted text-foreground ring-1 ring-border/60">
+            <Brain className="size-5" aria-hidden="true" />
+          </span>
+          <p className="whitespace-pre-wrap pt-1 text-sm/relaxed">
+            {reflection.studentReport}
+          </p>
+        </div>
+
+        {stats.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {stats.map((stat) => (
+              <div key={stat.label} className="rounded-xl bg-muted/60 px-4 py-3">
+                <p className="font-heading text-xl font-semibold tabular-nums">
+                  {stat.value}
+                </p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {reflection.recommendations.length > 0 && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-brand-mint/40 bg-brand-mint-soft/30 p-5">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Lightbulb className="size-4" aria-hidden="true" />
+              Rekomendasi
+            </p>
+            <ul className="flex flex-col gap-2">
+              {reflection.recommendations.map((recommendation) => (
+                <li key={recommendation} className="flex items-start gap-2 text-sm/relaxed">
+                  <Check className="mt-0.5 size-4 shrink-0 text-brand-mint-foreground" aria-hidden="true" />
+                  <span>{recommendation}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function QuizReview({ data }: { data: QuizData }) {
   const attempt = data.attempt;
   if (!attempt) return null;
@@ -492,6 +629,11 @@ function QuizReview({ data }: { data: QuizData }) {
           {formatDateTime(attempt.submittedAt)}.
         </AlertDescription>
       </Alert>
+
+      <AiUsageReflection
+        reflection={attempt.reflection ?? null}
+        attemptId={attempt.id}
+      />
 
       <Card>
         <CardHeader>
@@ -533,7 +675,7 @@ function QuizReview({ data }: { data: QuizData }) {
                         {index + 1}
                       </span>
                       <span className="min-w-0 flex-1 text-left text-sm/relaxed font-medium text-foreground">
-                        {question.prompt}
+                        <MathText>{question.prompt}</MathText>
                       </span>
                       <Badge variant={answer?.isCorrect ? "mint" : "destructive"}>
                         {answer?.isCorrect ? (
@@ -549,21 +691,23 @@ function QuizReview({ data }: { data: QuizData }) {
                     <Field>
                       <FieldLabel>Jawabanmu</FieldLabel>
                       <FieldDescription>
-                        {studentAnswer ?? "Tidak dijawab"}
+                        <MathText>{studentAnswer ?? "Tidak dijawab"}</MathText>
                       </FieldDescription>
                     </Field>
                     {!answer?.isCorrect && (
                       <Field>
                         <FieldLabel>Jawaban benar</FieldLabel>
                         <FieldDescription>
-                          {correctAnswer ?? "Tidak tersedia"}
+                          <MathText>{correctAnswer ?? "Tidak tersedia"}</MathText>
                         </FieldDescription>
                       </Field>
                     )}
                     {question.explanation && (
                       <Field>
                         <FieldLabel>Pembahasan</FieldLabel>
-                        <FieldDescription>{question.explanation}</FieldDescription>
+                        <FieldDescription>
+                          <MathText>{question.explanation}</MathText>
+                        </FieldDescription>
                       </Field>
                     )}
                   </AccordionContent>

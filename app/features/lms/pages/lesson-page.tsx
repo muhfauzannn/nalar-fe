@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Form, Link } from "react-router";
 
+import { MathText } from "~/components/math-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -222,15 +223,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                   <div className="flex flex-col gap-7 text-base/8 text-foreground/90">
                     {contentBlocks.map((block, blockIndex) => (
                       <p key={`${blockIndex}-${block.slice(0, 24)}`} className="whitespace-pre-wrap">
-                        {block.split(/(\s+)/).map((token, tokenIndex) =>
-                          token.trim() ? (
-                            <span key={tokenIndex} data-lesson-word>
-                              {token}
-                            </span>
-                          ) : (
-                            token
-                          ),
-                        )}
+                        <MathText animateWords>{block}</MathText>
                       </p>
                     ))}
                   </div>
@@ -355,7 +348,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                       </h3>
                       {resource.content && (
                         <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm/relaxed text-muted-foreground">
-                          {resource.content}
+                          <MathText>{resource.content}</MathText>
                         </p>
                       )}
                     </div>
