@@ -1,67 +1,72 @@
-name: Build & Deploy (FE)
+name: Build Frontend and Sync Dokploy Source
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    paths-ignore:
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-fe
+  group: nalar-frontend-source-sync
   cancel-in-progress: false
 
-env:
-  IMAGE: ghcr.io/muhfauzannn/nalar-fe
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Build frontend
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build frontend image
+        run: |
+          docker buildx build --platform linux/amd64 --target runtime --load \
+            --build-arg VITE_API_URL=https://api.nalar.muhfauzan.dev \
+            --build-arg VITE_APP_URL=https://nalar.muhfauzan.dev \
+            -t nalar-fe:ci .
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          build-args: |
-            VITE_API_URL=https://api.nalar.muhfauzan.dev
-            VITE_APP_URL=https://nalar.muhfauzan.dev
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy:
-    if: false
-    needs: build
+  sync-parent:
+    name: Update Bernalar frontend submodule
     runs-on: ubuntu-latest
-    permissions:
-      packages: read
+    needs: build
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout Bernalar backend repository
+        uses: actions/checkout@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GHCR_TOKEN
-          script: |
-            set -e
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            cd /opt/bernalar
-            docker compose pull fe
-            docker compose up -d fe
-            docker image prune -f
+          repository: muhfauzannn/nalar-be
+          ref: main
+          token: ${{ secrets.NALAR_PARENT_SYNC_TOKEN }}
+          path: nalar-be
+          persist-credentials: true
+          submodules: false
+
+      - name: Update frontend gitlink
+        working-directory: nalar-be
+        env:
+          FRONTEND_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FRONTEND_COMMIT" ]; then
+            echo "::error::Missing frontend commit."
+            exit 1
+          fi
+          current="$(git ls-tree HEAD frontend | awk '{print $3}')"
+          if [[ "$current" == "$FRONTEND_COMMIT" ]]; then
+            echo "Bernalar already points to this frontend commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git update-index --add --cacheinfo "160000,$FRONTEND_COMMIT,frontend"
+          git commit -m "chore: update frontend submodule"
+          git push origin HEAD:main
