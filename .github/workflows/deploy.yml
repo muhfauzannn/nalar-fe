@@ -42,10 +42,10 @@ jobs:
       - name: Check parent repository sync secret
         shell: bash
         env:
-          PARENT_SYNC_TOKEN: ${{ secrets.NALAR_PARENT_SYNC_TOKEN }}
+          PARENT_SYNC_SSH_KEY: ${{ secrets.NALAR_PARENT_SYNC_SSH_KEY }}
         run: |
-          if [ -z "$PARENT_SYNC_TOKEN" ]; then
-            echo "::error::Add NALAR_PARENT_SYNC_TOKEN with Contents write access to muhfauzannn/nalar-be."
+          if [ -z "$PARENT_SYNC_SSH_KEY" ]; then
+            echo "::error::Missing NALAR_PARENT_SYNC_SSH_KEY repository secret."
             exit 1
           fi
 
@@ -54,7 +54,7 @@ jobs:
         with:
           repository: muhfauzannn/nalar-be
           ref: main
-          token: ${{ secrets.NALAR_PARENT_SYNC_TOKEN }}
+          ssh-key: ${{ secrets.NALAR_PARENT_SYNC_SSH_KEY }}
           path: nalar-be
           persist-credentials: true
           submodules: false
