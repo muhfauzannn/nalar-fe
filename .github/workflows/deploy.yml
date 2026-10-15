@@ -39,6 +39,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Check parent repository sync secret
+        shell: bash
+        env:
+          PARENT_SYNC_TOKEN: ${{ secrets.NALAR_PARENT_SYNC_TOKEN }}
+        run: |
+          if [ -z "$PARENT_SYNC_TOKEN" ]; then
+            echo "::error::Add NALAR_PARENT_SYNC_TOKEN with Contents write access to muhfauzannn/nalar-be."
+            exit 1
+          fi
+
       - name: Checkout Bernalar backend repository
         uses: actions/checkout@v4
         with:
