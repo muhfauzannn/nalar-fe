@@ -5,8 +5,13 @@ import { cn } from "~/lib/utils";
 
 /**
  * The Bernalar logo lockup. Renders the provided SVG mark (`/illustration/
- * logo.svg`). Shared by the Navbar and Footer so the logo is defined once;
- * size it via `className` (defaults to a navbar-friendly height).
+ * logo.svg`). Shared by the Navbar, Footer, sidebar and auth screens so the logo
+ * is defined once; size it via `className` (defaults to a navbar-friendly height).
+ *
+ * The navy mark disappears on dark surfaces, so by default both versions are
+ * rendered and CSS shows the right one for the active theme (no flash, no JS).
+ * `isDark` forces the light-on-dark mark for surfaces that are always dark
+ * (the footer).
  */
 export function Brand({
   className,
@@ -15,18 +20,21 @@ export function Brand({
   className?: string;
   isDark?: boolean;
 }) {
+  const size = cn("h-8 w-auto select-none", className);
   return (
     <Link
       to="/"
-      aria-label={`${siteConfig.name} — home`}
-      className="inline-flex items-center"
+      aria-label={`${siteConfig.name} — beranda`}
+      className="inline-flex items-center rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      <img
-        src={isDark ? "/illustration/logo-dark.svg" : "/illustration/logo.svg"}
-        alt={siteConfig.name}
-        className={cn("h-8 w-auto select-none", className)}
-        draggable={false}
-      />
+      {isDark ? (
+        <img src="/illustration/logo-dark.svg" alt={siteConfig.name} className={size} draggable={false} />
+      ) : (
+        <>
+          <img src="/illustration/logo.svg" alt={siteConfig.name} className={cn(size, "dark:hidden")} draggable={false} />
+          <img src="/illustration/logo-dark.svg" alt="" aria-hidden="true" className={cn(size, "hidden dark:block")} draggable={false} />
+        </>
+      )}
     </Link>
   );
 }

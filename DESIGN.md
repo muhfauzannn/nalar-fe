@@ -310,6 +310,12 @@ Tokens and utilities live in `app/app.css` ("Motion system"); do not hard-code c
   `app.css`; JS animation checks `matchMedia`). Hover styles are already gated behind
   `@media (hover: hover)` by Tailwind.
 - Touch targets: icon buttons grow an invisible hit area (`after:-inset-1.5`) instead of looking bigger.
+- The navbar is seen on every page, so it gets feedback only: no intro animation, links press to
+  `scale(0.97)`, and the bar's blurred surface is a single layer whose `opacity` fades in once the
+  page scrolls past 8px (an `IntersectionObserver` sentinel, not a scroll listener). The centre links
+  sit in a three-column grid so they can never run into the right-hand cluster. Only the mobile
+  drawer (`--ease-drawer`, 300ms in / 200ms out) and the account popover (origin-aware, <= 200ms)
+  animate their open/close.
 
 ### How this was verified
 

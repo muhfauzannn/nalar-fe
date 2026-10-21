@@ -293,3 +293,16 @@
 [data-slot="sheet-overlay"] {
   animation-timing-function: var(--ease-drawer);
 }
+
+/* Reduced motion for the drawer: no slide, a short fade instead. */
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="sheet-content"] {
+    transition-property: opacity;
+    transition-duration: 150ms;
+  }
+  [data-slot="sheet-content"][data-starting-style],
+  [data-slot="sheet-content"][data-ending-style] {
+    translate: none;
+    opacity: 0;
+  }
+}

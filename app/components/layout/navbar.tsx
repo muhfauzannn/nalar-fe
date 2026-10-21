@@ -1,7 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { NavLink } from "react-router";
-import gsap from "gsap";
-import { useGSAP } from "@gsap/react";
 import { Languages, Menu } from "lucide-react";
 
 import { Brand } from "./brand";
@@ -21,89 +19,87 @@ import { useSession } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 
 /**
- * Top navigation. Follows DESIGN.md (logo left, centered links, language
- * toggle + Login right) but with two signature, non-generic touches:
- *  - the active link sits on an offset mint highlight block (the DESIGN.md
- *    section-header motif), instead of the usual underline;
- *  - the bar is transparent over the hero and only condenses into a blurred
- *    surface once you scroll — motion stays subtle.
+ * Top navigation: logo left, links centred, language + account right.
+ *
+ * It is chrome people see on every page, so it barely moves:
+ *  - no intro animation (it used to flash: server HTML visible, then hidden by JS,
+ *    then animated in);
+ *  - the bar is transparent over the hero and a blurred surface fades in once the
+ *    page scrolls. The surface is ONE layer whose opacity animates, so the blur
+ *    and the background arrive together (animating `background-color` alone left
+ *    the blur snapping on);
+ *  - links give press feedback and a keyboard ring; nothing else.
+ * The three-column grid means the centre links can never run into the right
+ * cluster, however wide it gets (centring with `absolute` did, at 768px).
  */
 export function Navbar() {
-  const scope = useRef<HTMLElement>(null);
-  const [scrolled, setScrolled] = useState(false);
   const [lang, setLang] = useState<"ID" | "EN">("ID");
   const { data: session } = useSession();
   const navigation = session ? studentNav : mainNav;
-
-  useGSAP(
-    () => {
-      const onScroll = () => setScrolled(window.scrollY > 8);
-      onScroll();
-      window.addEventListener("scroll", onScroll, { passive: true });
-
-      // Subtle, reduced-motion-aware intro. Never runs for users who opt out.
-      const mm = gsap.matchMedia();
-      mm.add("(prefers-reduced-motion: no-preference)", () => {
-        gsap.from("[data-nav-item]", {
-          y: -8,
-          opacity: 0,
-          duration: 0.4,
-          ease: "power2.out",
-          stagger: 0.05,
-          clearProps: "transform,opacity",
-        });
-      });
-
-      return () => window.removeEventListener("scroll", onScroll);
-    },
-    { scope },
-  );
+  const { sentinel, scrolled } = useScrolled();
+  const toggleLang = () => setLang((current) => (current === "ID" ? "EN" : "ID"));
 
   return (
-    <header
-      ref={scope}
-      className={cn(
-        "sticky top-0 z-50 transition-colors duration-300",
-        scrolled
-          ? "border-b border-border bg-background/70 backdrop-blur-md"
-          : "border-b border-transparent bg-transparent",
-      )}
-    >
-      <Container className="flex h-16 items-center justify-between gap-4">
-        <div data-nav-item>
-          <Brand />
-        </div>
+    <>
+      {/* Watched instead of listening to `scroll`: the only question is "past 8px?". */}
+      <div ref={sentinel} aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-2" />
 
-        {/* Centered links — desktop only */}
-        <nav
-          aria-label="Primary"
-          className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex"
-        >
-          {navigation.map((item) => (
-            <NavItemLink key={item.href} href={item.href} label={item.label} />
-          ))}
-        </nav>
+      <header className="sticky top-0 z-50">
+        <div
+          aria-hidden="true"
+          data-slot="navbar-surface"
+          className={cn(
+            "absolute inset-0 -z-10 border-b border-border bg-background/70 backdrop-blur-md transition-opacity duration-200 ease-out-strong motion-reduce:duration-100",
+            scrolled ? "opacity-100" : "opacity-0",
+          )}
+        />
 
-        {/* Right cluster — desktop */}
-        <div data-nav-item className="hidden items-center gap-1.5 md:flex">
-          <LangToggle
-            lang={lang}
-            onToggle={() => setLang(lang === "ID" ? "EN" : "ID")}
-          />
-          <SessionActions />
-        </div>
+        <Container className="flex h-16 items-center justify-between gap-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+          <div className="justify-self-start">
+            <Brand />
+          </div>
 
-        {/* Mobile */}
-        <div className="md:hidden">
-          <MobileMenu
-            navigation={navigation}
-            lang={lang}
-            onToggleLang={() => setLang(lang === "ID" ? "EN" : "ID")}
-          />
-        </div>
-      </Container>
-    </header>
+          {/* Centred links - desktop only. Keyed so a guest -> member swap fades. */}
+          <nav aria-label="Navigasi utama" className="hidden md:block">
+            <div key={session ? "member" : "guest"} className="enter-fade flex items-center gap-1">
+              {navigation.map((item) => (
+                <NavItemLink key={item.href} href={item.href} label={item.label} />
+              ))}
+            </div>
+          </nav>
+
+          {/* Right cluster - desktop */}
+          <div className="hidden items-center justify-end gap-1.5 md:flex">
+            <LangToggle lang={lang} onToggle={toggleLang} />
+            <SessionActions />
+          </div>
+
+          {/* Mobile */}
+          <div className="md:hidden">
+            <MobileMenu navigation={navigation} lang={lang} onToggleLang={toggleLang} />
+          </div>
+        </Container>
+      </header>
+    </>
   );
+}
+
+function useScrolled() {
+  const sentinel = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setScrolled(entry ? !entry.isIntersecting : false),
+      { threshold: 0 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return { sentinel, scrolled };
 }
 
 function NavItemLink({ href, label }: { href: string; label: string }) {
@@ -112,16 +108,15 @@ function NavItemLink({ href, label }: { href: string; label: string }) {
       to={href}
       end={href === "/"}
       prefetch="intent"
-      data-nav-item
-      className="group relative px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:text-foreground"
+      className="group relative isolate rounded-md px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-[color,scale] duration-150 ease-out-strong hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.97] motion-reduce:active:scale-100 aria-[current=page]:text-foreground"
     >
       {({ isActive }) => (
         <>
-          {/* offset highlight block for the active link */}
+          {/* offset highlight block for the active link (the DESIGN.md section motif) */}
           <span
-            aria-hidden
+            aria-hidden="true"
             className={cn(
-              "absolute inset-x-1.5 bottom-1 -z-10 h-1/3 -rotate-1 rounded-md bg-brand-mint-soft transition-opacity duration-300",
+              "absolute inset-x-1.5 bottom-1.5 -z-10 h-1/3 -rotate-1 rounded-md bg-brand-mint-soft",
               isActive ? "opacity-100" : "opacity-0",
             )}
           />
@@ -132,18 +127,14 @@ function NavItemLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function LangToggle({
-  lang,
-  onToggle,
-}: {
-  lang: "ID" | "EN";
-  onToggle: () => void;
-}) {
+// NOTE: nothing is translated yet, so this only flips the label. Kept because
+// DESIGN.md asks for it; remove it if i18n is not on the roadmap.
+function LangToggle({ lang, onToggle }: { lang: "ID" | "EN"; onToggle: () => void }) {
   return (
     <Button
       variant="ghost"
       onClick={onToggle}
-      aria-label={`Language: ${lang}. Switch language.`}
+      aria-label={`Bahasa: ${lang}. Ganti bahasa.`}
     >
       <Languages data-icon="inline-start" />
       {lang}
@@ -164,7 +155,7 @@ function MobileMenu({
     <Sheet>
       <SheetTrigger
         render={
-          <Button variant="ghost" size="icon" aria-label="Open menu">
+          <Button variant="ghost" size="icon" aria-label="Buka menu">
             <Menu />
           </Button>
         }
@@ -174,8 +165,8 @@ function MobileMenu({
           <SheetTitle className="sr-only">Menu</SheetTitle>
           <Brand />
         </SheetHeader>
-        <nav aria-label="Primary" className="mt-2 flex flex-col px-4">
-          {navigation.map((item) => (
+        <nav aria-label="Navigasi utama" className="mt-2 flex flex-col px-4">
+          {navigation.map((item, index) => (
             <SheetClose
               key={item.href}
               render={
@@ -183,7 +174,9 @@ function MobileMenu({
                   to={item.href}
                   end={item.href === "/"}
                   prefetch="intent"
-                  className="border-b border-border/60 py-3 text-base font-medium text-foreground/80 transition-colors hover:text-foreground aria-[current=page]:text-foreground"
+                  // The drawer opens now and then, so its rows rise in one after another.
+                  style={{ "--i": index } as CSSProperties}
+                  className="enter-up border-b border-border/60 py-3 text-base font-medium text-foreground/80 transition-colors duration-150 ease-out-strong hover:text-foreground active:bg-muted/50 aria-[current=page]:text-foreground"
                 >
                   {item.label}
                 </NavLink>
@@ -191,12 +184,12 @@ function MobileMenu({
             />
           ))}
         </nav>
-        <div className="mt-auto flex items-center gap-2 p-4">
-          <Button variant="outline" size="sm" onClick={onToggleLang}>
+        <div className="mt-auto flex flex-col gap-3 p-4">
+          <SessionActions layout="sheet" />
+          <Button variant="outline" size="sm" className="self-start" onClick={onToggleLang}>
             <Languages data-icon="inline-start" />
             {lang}
           </Button>
-          <SessionActions grow />
         </div>
       </SheetContent>
     </Sheet>
