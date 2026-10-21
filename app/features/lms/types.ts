@@ -107,6 +107,8 @@ export type LessonData = {
     title: string;
     content: string | null;
     url: string | null;
+    /** An uploaded PDF, opened through the API (see `studentResourceFileUrl`). */
+    file: { name: string; size: number } | null;
     position: number;
   }>;
 };

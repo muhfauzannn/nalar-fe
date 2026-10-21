@@ -4,6 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { formatFileSize, manageResourceFileUrl, MAX_PDF_BYTES } from "~/lib/files";
 import type { ManagedResource, ResourceType } from "../types";
 import { ActionError, useAction, useOnSuccess } from "./action-feedback";
 import { NativeSelect } from "./native-select";
@@ -11,7 +12,7 @@ import { NativeSelect } from "./native-select";
 const TYPE_LABEL: Record<ResourceType, string> = {
   text: "Teks / catatan",
   link: "Tautan web",
-  file: "File (PDF atau dokumen)",
+  file: "File PDF (unggah)",
 };
 
 // Create and edit share one form. `resource` present = edit.
@@ -26,11 +27,15 @@ export function ResourceForm({
 }) {
   const { fetcher, pending, error } = useAction();
   const [type, setType] = useState<ResourceType>(resource?.type ?? "link");
+  // An uploaded PDF keeps its type (changing it would silently delete the file); an old
+  // URL-only 'file' resource can still be edited by URL or switched to an upload.
+  const uploaded = resource?.file ?? null;
+  const legacyFile = resource?.type === "file" && !uploaded;
   const idPrefix = resource ? `resource-${resource.id}` : "new-resource";
   useOnSuccess(fetcher, () => onDone?.());
 
   return (
-    <fetcher.Form method="post" className="flex flex-col gap-4">
+    <fetcher.Form method="post" encType="multipart/form-data" className="flex flex-col gap-4">
       <input type="hidden" name="intent" value={resource ? "resource-update" : "resource-create"} />
       <input type="hidden" name="lessonId" value={lessonId} />
       {resource ? <input type="hidden" name="resourceId" value={resource.id} /> : null}
@@ -41,8 +46,10 @@ export function ResourceForm({
           <FieldLabel htmlFor={`${idPrefix}-type`}>Jenis</FieldLabel>
           <NativeSelect
             id={`${idPrefix}-type`}
-            name="type"
+            // a disabled control is not submitted, so an uploaded resource sends its type below
+            name={uploaded ? undefined : "type"}
             value={type}
+            disabled={Boolean(uploaded)}
             onChange={(event) => setType(event.target.value as ResourceType)}
           >
             {(Object.keys(TYPE_LABEL) as ResourceType[]).map((value) => (
@@ -51,6 +58,7 @@ export function ResourceForm({
               </option>
             ))}
           </NativeSelect>
+          {uploaded ? <input type="hidden" name="type" value="file" /> : null}
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-title`}>Judul</FieldLabel>
@@ -80,23 +88,59 @@ export function ResourceForm({
         </Field>
       ) : (
         <>
-          <Field>
-            <FieldLabel htmlFor={`${idPrefix}-url`}>URL</FieldLabel>
-            <Input
-              id={`${idPrefix}-url`}
-              name="url"
-              type="url"
-              required
-              maxLength={2048}
-              defaultValue={resource?.url ?? ""}
-              placeholder="https://..."
-            />
-            <FieldDescription>
-              {type === "file"
-                ? "NALAR tidak menyimpan file. Unggah PDF ke penyimpanan yang bisa dibuka siapa saja yang punya tautan (Google Drive, Dropbox, dll.), lalu tempel tautannya di sini. Hanya http:// dan https:// yang diterima."
-                : "Hanya tautan http:// dan https:// yang diterima."}
-            </FieldDescription>
-          </Field>
+          {type === "file" ? (
+            <Field>
+              <FieldLabel htmlFor={`${idPrefix}-file`}>
+                {uploaded || legacyFile ? "Ganti dengan file baru (opsional)" : "File PDF"}
+              </FieldLabel>
+              {uploaded ? (
+                <p className="text-sm text-muted-foreground">
+                  File saat ini:{" "}
+                  <a
+                    href={manageResourceFileUrl(resource!.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-foreground underline underline-offset-4"
+                  >
+                    {uploaded.name}
+                  </a>{" "}
+                  ({formatFileSize(uploaded.size)})
+                </p>
+              ) : null}
+              <Input
+                id={`${idPrefix}-file`}
+                name="file"
+                type="file"
+                accept="application/pdf,.pdf"
+                required={!uploaded && !legacyFile}
+              />
+              <FieldDescription>
+                PDF, maksimal {formatFileSize(MAX_PDF_BYTES)}. Hanya siswa yang terdaftar di
+                course ini yang bisa membukanya.
+              </FieldDescription>
+            </Field>
+          ) : null}
+          {type === "link" || legacyFile ? (
+            <Field>
+              <FieldLabel htmlFor={`${idPrefix}-url`}>
+                {legacyFile ? "Atau tetap pakai URL" : "URL"}
+              </FieldLabel>
+              <Input
+                id={`${idPrefix}-url`}
+                name="url"
+                type="url"
+                required={!legacyFile}
+                maxLength={2048}
+                defaultValue={resource?.url ?? ""}
+                placeholder="https://..."
+              />
+              <FieldDescription>
+                {legacyFile
+                  ? "Resource ini masih berupa tautan ke file di luar NALAR. Pilih file di atas untuk menggantinya dengan unggahan."
+                  : "Hanya tautan http:// dan https:// yang diterima."}
+              </FieldDescription>
+            </Field>
+          ) : null}
           <Field>
             <FieldLabel htmlFor={`${idPrefix}-description`}>Keterangan (opsional)</FieldLabel>
             <Input

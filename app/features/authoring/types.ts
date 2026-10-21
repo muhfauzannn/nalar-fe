@@ -32,6 +32,8 @@ export type ManagedResource = {
   title: string;
   content: string | null;
   url: string | null;
+  /** An uploaded PDF. Present instead of `url`, never together with it. */
+  file: { name: string; size: number } | null;
   position: number;
 };
 

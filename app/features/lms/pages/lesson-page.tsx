@@ -6,7 +6,9 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  Download,
   ExternalLink,
+  File,
   FileText,
   Link2,
   RotateCcw,
@@ -14,6 +16,7 @@ import {
 import { Form, Link } from "react-router";
 
 import { MathText } from "~/components/math-text";
+import { formatFileSize, studentResourceFileUrl } from "~/lib/files";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -338,6 +341,8 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                     <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-secondary-foreground transition-transform duration-700 ease-out group-hover:scale-105">
                       {resource.type === "text" ? (
                         <FileText className="size-5" aria-hidden="true" />
+                      ) : resource.file ? (
+                        <File className="size-5" aria-hidden="true" />
                       ) : (
                         <Link2 className="size-5" aria-hidden="true" />
                       )}
@@ -346,6 +351,11 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                       <h3 className="font-heading text-lg font-semibold text-balance">
                         {resource.title}
                       </h3>
+                      {resource.file && (
+                        <p className="mt-1 break-all text-xs text-muted-foreground">
+                          {resource.file.name} · {formatFileSize(resource.file.size)}
+                        </p>
+                      )}
                       {resource.content && (
                         <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm/relaxed text-muted-foreground">
                           <MathText>{resource.content}</MathText>
@@ -354,7 +364,32 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                     </div>
                   </div>
 
-                  {resource.url && (
+                  {resource.file ? (
+                    <div className="mt-6 flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        render={
+                          <a
+                            href={studentResourceFileUrl(resource.id)}
+                            target="_blank"
+                            rel="noreferrer"
+                          />
+                        }
+                      >
+                        Buka PDF
+                        <ExternalLink data-icon="inline-end" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label={`Unduh ${resource.file.name}`}
+                        render={<a href={studentResourceFileUrl(resource.id, true)} />}
+                      >
+                        <Download />
+                      </Button>
+                    </div>
+                  ) : resource.url ? (
                     <Button
                       variant="outline"
                       className="mt-6 w-full"
@@ -363,7 +398,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                       Buka resource
                       <ExternalLink data-icon="inline-end" />
                     </Button>
-                  )}
+                  ) : null}
                 </article>
               ))}
             </div>

@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 
+import { pdfProblem } from "~/lib/files";
 import {
   flag,
   jsonField,
@@ -60,8 +61,24 @@ function resourceBody(form: FormData) {
     type,
     title: text(form, "title"),
     ...(content ? { content } : {}),
-    ...(type === "text" ? {} : { url: text(form, "url") }),
+    // An uploaded PDF has no URL field in the form: leaving `url` out keeps the file.
+    ...(type === "text" || !form.has("url") ? {} : { url: text(form, "url") }),
   };
+}
+
+function chosenFile(form: FormData): File | null {
+  const value = form.get("file");
+  return value instanceof File && value.size > 0 ? value : null;
+}
+
+// The words travel with the file in one request, so a rejected upload changes nothing.
+function uploadBody(form: FormData, file: File) {
+  const body = new FormData();
+  body.set("title", text(form, "title"));
+  const content = rawText(form, "content").trim();
+  if (content) body.set("content", content);
+  body.set("file", file);
+  return body;
 }
 
 // ---- /manage/courses/new ------------------------------------------------
@@ -196,12 +213,28 @@ export async function lessonEditorAction({ request, params }: Args) {
           status: publicationStatus(form),
         }),
       );
-    case "resource-create":
-      return runAction(() => manageApi.createResource(request, lessonId, resourceBody(form)));
-    case "resource-update":
+    case "resource-create": {
+      if (text(form, "type") !== "file") {
+        return runAction(() => manageApi.createResource(request, lessonId, resourceBody(form)));
+      }
+      const file = chosenFile(form);
+      const problem = pdfProblem(file);
+      if (problem || !file) return { ok: false, error: problem ?? "Pilih file PDF terlebih dahulu." };
+      return runAction(() => manageApi.uploadResource(request, lessonId, uploadBody(form, file)));
+    }
+    case "resource-update": {
+      const file = text(form, "type") === "file" ? chosenFile(form) : null;
+      if (file) {
+        const problem = pdfProblem(file);
+        if (problem) return { ok: false, error: problem };
+        return runAction(() =>
+          manageApi.replaceResourceFile(request, text(form, "resourceId"), uploadBody(form, file)),
+        );
+      }
       return runAction(() =>
         manageApi.updateResource(request, text(form, "resourceId"), resourceBody(form)),
       );
+    }
     case "resource-delete":
       return runAction(() => manageApi.deleteResource(request, text(form, "resourceId")));
     case "resource-order":

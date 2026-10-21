@@ -146,6 +146,14 @@ export const manageApi = {
     write(request, () => http.post(`${base}/lessons/${lessonId}/resources`, body, init(request))),
   updateResource: (request: Request, resourceId: string, body: ResourceBody) =>
     write(request, () => http.patch(`${base}/resources/${resourceId}`, body, init(request))),
+  uploadResource: (request: Request, lessonId: string, form: FormData) =>
+    write(request, () =>
+      http.postForm(`${base}/lessons/${lessonId}/resources/upload`, form, init(request)),
+    ),
+  replaceResourceFile: (request: Request, resourceId: string, form: FormData) =>
+    write(request, () =>
+      http.putForm(`${base}/resources/${resourceId}/file`, form, init(request)),
+    ),
   deleteResource: (request: Request, resourceId: string) =>
     write(request, () => http.delete(`${base}/resources/${resourceId}`, init(request))),
   orderResources: (request: Request, lessonId: string, ids: string[]) =>

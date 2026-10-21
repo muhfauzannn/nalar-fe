@@ -17,10 +17,12 @@ export class HttpError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // A multipart body must not get a Content-Type from us: the browser adds it, with the boundary.
+  const isForm = init?.body instanceof FormData;
   const res = await fetch(`${env.apiUrl}${path}`, {
     credentials: "include",
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: { ...(isForm ? {} : { "Content-Type": "application/json" }), ...init?.headers },
   });
 
   if (!res.ok) {
@@ -53,6 +55,10 @@ export const http = {
     request<T>(path, { ...init, method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, { ...init, method: "PATCH", body: JSON.stringify(body) }),
+  postForm: <T>(path: string, form: FormData, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "POST", body: form }),
+  putForm: <T>(path: string, form: FormData, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "PUT", body: form }),
   delete: <T>(path: string, init?: RequestInit) =>
     request<T>(path, { ...init, method: "DELETE" }),
 };

@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, FileText, Link2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, File, FileText, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { formatFileSize, manageResourceFileUrl } from "~/lib/files";
 import { ActionError, useAction } from "../components/action-feedback";
 import { ConfirmAction } from "../components/confirm-action";
 import { NativeSelect } from "../components/native-select";
@@ -197,7 +198,7 @@ function ResourceRow({
 }) {
   const [editing, setEditing] = useState(false);
   const remove = useAction();
-  const Icon = resource.type === "text" ? FileText : Link2;
+  const Icon = resource.type === "text" ? FileText : resource.file ? File : Link2;
 
   return (
     <ListItem flipKey={resource.id} index={index}>
@@ -213,10 +214,22 @@ function ResourceRow({
               <span className="truncate text-xs text-muted-foreground">
                 {resource.type === "text"
                   ? "Teks"
-                  : resource.type === "file"
-                    ? "File — "
-                    : "Tautan — "}
-                {resource.url ? (
+                  : resource.file
+                    ? "PDF — "
+                    : resource.type === "file"
+                      ? "File — "
+                      : "Tautan — "}
+                {resource.file ? (
+                  <a
+                    href={manageResourceFileUrl(resource.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 underline underline-offset-4"
+                  >
+                    {resource.file.name} ({formatFileSize(resource.file.size)})
+                    <ExternalLink className="size-3" aria-hidden="true" />
+                  </a>
+                ) : resource.url ? (
                   <a
                     href={resource.url}
                     target="_blank"
