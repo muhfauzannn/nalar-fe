@@ -1,16 +1,17 @@
 import { useState, type ReactNode } from "react";
 
-import { Button } from "~/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
+import { Button } from "~/components/ui/button";
 
 // For actions that cannot be undone, or that invalidate something other people
 // are holding (a class code that was already shared).
@@ -37,21 +38,21 @@ export function ConfirmAction({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
         render={<Button type="button" variant={variant} size={size} disabled={disabled} />}
       >
         {icon}
         {label}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>Batal</DialogClose>
-          <Button
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel type="button">Batal</AlertDialogCancel>
+          <AlertDialogAction
             type="button"
             variant={variant === "destructive" ? "destructive" : "default"}
             onClick={() => {
@@ -60,9 +61,9 @@ export function ConfirmAction({
             }}
           >
             {confirmLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

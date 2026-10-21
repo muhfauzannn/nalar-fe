@@ -8,13 +8,13 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import { formatDateTime } from "~/features/lms/lib/format";
 import { ActionError, useAction, useResetOnSuccess } from "../components/action-feedback";
 import { CourseContentTab } from "../components/course-content-tab";
 import { JoinCodeCard } from "../components/join-code-card";
-import { NativeSelect } from "../components/native-select";
 import { ListItem } from "../components/list-item";
 import { StatusBadge } from "../components/status-badge";
 import type {
@@ -181,9 +181,9 @@ function CourseDetailsCard({
             <FieldLabel htmlFor="course-subject">Mata pelajaran</FieldLabel>
             <NativeSelect id="course-subject" name="subjectId" defaultValue={course.subjectId}>
               {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
+                <NativeSelectOption key={subject.id} value={subject.id}>
                   {subject.name}
-                </option>
+                </NativeSelectOption>
               ))}
             </NativeSelect>
           </Field>
@@ -313,13 +313,13 @@ function AssignmentsTab({
                 <Field>
                   <FieldLabel htmlFor="new-assignment-scenario">Skenario</FieldLabel>
                   <NativeSelect id="new-assignment-scenario" name="scenarioId" required defaultValue="">
-                    <option value="" disabled>
+                    <NativeSelectOption value="" disabled>
                       Pilih skenario
-                    </option>
+                    </NativeSelectOption>
                     {scenarios.map((scenario) => (
-                      <option key={scenario.id} value={scenario.id}>
+                      <NativeSelectOption key={scenario.id} value={scenario.id}>
                         {scenario.title} — {scenario.subjectName}
-                      </option>
+                      </NativeSelectOption>
                     ))}
                   </NativeSelect>
                 </Field>

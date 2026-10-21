@@ -4,10 +4,10 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
 import type { ManagedQuestion, QuestionDraft } from "../types";
 import { ActionError, useAction, useOnSuccess } from "./action-feedback";
-import { NativeSelect } from "./native-select";
 
 type OptionDraft = { label: string; isCorrect: boolean };
 
@@ -121,8 +121,8 @@ export function QuestionForm({
             value={type}
             onChange={(event) => setType(event.target.value as QuestionDraft["type"])}
           >
-            <option value="multiple_choice">Pilihan ganda</option>
-            <option value="short_answer">Isian singkat</option>
+            <NativeSelectOption value="multiple_choice">Pilihan ganda</NativeSelectOption>
+            <NativeSelectOption value="short_answer">Isian singkat</NativeSelectOption>
           </NativeSelect>
         </Field>
         <Field>

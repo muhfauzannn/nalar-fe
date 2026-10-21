@@ -8,11 +8,11 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
 import { formatFileSize, manageResourceFileUrl } from "~/lib/files";
 import { ActionError, useAction } from "../components/action-feedback";
 import { ConfirmAction } from "../components/confirm-action";
-import { NativeSelect } from "../components/native-select";
 import { ListItem } from "../components/list-item";
 import { ReorderControls } from "../components/reorder-controls";
 import { ResourceForm } from "../components/resource-form";
@@ -76,9 +76,9 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
                 <FieldLabel htmlFor="lesson-status">Status</FieldLabel>
                 <NativeSelect id="lesson-status" name="status" defaultValue={lesson.status}>
                   {(["draft", "published", "archived"] as PublicationStatus[]).map((value) => (
-                    <option key={value} value={value}>
+                    <NativeSelectOption key={value} value={value}>
                       {publicationStatusLabel[value]}
-                    </option>
+                    </NativeSelectOption>
                   ))}
                 </NativeSelect>
               </Field>

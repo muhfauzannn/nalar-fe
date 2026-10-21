@@ -4,9 +4,9 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
 import { ActionError } from "../components/action-feedback";
-import { NativeSelect } from "../components/native-select";
 import type { ActionResult, Subject } from "../types";
 
 export function NewCoursePage({
@@ -42,13 +42,13 @@ export function NewCoursePage({
             <Field>
               <FieldLabel htmlFor="subjectId">Mata pelajaran</FieldLabel>
               <NativeSelect id="subjectId" name="subjectId" required defaultValue="">
-                <option value="" disabled>
+                <NativeSelectOption value="" disabled>
                   Pilih mata pelajaran
-                </option>
+                </NativeSelectOption>
                 {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
+                  <NativeSelectOption key={subject.id} value={subject.id}>
                     {subject.name}
-                  </option>
+                  </NativeSelectOption>
                 ))}
               </NativeSelect>
             </Field>

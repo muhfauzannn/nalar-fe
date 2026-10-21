@@ -1,19 +1,22 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-import { Input } from "~/components/ui/input";
-import { Button } from "~/components/ui/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "~/components/ui/input-group";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { cn } from "~/lib/utils";
 
 /**
  * Password input with a show/hide toggle. Local UI state only — no auth logic.
  * The toggle is an icon-only button, so it carries an `aria-label` + `Tooltip`
- * (AGENTS.md rule). Keeps the shared `h-9` control height via `pr-10` padding.
+ * (AGENTS.md rule). The group is pinned to the shared `h-9` control height.
  */
 export function PasswordField({
   id,
@@ -23,43 +26,42 @@ export function PasswordField({
   className,
   disabled,
   ...props
-}: Omit<React.ComponentProps<typeof Input>, "type"> & {
+}: Omit<React.ComponentProps<typeof InputGroupInput>, "type"> & {
   id: string;
 }) {
   const [show, setShow] = useState(false);
 
   return (
-    <div className="relative">
-      <Input
+    <InputGroup className="h-9">
+      <InputGroupInput
         id={id}
         name={name}
         type={show ? "text" : "password"}
         autoComplete={autoComplete}
         placeholder={placeholder}
-        className={cn("pr-10", className)}
+        className={className}
         disabled={disabled}
         {...props}
       />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setShow((v) => !v)}
-              disabled={disabled}
-              aria-label={show ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
-              className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground active:not-aria-[haspopup]:-translate-y-1/2"
-            >
-              {show ? <EyeOff /> : <Eye />}
-            </Button>
-          }
-        />
-        <TooltipContent>
-          {show ? "Sembunyikan" : "Tampilkan"}
-        </TooltipContent>
-      </Tooltip>
-    </div>
+      <InputGroupAddon align="inline-end">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <InputGroupButton
+                size="icon-xs"
+                onClick={() => setShow((v) => !v)}
+                disabled={disabled}
+                aria-label={show ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+              />
+            }
+          >
+            {show ? <EyeOff /> : <Eye />}
+          </TooltipTrigger>
+          <TooltipContent>
+            {show ? "Sembunyikan" : "Tampilkan"}
+          </TooltipContent>
+        </Tooltip>
+      </InputGroupAddon>
+    </InputGroup>
   );
 }

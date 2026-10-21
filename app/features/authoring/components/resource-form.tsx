@@ -3,11 +3,11 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
 import { formatFileSize, manageResourceFileUrl, MAX_PDF_BYTES } from "~/lib/files";
 import type { ManagedResource, ResourceType } from "../types";
 import { ActionError, useAction, useOnSuccess } from "./action-feedback";
-import { NativeSelect } from "./native-select";
 
 const TYPE_LABEL: Record<ResourceType, string> = {
   text: "Teks / catatan",
@@ -53,9 +53,9 @@ export function ResourceForm({
             onChange={(event) => setType(event.target.value as ResourceType)}
           >
             {(Object.keys(TYPE_LABEL) as ResourceType[]).map((value) => (
-              <option key={value} value={value}>
+              <NativeSelectOption key={value} value={value}>
                 {TYPE_LABEL[value]}
-              </option>
+              </NativeSelectOption>
             ))}
           </NativeSelect>
           {uploaded ? <input type="hidden" name="type" value="file" /> : null}
