@@ -9,3 +9,7 @@
 
 /.agents/
 /AGENTS.md
+# Generated from the installed PDF.js version
+/public/pdfjs/
+/test-results/
+/playwright-report/

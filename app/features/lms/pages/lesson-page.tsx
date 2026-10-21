@@ -43,6 +43,7 @@ import {
 } from "~/components/ui/empty";
 import { Separator } from "~/components/ui/separator";
 import type { LessonData } from "../types";
+import { PdfStudyRoom } from "../components/pdf-study-room";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -198,6 +199,10 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
             </div>
           </div>
         </header>
+
+        {loaderData.resources.some((resource) => resource.file) ? (
+          <PdfStudyRoom resources={loaderData.resources} />
+        ) : null}
 
         <div
           data-reading-grid

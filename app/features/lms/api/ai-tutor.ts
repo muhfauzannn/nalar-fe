@@ -7,6 +7,10 @@ import type {
 } from "../types";
 
 export const aiTutorApi = {
+  createPdfSession: (resourceId: string, signal: AbortSignal) =>
+    http.post<{ token: string; model: string; expiresAt: string; resourceId: string }>(
+      "/api/student/ai-tutor/pdf-sessions", { resourceId }, { signal },
+    ),
   createSession: (target: AiTutorTarget, mode: AiTutorMode) =>
     http.post<AiTutorSessionData>("/api/student/ai-tutor/sessions", {
       ...target,

@@ -85,3 +85,8 @@ This template comes with [Tailwind CSS](https://tailwindcss.com/) already config
 ---
 
 Built with ❤️ using React Router.
+
+## TutorAI PDF
+
+Materi yang memiliki PDF unggahan kini menyertakan pembaca PDF dan tutor suara
+kontekstual dengan cursor serta anotasi. Lihat [alur, konfigurasi, dan pengujian](docs/tutor-ai.md).
