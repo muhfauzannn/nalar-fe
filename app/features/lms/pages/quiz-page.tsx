@@ -8,16 +8,15 @@ import {
   Clock3,
   FileQuestion,
   Lightbulb,
-  ListChecks,
   RefreshCw,
   ShieldCheck,
   Sparkles,
-  TextCursorInput,
   TimerOff,
   X,
 } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
 import {
   Accordion,
@@ -27,14 +26,6 @@ import {
 } from "~/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -48,7 +39,6 @@ import {
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Separator } from "~/components/ui/separator";
 import { Spinner } from "~/components/ui/spinner";
-import { cn } from "~/lib/utils";
 import { QuizAttempt, QuizAttemptExpired } from "../components/quiz-attempt";
 import { formatDateTime } from "../lib/format";
 import type { AiRelianceLevel, QuizData, QuizUsageReflection } from "../types";
@@ -93,18 +83,11 @@ export function QuizPage({
       const media = gsap.matchMedia();
       media.add("(prefers-reduced-motion: no-preference)", () => {
         gsap.from("[data-quiz-reveal]", {
-          y: 14,
+          y: 8,
           opacity: 0,
-          duration: 0.38,
-          ease: "power2.out",
-          stagger: 0.06,
-          clearProps: "transform,opacity",
-        });
-        gsap.from("[data-quiz-art]", {
-          scale: 0.88,
-          opacity: 0,
-          duration: 0.55,
+          duration: 0.24,
           ease: "power3.out",
+          stagger: 0.04,
           clearProps: "transform,opacity",
         });
       });
@@ -117,95 +100,37 @@ export function QuizPage({
     <div ref={scope} className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-8 lg:gap-10">
         <div data-quiz-reveal>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink
-                  render={<Link to={`/courses/${loaderData.quiz.courseId}`} />}
-                >
-                  {loaderData.quiz.courseName}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{loaderData.quiz.title}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
-
-        <div data-quiz-reveal>
-          <header
-            className={cn(
-              activeAttempt
-                ? "flex flex-col gap-3 border-b pb-6"
-                : "group relative isolate grid min-h-80 overflow-hidden rounded-3xl bg-primary px-6 py-9 text-primary-foreground sm:px-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)] lg:items-center lg:px-12 lg:py-10",
-            )}
-          >
-            {!activeAttempt && (
-              <div
-                aria-hidden="true"
-                className="absolute -top-28 -left-24 size-72 rounded-full bg-secondary/10"
-              />
-            )}
-
-            <div className="relative flex max-w-5xl flex-col items-start gap-4">
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  activeAttempt
-                    ? "text-muted-foreground"
-                    : "text-primary-foreground/60",
-                )}
-              >
-                {loaderData.quiz.courseName} / Quiz
-              </p>
-              <h1
-                className={cn(
-                  "max-w-5xl font-heading leading-tight font-semibold tracking-tight text-balance",
-                  activeAttempt
-                    ? "text-3xl sm:text-4xl"
-                    : "text-3xl sm:text-4xl lg:text-5xl",
-                )}
-              >
-                {loaderData.quiz.title}
-              </h1>
-              {loaderData.quiz.instructions && (
-                <p
-                  className={cn(
-                    "max-w-3xl whitespace-pre-wrap text-sm/relaxed sm:text-base/relaxed",
-                    activeAttempt
-                      ? "text-muted-foreground"
-                      : "text-primary-foreground/70",
-                  )}
-                >
-                  {loaderData.quiz.instructions}
-                </p>
-              )}
-            </div>
-
-            {!activeAttempt && (
-              <div className="relative flex items-center justify-center lg:justify-end">
-                <img
-                  data-quiz-art
-                  src="/illustration/chalkboard.svg"
-                  width={1254}
-                  height={1254}
-                  alt=""
-                  aria-hidden="true"
-                  className="pointer-events-none aspect-square w-full max-w-56 select-none object-contain transition-transform duration-700 ease-out group-hover:scale-105 sm:max-w-64 lg:max-w-72"
-                />
-              </div>
-            )}
-          </header>
-
-          {!activeAttempt && (
-            <QuizOverviewRail
-              data={loaderData}
-              multipleChoiceCount={multipleChoiceCount}
-              shortAnswerCount={shortAnswerCount}
-            />
-          )}
+          <PageHeader
+            crumbs={[
+              { label: "Course saya", to: "/courses" },
+              { label: loaderData.quiz.courseName, to: `/courses/${loaderData.quiz.courseId}` },
+            ]}
+            eyebrow={<Badge variant="lavender">Quiz</Badge>}
+            title={loaderData.quiz.title}
+            description={
+              loaderData.quiz.instructions && (
+                <span className="whitespace-pre-wrap">{loaderData.quiz.instructions}</span>
+              )
+            }
+            meta={
+              !activeAttempt && (
+                <>
+                  <span className="flex items-center gap-1.5 tabular-nums">
+                    <FileQuestion className="size-4" aria-hidden="true" />
+                    {loaderData.questions.length} soal
+                    {loaderData.questions.length > 0 &&
+                      ` (${multipleChoiceCount} pilihan ganda, ${shortAnswerCount} isian singkat)`}
+                  </span>
+                  <span className="flex items-center gap-1.5 tabular-nums">
+                    <Clock3 className="size-4" aria-hidden="true" />
+                    {loaderData.quiz.timeLimitMinutes
+                      ? `${loaderData.quiz.timeLimitMinutes} menit`
+                      : "Tanpa batas waktu"}
+                  </span>
+                </>
+              )
+            }
+          />
         </div>
 
         {actionError && !terminalActionError && (
@@ -217,12 +142,7 @@ export function QuizPage({
 
         <div data-quiz-reveal>
           {!loaderData.attempt ? (
-            <QuizStartPanel
-              data={loaderData}
-              working={working}
-              multipleChoiceCount={multipleChoiceCount}
-              shortAnswerCount={shortAnswerCount}
-            />
+            <QuizStartPanel data={loaderData} working={working} />
           ) : submitted ? (
             <QuizReview data={loaderData} />
           ) : expired ? (
@@ -238,82 +158,7 @@ export function QuizPage({
   );
 }
 
-function QuizOverviewRail({
-  data,
-  multipleChoiceCount,
-  shortAnswerCount,
-}: {
-  data: QuizData;
-  multipleChoiceCount: number;
-  shortAnswerCount: number;
-}) {
-  const metrics = [
-    {
-      label: "Total soal",
-      value: data.questions.length,
-      icon: FileQuestion,
-    },
-    {
-      label: "Pilihan ganda",
-      value: multipleChoiceCount,
-      icon: ListChecks,
-    },
-    {
-      label: "Isian singkat",
-      value: shortAnswerCount,
-      icon: TextCursorInput,
-    },
-    {
-      label: "Batas waktu",
-      value: data.quiz.timeLimitMinutes
-        ? `${data.quiz.timeLimitMinutes} mnt`
-        : "Fleksibel",
-      icon: Clock3,
-    },
-  ];
-
-  return (
-    <Card className="relative z-10 mx-4 -mt-7 sm:mx-8 lg:mx-12">
-      <CardContent className="grid grid-flow-dense grid-cols-2 p-0 lg:grid-cols-4">
-        {metrics.map(({ label, value, icon: Icon }, index) => (
-          <div
-            key={label}
-            className={cn(
-              "flex min-w-0 items-center gap-3 px-4 py-4 sm:px-5",
-              index % 2 !== 0 && "border-l",
-              index >= 2 && "border-t lg:border-t-0",
-              index > 0 && "lg:border-l",
-            )}
-          >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-              <Icon className="size-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-heading text-lg font-semibold tabular-nums sm:text-xl">
-                {value}
-              </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {label}
-              </span>
-            </span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function QuizStartPanel({
-  data,
-  working,
-  multipleChoiceCount,
-  shortAnswerCount,
-}: {
-  data: QuizData;
-  working: boolean;
-  multipleChoiceCount: number;
-  shortAnswerCount: number;
-}) {
+function QuizStartPanel({ data, working }: { data: QuizData; working: boolean }) {
   const preparation = [
     "Jawaban tersimpan otomatis per soal.",
     "Quiz hanya dapat dikerjakan satu kali.",
@@ -350,16 +195,12 @@ function QuizStartPanel({
         <CardHeader>
           <CardTitle>Siap mengerjakan?</CardTitle>
           <CardDescription>
-            {multipleChoiceCount} pilihan ganda, {shortAnswerCount} isian singkat.
+            {data.questions.length} soal
+            {data.quiz.dueAt ? `, tenggat ${formatDateTime(data.quiz.dueAt)}` : ""}. Jawaban
+            tersimpan setiap kamu menjawab.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="font-heading text-4xl font-semibold tabular-nums">
-            {data.questions.length}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">soal tersedia</p>
-        </CardContent>
-        <CardFooter>
+        <CardFooter className="mt-auto">
           {data.canStart ? (
             <Form method="post" className="w-full">
               <input type="hidden" name="intent" value="start" />

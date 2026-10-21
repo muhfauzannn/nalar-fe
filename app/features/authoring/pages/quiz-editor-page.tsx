@@ -1,7 +1,7 @@
-import { ArrowLeft, Check, Copy, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
-import { Link } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -32,31 +32,35 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <Button variant="ghost" size="sm" render={<Link to={`/manage/courses/${quiz.courseId}?tab=quizzes`} />}>
-          <ArrowLeft data-icon="inline-start" />
-          Kembali ke course
-        </Button>
-      </div>
-
-      <header className="flex flex-wrap items-start justify-between gap-5">
-        <div className="flex min-w-0 max-w-3xl flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        crumbs={[
+          { label: "Kelola course", to: "/manage" },
+          { label: "Isi course", to: `/manage/courses/${quiz.courseId}?tab=quizzes` },
+        ]}
+        eyebrow={
+          <>
             <StatusBadge status={quiz.status} />
-            <Badge variant="outline">{questions.length} soal · {totalPoints} poin</Badge>
-            <Badge variant="ghost">{attemptCount} pengerjaan</Badge>
-          </div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-            {quiz.title}
-          </h1>
-        </div>
-        <QuizStatusActions
-          status={quiz.status}
-          attemptCount={attemptCount}
-          ready={readiness.ready}
-          questionCount={readiness.questionCount}
-        />
-      </header>
+            <Badge variant="lavender">Kuis</Badge>
+          </>
+        }
+        title={quiz.title}
+        meta={
+          <>
+            <span className="tabular-nums">
+              {questions.length} soal · {totalPoints} poin
+            </span>
+            <span className="tabular-nums">{attemptCount} pengerjaan</span>
+          </>
+        }
+        actions={
+          <QuizStatusActions
+            status={quiz.status}
+            attemptCount={attemptCount}
+            ready={readiness.ready}
+            questionCount={readiness.questionCount}
+          />
+        }
+      />
 
       {locked ? (
         <Alert data-testid="quiz-locked">
@@ -157,8 +161,8 @@ function QuizStatusActions({
   const canDraft = attemptCount === 0;
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-col items-start gap-2 md:items-end">
+      <div className="flex flex-wrap gap-2 md:justify-end">
         {status === "draft" ? (
           <Button type="button" loading={pending} disabled={!ready} onClick={() => change("published")}>
             Terbitkan kuis

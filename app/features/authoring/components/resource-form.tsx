@@ -5,9 +5,10 @@ import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
-import { formatFileSize, manageResourceFileUrl, MAX_PDF_BYTES } from "~/lib/files";
+import { formatFileSize, manageResourceFileUrl } from "~/lib/files";
 import type { ManagedResource, ResourceType } from "../types";
 import { ActionError, useAction, useOnSuccess } from "./action-feedback";
+import { PdfFileField } from "./pdf-file-field";
 
 const TYPE_LABEL: Record<ResourceType, string> = {
   text: "Teks / catatan",
@@ -89,10 +90,12 @@ export function ResourceForm({
       ) : (
         <>
           {type === "file" ? (
-            <Field>
-              <FieldLabel htmlFor={`${idPrefix}-file`}>
-                {uploaded || legacyFile ? "Ganti dengan file baru (opsional)" : "File PDF"}
-              </FieldLabel>
+            <PdfFileField
+              id={`${idPrefix}-file`}
+              label={uploaded || legacyFile ? "Ganti dengan file baru (opsional)" : "File PDF"}
+              required={!uploaded && !legacyFile}
+              disabled={pending}
+            >
               {uploaded ? (
                 <p className="text-sm text-muted-foreground">
                   File saat ini:{" "}
@@ -107,18 +110,7 @@ export function ResourceForm({
                   ({formatFileSize(uploaded.size)})
                 </p>
               ) : null}
-              <Input
-                id={`${idPrefix}-file`}
-                name="file"
-                type="file"
-                accept="application/pdf,.pdf"
-                required={!uploaded && !legacyFile}
-              />
-              <FieldDescription>
-                PDF, maksimal {formatFileSize(MAX_PDF_BYTES)}. Hanya siswa yang terdaftar di
-                course ini yang bisa membukanya.
-              </FieldDescription>
-            </Field>
+            </PdfFileField>
           ) : null}
           {type === "link" || legacyFile ? (
             <Field>

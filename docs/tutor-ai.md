@@ -42,6 +42,18 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
 - Aplikasi mengakui tindakan setelah satu frame render (batas tunggu 80 ms), lalu
   model dapat menjelaskan langkah tersebut. Sinkronisasi dilakukan per langkah,
   bukan per kata. Audio baru diputar setelah pembacaan konteks pada giliran itu.
+- Goresan memakai timeline GSAP yang sudah ada di proyek. Sebuah tangan dengan
+  pena mengikuti panjang jalur SVG; pena terangkat ketika berpindah goresan.
+  Persegi panjang, elips, panah, sorotan, dan garis bebas digambar berurutan.
+  Label Latin/angka serta simbol matematika umum memakai glyph satu garis
+  Hershey (data public domain; atribusi di `lib/handwriting/LICENSE.txt`), bukan
+  animasi ketik. Karakter di luar cakupan glyph tetap ditampilkan dengan font
+  biasa setelah goresan selesai agar isi tidak hilang.
+- Suara boleh berjalan sambil pena menggambar; acknowledgment tool tidak menunggu
+  semua huruf selesai. Satu batch animasi dibatasi sekitar 10 detik. Label panjang
+  dibungkus dalam halaman. Saat konteks berubah, timeline dihentikan dan goresan
+  yang sudah terlihat dipertahankan tanpa memulai ulang ketika zoom/rotasi.
+  Reduced motion menampilkan hasil lengkap langsung tanpa gerak tangan.
 - Pergantian konteks langsung menghentikan audio dan membatalkan giliran tertunda.
   Anotasi yang sudah selesai tetap mengikuti sumber saat zoom/rotasi/scroll; cursor
   lama disembunyikan. Pindah halaman/dokumen membersihkan lapisan. Siswa dapat
@@ -78,6 +90,9 @@ Kriteria penerimaan teknis:
 | PDF scan tetap menghasilkan bukti visual | Uji PDF JPEG tanpa block teks |
 | Gagal koneksi/PDF tetap menyediakan pemulihan | Uji 503, 404, retry, dan pembacaan materi |
 | Kontrol tetap muat di ponsel | Uji viewport 390 px tanpa overflow halaman |
+| Gambar dan huruf ditulis bertahap, ujung pena sesuai ujung garis | Uji kemajuan stroke SVG dan koordinat tangan dengan clock browser |
+| Pembatalan menghentikan animasi; zoom/rotasi tidak mengulang tulisan | Uji kemajuan goresan yang dibekukan saat konteks berubah |
+| Reduced motion menampilkan semua goresan tanpa animasi | Uji media preference di browser |
 
 Di backend, jalankan seluruh suite dengan `TEST_DATABASE_URL` yang menunjuk
 Postgres lokal sementara. Test `pdf-tutor.test.ts` memeriksa login, ID, kepemilikan

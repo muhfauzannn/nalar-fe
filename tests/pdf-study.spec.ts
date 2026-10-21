@@ -478,7 +478,7 @@ test("cancelling a visual tool during its render frame removes the uncommitted i
       ],
     },
   });
-  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
+  await expect(page.getByTestId("tutor-highlight")).toBeAttached();
   mock.send({ toolCallCancellation: { ids: ["pending-ink"] } });
   await expect(page.getByTestId("tutor-highlight")).toHaveCount(0);
   await page.clock.runFor(100);

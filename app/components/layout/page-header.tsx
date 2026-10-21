@@ -62,7 +62,7 @@ export function PageHeader({
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between md:gap-8">
         <div className="flex min-w-0 flex-col gap-2.5">
           {eyebrow && <div className="flex min-w-0 flex-wrap items-center gap-2">{eyebrow}</div>}
-          <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance break-words sm:text-4xl">
+          <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance wrap-break-word sm:text-4xl">
             {title}
           </h1>
           {description && (

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
 import {
   Accordion,
@@ -27,14 +28,6 @@ import {
 } from "~/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -144,29 +137,12 @@ export function AssignmentPage({
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-8 lg:gap-10">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink render={<Link to={`/courses/${loaderData.courseId}`} />}>
-                {loaderData.courseName}
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>{loaderData.title}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-
-        <div>
-          <AssignmentHeader data={loaderData} compact={Boolean(activeStage)} finished={finished} />
-          {!activeStage && (
-            <AssignmentOverviewRail
-              data={loaderData}
-              completedStages={completedStages}
-            />
-          )}
-        </div>
+        <AssignmentHeader
+          data={loaderData}
+          working={Boolean(activeStage)}
+          finished={finished}
+          completedStages={completedStages}
+        />
 
         {actionError && !terminalActionError && (
           <Alert variant="destructive">
@@ -199,132 +175,61 @@ export function AssignmentPage({
 
 function AssignmentHeader({
   data,
-  compact,
+  working,
   finished,
-}: {
-  data: AssignmentData;
-  compact: boolean;
-  finished: boolean;
-}) {
-  if (compact) {
-    return (
-      <header className="flex flex-col gap-4 border-b pb-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="lavender">Assignment NALAR</Badge>
-          <Badge variant="outline">
-            <Clock3 data-icon="inline-start" />
-            Tenggat {formatDateTime(data.dueAt)}
-          </Badge>
-        </div>
-        <div className="flex max-w-5xl flex-col gap-3">
-          <p className="text-sm font-medium text-muted-foreground">
-            {data.courseName} / Sedang dikerjakan
-          </p>
-          <h1 className="font-heading text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
-            {data.title}
-          </h1>
-          <p className="max-w-3xl whitespace-pre-wrap text-sm/relaxed text-muted-foreground sm:text-base/relaxed">
-            <MathText>{data.instructions}</MathText>
-          </p>
-        </div>
-      </header>
-    );
-  }
-
-  const unavailable = !finished && data.availability !== "available";
-  const illustration = finished
-    ? "/illustration/plane.svg"
-    : unavailable
-      ? "/illustration/sleeping.svg"
-      : "/illustration/decoration2.svg";
-  const illustrationSize = finished || unavailable ? 1254 : 1402;
-  const illustrationHeight = finished || unavailable ? 1254 : 1122;
-
-  return (
-    <header className="group relative isolate grid min-h-80 overflow-hidden rounded-3xl bg-primary px-6 py-9 text-primary-foreground sm:px-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)] lg:items-center lg:px-12 lg:py-10">
-      <div aria-hidden="true" className="absolute -top-28 -left-24 size-72 rounded-full bg-secondary/10" />
-      <div className="relative flex max-w-3xl flex-col items-start gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="lavender">Assignment NALAR</Badge>
-          {finished && <Badge variant="mint">Sudah dikumpulkan</Badge>}
-        </div>
-        <p className="text-sm font-medium text-primary-foreground/60">
-          {data.courseName} / Assignment
-        </p>
-        <h1 className="font-heading text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
-          {data.title}
-        </h1>
-        <p className="max-w-2xl whitespace-pre-wrap text-sm/relaxed text-primary-foreground/70 sm:text-base/relaxed">
-          <MathText>{data.instructions}</MathText>
-        </p>
-      </div>
-
-      <div className="relative flex min-h-52 items-center justify-center lg:justify-end">
-        <img
-          src={illustration}
-          width={illustrationSize}
-          height={illustrationHeight}
-          alt=""
-          aria-hidden="true"
-          className={cn(
-            "pointer-events-none w-full select-none object-contain transition-transform duration-700 ease-out group-hover:scale-[1.03]",
-            finished || unavailable ? "max-w-52 sm:max-w-60 lg:max-w-64" : "max-w-72 lg:max-w-80",
-          )}
-        />
-        {!finished && !unavailable && (
-          <div className="absolute inset-x-auto bottom-4 rounded-2xl border border-white/15 bg-primary/85 px-5 py-3 text-center shadow-lg backdrop-blur-sm">
-            <span className="block font-heading text-2xl font-semibold">5 tahap</span>
-            <span className="text-xs text-primary-foreground/65">Alur berpikir NALAR</span>
-          </div>
-        )}
-      </div>
-    </header>
-  );
-}
-
-function AssignmentOverviewRail({
-  data,
   completedStages,
 }: {
   data: AssignmentData;
+  working: boolean;
+  finished: boolean;
   completedStages: number;
 }) {
-  const metrics = [
-    { label: "Tenggat", value: formatDateTime(data.dueAt), icon: Clock3 },
-    { label: "Ditutup", value: formatDateTime(data.closesAt), icon: LockKeyhole },
-    { label: "Kriteria", value: `${data.criteria.length} rubrik`, icon: ListChecks },
-    {
-      label: "Progres",
-      value: data.submission ? `${completedStages} / 5 tahap` : "Belum dimulai",
-      icon: FileCheck2,
-    },
-  ];
-
   return (
-    <Card className="relative z-10 mx-4 -mt-7 sm:mx-8 lg:mx-12">
-      <CardContent className="grid grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map(({ label, value, icon: Icon }, index) => (
-          <div
-            key={label}
-            className={cn(
-              "flex min-w-0 items-center gap-3 px-4 py-4 sm:px-5",
-              index > 0 && "border-t sm:border-t-0",
-              index % 2 !== 0 && "sm:border-l",
-              index >= 2 && "sm:border-t lg:border-t-0",
-              index > 0 && "lg:border-l",
-            )}
-          >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-              <Icon className="size-4" aria-hidden="true" />
+    <PageHeader
+      crumbs={[
+        { label: "Course saya", to: "/courses" },
+        { label: data.courseName, to: `/courses/${data.courseId}` },
+      ]}
+      eyebrow={
+        <>
+          <Badge variant="lavender">Assignment</Badge>
+          {finished && <Badge variant="mint">Sudah dikumpulkan</Badge>}
+          {working && <Badge variant="outline">Sedang dikerjakan</Badge>}
+        </>
+      }
+      title={data.title}
+      description={
+        <span className="whitespace-pre-wrap">
+          <MathText>{data.instructions}</MathText>
+        </span>
+      }
+      meta={
+        <>
+          <span className="flex items-center gap-1.5 tabular-nums">
+            <Clock3 className="size-4" aria-hidden="true" />
+            Tenggat {formatDateTime(data.dueAt)}
+          </span>
+          {!working && (
+            <>
+              <span className="flex items-center gap-1.5 tabular-nums">
+                <LockKeyhole className="size-4" aria-hidden="true" />
+                Ditutup {formatDateTime(data.closesAt)}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <ListChecks className="size-4" aria-hidden="true" />
+                {data.criteria.length} kriteria rubrik
+              </span>
+            </>
+          )}
+          {data.submission && !finished && (
+            <span className="flex items-center gap-1.5 tabular-nums">
+              <FileCheck2 className="size-4" aria-hidden="true" />
+              {completedStages} dari 5 tahap selesai
             </span>
-            <span className="min-w-0">
-              <span className="block truncate font-heading text-sm font-semibold">{value}</span>
-              <span className="block text-xs text-muted-foreground">{label}</span>
-            </span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
+          )}
+        </>
+      }
+    />
   );
 }
 
@@ -349,7 +254,7 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
                   index === 4 && "sm:col-span-2",
                 )}
               >
-                <span className="font-heading text-sm font-semibold text-muted-foreground/70">
+                <span className="font-heading text-sm font-semibold text-muted-foreground tabular-nums">
                   {stage.number}
                 </span>
                 <div>
@@ -375,7 +280,7 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
               <ShieldCheck className="size-4" aria-hidden="true" />
               Satu submission
             </div>
-            <p className="mt-1 text-xs/relaxed opacity-80">
+            <p className="mt-1 text-xs/relaxed">
               Periksa tenggat dan rubrik sebelum memulai.
             </p>
           </div>
@@ -385,8 +290,9 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
           <Form method="post" className="w-full">
             <input type="hidden" name="intent" value="start" />
             <Button type="submit" className="w-full" disabled={working}>
-              {working ? <Spinner data-icon="inline-start" /> : <ArrowRight data-icon="inline-end" />}
+              {working && <Spinner data-icon="inline-start" />}
               {working ? "Membuka assignment..." : "Mulai mengerjakan"}
+              {!working && <ArrowRight data-icon="inline-end" />}
             </Button>
           </Form>
         </CardFooter>

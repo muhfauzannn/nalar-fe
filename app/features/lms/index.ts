@@ -7,6 +7,7 @@ export {
   CoursesPageSkeleton,
   DashboardPageSkeleton,
   LessonPageSkeleton,
+  ManageCoursesPageSkeleton,
   QuizPageSkeleton,
   StudentAppShellSkeleton,
 } from "./components/loading-skeletons";

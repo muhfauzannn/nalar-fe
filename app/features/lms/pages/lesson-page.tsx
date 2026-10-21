@@ -15,16 +15,10 @@ import {
 } from "lucide-react";
 import { Form, Link } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
 import { formatFileSize, studentResourceFileUrl } from "~/lib/files";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -60,39 +54,14 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
       const media = gsap.matchMedia();
 
       media.add("(prefers-reduced-motion: no-preference)", () => {
+        // Once per visit, short: the page settles in, then stays still while you read.
         gsap.from("[data-lesson-reveal]", {
-          y: 14,
+          y: 8,
           opacity: 0,
-          duration: 0.38,
-          ease: "power2.out",
-          stagger: 0.06,
+          duration: 0.24,
+          ease: "power3.out",
+          stagger: 0.04,
           clearProps: "transform,opacity",
-        });
-
-        const words = gsap.utils.toArray<HTMLElement>("[data-lesson-word]");
-        if (words.length > 0) {
-          gsap.fromTo(
-            words,
-            { opacity: 0.22 },
-            {
-              opacity: 1,
-              stagger: 0.018,
-              ease: "none",
-              scrollTrigger: {
-                trigger: "[data-lesson-reading]",
-                start: "clamp(top 78%)",
-                end: "clamp(bottom 45%)",
-                scrub: 0.35,
-              },
-            },
-          );
-        }
-
-        gsap.to("[data-lesson-marquee]", {
-          xPercent: -50,
-          duration: 24,
-          ease: "none",
-          repeat: -1,
         });
       });
 
@@ -131,74 +100,28 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
     <div ref={scope} className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-10 lg:gap-14">
         <div data-lesson-reveal>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink
-                  render={<Link to={`/courses/${loaderData.courseId}`} />}
-                >
-                  {loaderData.courseName}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{loaderData.title}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
-
-        <header
-          data-lesson-reveal
-          className="group relative isolate grid min-h-[24rem] overflow-hidden rounded-3xl bg-primary px-6 py-9 text-primary-foreground sm:px-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)] lg:items-center lg:px-12 lg:py-12"
-        >
-          <div
-            aria-hidden="true"
-            className="absolute -top-28 -left-24 size-72 rounded-full bg-secondary/10"
+          <PageHeader
+            crumbs={[
+              { label: "Course saya", to: "/courses" },
+              { label: loaderData.courseName, to: `/courses/${loaderData.courseId}` },
+            ]}
+            eyebrow={
+              <Badge variant="outline" className="max-w-full truncate">
+                {loaderData.moduleTitle}
+              </Badge>
+            }
+            title={loaderData.title}
+            description="Baca dengan tenang, gunakan resource bila diperlukan, lalu tandai materi saat selesai."
+            meta={
+              completed && (
+                <span className="flex items-center gap-1.5 text-brand-mint-foreground">
+                  <CheckCircle2 className="size-4" aria-hidden="true" />
+                  Sudah selesai
+                </span>
+              )
+            }
           />
-          <div className="relative flex max-w-5xl flex-col items-start gap-5 pb-24 lg:pb-10">
-            <p className="text-sm font-medium text-primary-foreground/60">
-              {loaderData.courseName} / {loaderData.moduleTitle}
-            </p>
-            <h1 className="max-w-5xl font-heading text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
-              {loaderData.title}
-            </h1>
-            <p className="max-w-2xl text-sm/relaxed text-primary-foreground/70 sm:text-base/relaxed">
-              Baca dengan tenang, gunakan resource bila diperlukan, lalu tandai
-              materi saat selesai.
-            </p>
-          </div>
-
-          <div className="relative flex items-center justify-center lg:justify-end">
-            <img
-              src="/illustration/chalkboard.svg"
-              width={1254}
-              height={1254}
-              alt=""
-              aria-hidden="true"
-              className="pointer-events-none aspect-square w-full max-w-60 select-none object-contain transition-transform duration-700 ease-out group-hover:scale-105 sm:max-w-72 lg:max-w-80"
-            />
-          </div>
-
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-0 bottom-0 overflow-hidden border-t border-primary-foreground/10 py-3"
-          >
-            <div
-              data-lesson-marquee
-              className="flex w-max items-center text-xs font-medium tracking-[0.18em] text-primary-foreground/25 uppercase"
-            >
-              {Array.from({ length: 2 }).map((_, groupIndex) => (
-                <div key={groupIndex} className="flex shrink-0 items-center gap-10 pr-10">
-                  <span>Pahami konsep</span>
-                  <span>Catat inti materi</span>
-                  <span>Gunakan resource</span>
-                  <span>Selesaikan lesson</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </header>
+        </div>
 
         {loaderData.resources.some((resource) => resource.file) ? (
           <PdfStudyRoom resources={loaderData.resources} />
@@ -231,7 +154,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                   <div className="flex flex-col gap-7 text-base/8 text-foreground/90">
                     {contentBlocks.map((block, blockIndex) => (
                       <p key={`${blockIndex}-${block.slice(0, 24)}`} className="whitespace-pre-wrap">
-                        <MathText animateWords>{block}</MathText>
+                        <MathText>{block}</MathText>
                       </p>
                     ))}
                   </div>
@@ -336,14 +259,14 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
               </p>
             </div>
 
-            <div className="flex min-h-64 gap-3 overflow-x-auto pb-2 lg:h-72 lg:overflow-visible">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {loaderData.resources.map((resource) => (
                 <article
                   key={resource.id}
-                  className="group flex min-w-64 flex-1 flex-col justify-between overflow-hidden rounded-2xl border bg-card p-5 shadow-sm transition-[flex,transform] duration-700 ease-out hover:-translate-y-1 lg:min-w-0 lg:hover:flex-[1.45]"
+                  className="flex min-w-0 flex-col justify-between rounded-2xl border bg-card p-5 shadow-sm"
                 >
                   <div className="flex flex-col gap-4">
-                    <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-secondary-foreground transition-transform duration-700 ease-out group-hover:scale-105">
+                    <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
                       {resource.type === "text" ? (
                         <FileText className="size-5" aria-hidden="true" />
                       ) : resource.file ? (

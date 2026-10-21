@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { cn } from "~/lib/utils";
 import type { ManagedLessonSummary, ManagedModule, PublicationStatus } from "../types";
 import { ActionError, useAction, useOnSuccess, useResetOnSuccess } from "./action-feedback";
 import { optimisticOrder, useFlip } from "../lib/motion";
@@ -159,11 +160,11 @@ function ModuleCard({
   useOnSuccess(edit.fetcher, () => setEditing(false));
 
   return (
-    <Card className={archived ? "opacity-70" : undefined} data-testid="module-card">
+    <Card className={archived ? "bg-muted/40" : undefined} data-testid="module-card">
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center gap-3">
           {orderControls}
-          <CardTitle className="min-w-0 flex-1 font-heading text-lg">{module.title}</CardTitle>
+          <CardTitle className="min-w-0 flex-1 font-heading text-lg text-pretty wrap-break-word">{module.title}</CardTitle>
           <StatusBadge status={module.status} />
         </div>
         {module.description ? (
@@ -255,17 +256,24 @@ function LessonRow({
       flipKey={lesson.id}
       index={index}
       data-testid="lesson-row"
-      className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 ${lesson.status === "archived" ? "opacity-60" : ""}`}
+      className={cn(
+        "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5",
+        lesson.status === "archived" && "bg-muted/40",
+      )}
     >
       {orderControls}
-      <Link
-        to={`/manage/lessons/${lesson.id}`}
-        className="min-w-0 flex-1 truncate font-medium underline-offset-4 hover:underline"
-      >
-        {lesson.title}
-      </Link>
-      <span className="text-xs text-muted-foreground">{lesson.resources.length} resource</span>
-      <StatusBadge status={lesson.status} />
+      <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
+        <Link
+          to={`/manage/lessons/${lesson.id}`}
+          className="line-clamp-2 font-medium wrap-break-word underline-offset-4 hover:underline"
+        >
+          {lesson.title}
+        </Link>
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <StatusBadge status={lesson.status} />
+          {lesson.resources.length} resource
+        </span>
+      </div>
       <StatusActions
         status={lesson.status}
         pending={status.pending}

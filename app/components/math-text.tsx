@@ -5,7 +5,6 @@ import { cn } from "~/lib/utils";
 type MathTextProps = {
   children: string;
   className?: string;
-  animateWords?: boolean;
 };
 
 type TextPart = { type: "text"; value: string };
@@ -40,23 +39,7 @@ function parseMathText(value: string): MathTextPart[] {
   return parts.length > 0 ? parts : [{ type: "text", value }];
 }
 
-function AnimatedText({ value }: { value: string }) {
-  return value.split(/(\s+)/).map((token, index) =>
-    token.trim() ? (
-      <span key={`${index}-${token}`} data-lesson-word>
-        {token}
-      </span>
-    ) : (
-      token
-    ),
-  );
-}
-
-export function MathText({
-  children,
-  className,
-  animateWords = false,
-}: MathTextProps) {
+export function MathText({ children, className }: MathTextProps) {
   return (
     <span
       className={cn(
@@ -66,9 +49,7 @@ export function MathText({
     >
       {parseMathText(children).map((part, index) =>
         part.type === "text" ? (
-          <span key={`text-${index}`}>
-            {animateWords ? <AnimatedText value={part.value} /> : part.value}
-          </span>
+          <span key={`text-${index}`}>{part.value}</span>
         ) : (
           <span
             key={`math-${index}`}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Link,
   NavLink,
@@ -18,7 +18,7 @@ import {
 
 import { Brand } from "~/components/layout/brand";
 import { ThemeToggle } from "~/components/layout/theme-toggle";
-import { Button } from "~/components/ui/button";
+import { Separator } from "~/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
@@ -48,8 +48,12 @@ const navigationIcons: Record<string, LucideIcon> = {
   "/manage": PencilRuler,
 };
 
-function isFocusedActivityRoute(pathname: string) {
-  return pathname.startsWith("/assignments/") || pathname.startsWith("/quizzes/");
+// Lessons, quizzes and assignments belong to "Course saya" even though their
+// URLs do not start with /courses.
+function sectionFor(pathname: string) {
+  if (pathname.startsWith("/manage")) return "/manage";
+  if (pathname === "/dashboard") return "/dashboard";
+  return "/courses";
 }
 
 export function StudentAppShell({ data }: { data: StudentShellData }) {
@@ -57,10 +61,8 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
   const navigate = useNavigate();
   const navigation = useNavigation();
   const [signingOut, setSigningOut] = useState(false);
-  const focusedActivity = isFocusedActivityRoute(location.pathname);
-  const [sidebarOpen, setSidebarOpen] = useState(() => !focusedActivity);
-  const previousSidebarOpen = useRef(true);
-  const wasFocusedActivity = useRef(focusedActivity);
+  const section = sectionFor(location.pathname);
+  const sectionLabel = studentNav.find((item) => item.href === section)?.label;
   const nextPathname = navigation.state === "loading" ? navigation.location.pathname : null;
   const loadingPathname =
     nextPathname &&
@@ -74,18 +76,6 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
       nextPathname.startsWith("/quizzes/"))
       ? nextPathname
       : null;
-
-  useEffect(() => {
-    if (focusedActivity === wasFocusedActivity.current) return;
-
-    if (focusedActivity) {
-      previousSidebarOpen.current = sidebarOpen;
-      setSidebarOpen(false);
-    } else {
-      setSidebarOpen(previousSidebarOpen.current);
-    }
-    wasFocusedActivity.current = focusedActivity;
-  }, [focusedActivity, sidebarOpen]);
 
   async function signOut() {
     setSigningOut(true);
@@ -102,7 +92,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
     .toUpperCase();
 
   return (
-    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
+    <SidebarProvider>
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
           <div className="flex h-12 items-center px-3 group-data-[collapsible=icon]:px-0">
@@ -123,9 +113,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
               <SidebarMenu>
                 {studentNav.map((item) => {
                   const Icon = navigationIcons[item.href] ?? BookOpen;
-                  const active =
-                    location.pathname === item.href ||
-                    (item.href !== "/dashboard" && location.pathname.startsWith(`${item.href}/`));
+                  const active = item.href === section;
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
@@ -174,19 +162,15 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b bg-background px-5 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <SidebarTrigger aria-label="Buka navigasi" />
-            <div className="hidden min-w-0 sm:block">
-              <p className="truncate text-sm font-medium">NALAR</p>
-              <p className="text-xs text-muted-foreground">
-                {data.profile?.gradeLevel ? `Kelas ${data.profile.gradeLevel}` : "Ruang belajar"}
-              </p>
-            </div>
+        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background/90 px-4 backdrop-blur-sm sm:px-6 lg:rounded-t-xl lg:px-8">
+          <div className="flex min-w-0 items-center gap-2">
+            <SidebarTrigger aria-label="Buka navigasi" className="-ml-1" />
+            <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
+            <p className="truncate text-sm font-medium">{sectionLabel}</p>
           </div>
           <ThemeToggle />
         </header>
-        <main className="flex-1 px-5 py-8 sm:px-6 md:py-10 lg:px-10 lg:py-12">
+        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
           <div className="mx-auto w-full max-w-7xl">
             {loadingPathname ? (
               <StudentRouteSkeleton pathname={loadingPathname} />

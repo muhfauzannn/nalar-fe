@@ -348,3 +348,7 @@
 
 /* Annotations live on the white PDF page in either app theme. */
 .pdf-tutor-overlay { --pdf-tutor-ink: var(--brand-lavender-foreground); }
+
+.pdf-tutor-overlay[data-ink-state="drawing"] [data-tutor-pointer] {
+  visibility: hidden;
+}

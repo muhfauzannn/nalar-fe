@@ -19,7 +19,7 @@ export function pdfProblem(file: File | null): string | null {
     return `File terlalu besar (maksimal ${formatFileSize(MAX_PDF_BYTES)}).`;
   }
   // The browser may not know the type; the API checks the real content anyway.
-  if (file.type && file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+  if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
     return "Hanya file PDF yang diterima.";
   }
   return null;

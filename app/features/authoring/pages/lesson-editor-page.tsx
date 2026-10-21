@@ -1,7 +1,7 @@
-import { ArrowLeft, ExternalLink, File, FileText, Link2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, File, FileText, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -33,31 +33,26 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          render={<Link to={`/manage/courses/${lesson.courseId}?tab=content`} />}
-        >
-          <ArrowLeft data-icon="inline-start" />
-          {lesson.courseName}
-        </Button>
-      </div>
-
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={lesson.status} />
-          <Badge variant="outline">{lesson.moduleTitle}</Badge>
-        </div>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-          {lesson.title}
-        </h1>
-      </header>
+      <PageHeader
+        crumbs={[
+          { label: "Kelola course", to: "/manage" },
+          { label: lesson.courseName, to: `/manage/courses/${lesson.courseId}?tab=content` },
+        ]}
+        eyebrow={
+          <>
+            <StatusBadge status={lesson.status} />
+            <Badge variant="outline" className="max-w-full truncate">
+              {lesson.moduleTitle}
+            </Badge>
+          </>
+        }
+        title={lesson.title}
+      />
 
       <Card>
         <CardHeader>
           <CardTitle>Isi lesson</CardTitle>
-          <CardDescription>Pratinjau di sebelah kanan sama dengan yang dilihat siswa.</CardDescription>
+          <CardDescription>Pratinjau menampilkan lesson persis seperti yang dilihat siswa.</CardDescription>
         </CardHeader>
         <CardContent>
           <save.fetcher.Form

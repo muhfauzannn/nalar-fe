@@ -9,11 +9,11 @@ import {
   FileQuestion,
   Megaphone,
   PlayCircle,
-  Route,
   Users,
 } from "lucide-react";
 import { Link } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import {
   Accordion,
   AccordionContent,
@@ -22,14 +22,6 @@ import {
 } from "~/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -81,142 +73,30 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
 
   return (
     <div className="flex flex-col gap-8 lg:gap-10">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link to="/courses" />}>
-              Course
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{loaderData.course.name}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      <PageHeader
+        crumbs={[{ label: "Course saya", to: "/courses" }]}
+        eyebrow={
+          <>
+            <Badge variant="mint">{loaderData.course.subjectName}</Badge>
+            {loaderData.course.status === "archived" && <Badge variant="outline">Arsip</Badge>}
+          </>
+        }
+        title={loaderData.course.name}
+        description={
+          loaderData.course.description ??
+          "Ikuti materi dan aktivitas course secara bertahap sampai tuntas."
+        }
+        meta={
+          loaderData.teachers.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <Users className="size-4" aria-hidden="true" />
+              Pengajar: {loaderData.teachers.join(", ")}
+            </span>
+          )
+        }
+      />
 
-      <div>
-        <header className="relative isolate overflow-hidden rounded-3xl bg-primary text-primary-foreground shadow-sm motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 motion-reduce:animate-none">
-          <div
-            className="absolute -top-24 -left-24 size-72 rounded-full bg-secondary/10"
-            aria-hidden="true"
-          />
-          <div
-            className="absolute right-1/4 -bottom-32 size-80 rounded-full bg-brand-lavender-soft/10"
-            aria-hidden="true"
-          />
-
-          <div className="relative grid min-h-[28rem] items-center gap-3 px-6 pt-8 pb-16 sm:px-9 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:px-12 lg:py-12">
-            <div className="z-10 flex max-w-3xl flex-col items-start gap-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="mint">{loaderData.course.subjectName}</Badge>
-                <span className="text-xs font-medium tracking-[0.16em] text-primary-foreground/60 uppercase">
-                  {loaderData.course.subjectCode}
-                </span>
-                {loaderData.course.status === "archived" && (
-                  <Badge
-                    variant="outline"
-                    className="border-primary-foreground/30 text-primary-foreground"
-                  >
-                    Arsip
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <p className="text-sm font-medium text-brand-mint-soft">
-                  Ruang belajar kamu
-                </p>
-                <h1 className="max-w-3xl font-heading text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
-                  {loaderData.course.name}
-                </h1>
-                <p className="max-w-2xl text-sm/relaxed text-primary-foreground/70 sm:text-base/relaxed">
-                  {loaderData.course.description ??
-                    "Ikuti materi dan aktivitas course secara bertahap sampai tuntas."}
-                </p>
-              </div>
-
-              {loaderData.teachers.length > 0 && (
-                <p className="flex items-center gap-2 text-sm text-primary-foreground/70">
-                  <Users className="size-4" aria-hidden="true" />
-                  <span>Pengajar: {loaderData.teachers.join(", ")}</span>
-                </p>
-              )}
-
-              {nextAction ? (
-                <div className="flex flex-col items-start gap-2">
-                  <span className="text-xs font-medium tracking-wide text-primary-foreground/55 uppercase">
-                    Langkah berikutnya
-                  </span>
-                  <Button
-                    variant="secondary"
-                    size="lg"
-                    render={<Link to={nextAction.href} />}
-                  >
-                    {nextAction.label}
-                    <ArrowRight data-icon="inline-end" />
-                  </Button>
-                  <p className="max-w-md text-sm text-primary-foreground/60">
-                    {nextAction.title}
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 rounded-2xl border border-primary-foreground/15 bg-primary-foreground/5 px-4 py-3">
-                  <CheckCircle2
-                    className="size-5 text-brand-mint-soft"
-                    aria-hidden="true"
-                  />
-                  <p className="text-sm text-primary-foreground/80">
-                    {loaderData.progress.total > 0
-                      ? "Semua aktivitas yang tersedia sudah kamu selesaikan."
-                      : "Aktivitas course akan muncul di sini setelah dipublikasikan."}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="relative mx-auto flex w-full max-w-sm items-center justify-center self-end lg:max-w-md lg:self-center">
-              <img
-                src="/illustration/plane.svg"
-                width={700}
-                height={700}
-                alt=""
-                aria-hidden="true"
-                className="pointer-events-none aspect-square w-full select-none object-contain motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-700 motion-reduce:animate-none"
-              />
-              <div className="absolute right-0 bottom-12 left-0 mx-auto w-[min(17rem,90%)] rounded-2xl border border-border/60 bg-background/95 p-4 text-foreground shadow-lg backdrop-blur-sm">
-                <div className="mb-3 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      Progres course
-                    </p>
-                    <p className="mt-1 font-heading text-3xl font-semibold tabular-nums">
-                      {loaderData.progress.percentage}%
-                    </p>
-                  </div>
-                  <p className="text-right text-xs text-muted-foreground">
-                    {loaderData.progress.completed}/{loaderData.progress.total}{" "}
-                    aktivitas
-                  </p>
-                </div>
-                <Progress
-                  value={loaderData.progress.percentage}
-                  aria-label={`Progres course ${loaderData.progress.percentage}%`}
-                >
-                  <ProgressLabel className="sr-only">
-                    Progres course
-                  </ProgressLabel>
-                  <ProgressValue className="sr-only">
-                    {() => `${loaderData.progress.percentage}%`}
-                  </ProgressValue>
-                </Progress>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <CourseMetrics data={loaderData} />
-      </div>
+      <CourseProgress data={loaderData} nextAction={nextAction} />
 
       {loaderData.course.status === "archived" && (
         <Alert>
@@ -259,53 +139,73 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
   );
 }
 
-function CourseMetrics({ data }: { data: CourseData }) {
+// The only place the course's progress is shown: overall, per activity type,
+// and what to do next.
+function CourseProgress({
+  data,
+  nextAction,
+}: {
+  data: CourseData;
+  nextAction: ReturnType<typeof getNextAction>;
+}) {
   const metrics = [
-    {
-      label: "Materi selesai",
-      value: `${data.progress.lessons.completed}/${data.progress.lessons.total}`,
-      icon: BookOpen,
-    },
-    {
-      label: "Assignment selesai",
-      value: `${data.progress.assignments.completed}/${data.progress.assignments.total}`,
-      icon: ClipboardList,
-    },
-    {
-      label: "Quiz selesai",
-      value: `${data.progress.quizzes.completed}/${data.progress.quizzes.total}`,
-      icon: FileQuestion,
-    },
-    {
-      label: "Total progres",
-      value: `${data.progress.percentage}%`,
-      icon: Route,
-    },
+    { label: "Materi", progress: data.progress.lessons, icon: BookOpen },
+    { label: "Assignment", progress: data.progress.assignments, icon: ClipboardList },
+    { label: "Quiz", progress: data.progress.quizzes, icon: FileQuestion },
   ];
 
   return (
-    <Card className="relative z-10 mx-4 -mt-8 sm:mx-8 lg:mx-12">
-      <CardContent className="grid grid-cols-2 p-0 lg:grid-cols-4">
-        {metrics.map(({ label, value, icon: Icon }, index) => (
-          <div
-            key={label}
-            className={`flex min-w-0 items-center gap-3 px-4 py-4 sm:px-5 ${
-              index % 2 !== 0 ? "border-l" : ""
-            } ${index >= 2 ? "border-t lg:border-t-0" : ""} ${index > 0 ? "lg:border-l" : ""}`}
+    <Card>
+      <CardContent className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] md:items-center md:gap-8">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Progress
+            value={data.progress.percentage}
+            aria-label={`Progres course ${data.progress.percentage}%`}
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
-              <Icon className="size-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-heading text-lg font-semibold tabular-nums sm:text-xl">
-                {value}
+            <ProgressLabel className="flex items-baseline gap-2">
+              <span className="font-heading text-3xl font-semibold tracking-tight tabular-nums">
+                {data.progress.percentage}%
               </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {label}
-              </span>
-            </span>
-          </div>
-        ))}
+              <span className="text-sm font-normal text-muted-foreground">progres course</span>
+            </ProgressLabel>
+            <ProgressValue className="text-sm">
+              {() => `${data.progress.completed}/${data.progress.total} aktivitas`}
+            </ProgressValue>
+          </Progress>
+          <dl className="grid grid-cols-3 gap-3">
+            {metrics.map(({ label, progress, icon: Icon }) => (
+              <div key={label} className="flex min-w-0 flex-col gap-1">
+                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{label}</span>
+                </dt>
+                <dd className="font-heading text-lg font-semibold tabular-nums">
+                  {progress.completed}/{progress.total}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <div className="flex flex-col items-start gap-3 border-t pt-5 md:border-t-0 md:border-l md:pt-0 md:pl-8">
+          {nextAction ? (
+            <>
+              <p className="text-xs font-medium text-muted-foreground">Langkah berikutnya</p>
+              <p className="font-medium text-pretty">{nextAction.title}</p>
+              <Button render={<Link to={nextAction.href} />}>
+                {nextAction.label}
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+            </>
+          ) : (
+            <p className="flex items-start gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-brand-mint-foreground" aria-hidden="true" />
+              {data.progress.total > 0
+                ? "Semua aktivitas yang tersedia sudah kamu selesaikan."
+                : "Aktivitas course akan muncul di sini setelah dipublikasikan."}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -362,7 +262,7 @@ function CourseModules({ data }: { data: CourseData }) {
                   <AccordionItem key={module.id} value={module.id}>
                     <AccordionTrigger className="py-5 hover:no-underline">
                       <span className="flex min-w-0 flex-1 items-start gap-4 pr-4">
-                        <span className="font-heading text-2xl leading-none font-semibold text-muted-foreground/50 tabular-nums sm:text-3xl">
+                        <span className="w-8 shrink-0 font-heading text-2xl leading-none font-semibold text-muted-foreground tabular-nums sm:w-10 sm:text-3xl">
                           {String(moduleIndex + 1).padStart(2, "0")}
                         </span>
                         <span className="min-w-0 flex-1">
@@ -405,7 +305,7 @@ function CourseModules({ data }: { data: CourseData }) {
                             <Link
                               key={lesson.id}
                               to={`/lessons/${lesson.id}`}
-                              className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-foreground no-underline! transition-all hover:bg-accent hover:no-underline! active:translate-y-px"
+                              className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-foreground no-underline! transition-colors hover:bg-accent hover:no-underline!"
                             >
                               <span className="flex min-w-0 items-center gap-3">
                                 <LessonStatusIcon status={lesson.status} />

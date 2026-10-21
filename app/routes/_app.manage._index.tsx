@@ -1,5 +1,5 @@
 import type { Route } from "./+types/_app.manage._index";
-import { ActivityPageSkeleton } from "~/features/lms";
+import { ManageCoursesPageSkeleton } from "~/features/lms";
 import { manageApi, MyCoursesPage } from "~/features/authoring";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -7,7 +7,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export function HydrateFallback() {
-  return <ActivityPageSkeleton />;
+  return <ManageCoursesPageSkeleton />;
 }
 
 export function meta() {

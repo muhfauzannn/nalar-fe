@@ -207,7 +207,7 @@ export function usePdfTutor(
                 "Panggil get_pdf_context pada giliran ini dahulu.",
               );
             const next = parsePdfGuidance(call.args, view, active.id);
-            // A bounded frame wait lets React commit the visual before audio is generated.
+            // Start the ink timeline before acknowledging; speech may accompany the strokes.
             pendingGuidanceCall.current = call.id;
             setGuidance(next);
             await new Promise<void>((resolve) => {

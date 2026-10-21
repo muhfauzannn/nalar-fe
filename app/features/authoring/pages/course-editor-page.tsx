@@ -1,7 +1,8 @@
-import { ArrowLeft, ArrowRight, Copy, Plus, Users } from "lucide-react";
+import { ArrowRight, Plus, Users } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -57,31 +58,24 @@ export function CourseEditorPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <Button variant="ghost" size="sm" render={<Link to="/manage" />}>
-          <ArrowLeft data-icon="inline-start" />
-          Semua course
-        </Button>
-      </div>
-
-      <header className="flex flex-wrap items-start justify-between gap-5">
-        <div className="flex min-w-0 max-w-3xl flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        crumbs={[{ label: "Kelola course", to: "/manage" }]}
+        eyebrow={
+          <>
             <StatusBadge status={course.status} />
             <Badge variant="outline">{course.subjectName}</Badge>
-            <Badge variant="ghost">
-              <Users /> {data.studentCount} siswa
-            </Badge>
-          </div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-            {course.name}
-          </h1>
-          {course.description ? (
-            <p className="leading-relaxed text-muted-foreground text-pretty">{course.description}</p>
-          ) : null}
-        </div>
-        <CourseStatusActions status={course.status} studentCount={data.studentCount} />
-      </header>
+          </>
+        }
+        title={course.name}
+        description={course.description}
+        meta={
+          <span className="flex items-center gap-1.5 tabular-nums">
+            <Users className="size-4" aria-hidden="true" />
+            {data.studentCount} siswa
+          </span>
+        }
+        actions={<CourseStatusActions status={course.status} studentCount={data.studentCount} />}
+      />
 
       <Tabs value={tab} onValueChange={selectTab}>
         <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-fit">
@@ -128,8 +122,8 @@ function CourseStatusActions({
   const canDraft = studentCount === 0;
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-col items-start gap-2 md:items-end">
+      <div className="flex flex-wrap gap-2 md:justify-end">
         {status !== "published" ? (
           <Button type="button" loading={pending} onClick={() => change("published")}>
             {status === "archived" ? "Terbitkan lagi" : "Terbitkan course"}

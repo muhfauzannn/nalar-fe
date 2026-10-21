@@ -1,7 +1,7 @@
-import { ArrowLeft, Copy, Lock, Plus, X } from "lucide-react";
+import { Copy, Lock, Plus, X } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,34 +19,32 @@ export function AssignmentEditorPage({ data }: { data: AssignmentEditorData }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          render={<Link to={`/manage/courses/${assignment.courseId}?tab=assignments`} />}
-        >
-          <ArrowLeft data-icon="inline-start" />
-          Kembali ke course
-        </Button>
-      </div>
-
-      <header className="flex flex-wrap items-start justify-between gap-5">
-        <div className="flex min-w-0 max-w-3xl flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        crumbs={[
+          { label: "Kelola course", to: "/manage" },
+          { label: "Isi course", to: `/manage/courses/${assignment.courseId}?tab=assignments` },
+        ]}
+        eyebrow={
+          <>
             <StatusBadge status={assignment.status} />
-            <Badge variant="outline">Skenario: {assignment.scenarioTitle}</Badge>
-            <Badge variant="ghost">{submissionCount} pengerjaan</Badge>
-          </div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-            {assignment.title}
-          </h1>
-        </div>
-        <AssignmentStatusActions
-          status={assignment.status}
-          submissionCount={submissionCount}
-          ready={readiness.ready}
-        />
-      </header>
+            <Badge variant="lavender">Assignment</Badge>
+          </>
+        }
+        title={assignment.title}
+        meta={
+          <>
+            <span>Skenario: {assignment.scenarioTitle}</span>
+            <span className="tabular-nums">{submissionCount} pengerjaan</span>
+          </>
+        }
+        actions={
+          <AssignmentStatusActions
+            status={assignment.status}
+            submissionCount={submissionCount}
+            ready={readiness.ready}
+          />
+        }
+      />
 
       {locked ? (
         <Alert data-testid="assignment-locked">
@@ -88,8 +86,8 @@ function AssignmentStatusActions({
   const canDraft = submissionCount === 0;
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-col items-start gap-2 md:items-end">
+      <div className="flex flex-wrap gap-2 md:justify-end">
         {status === "draft" ? (
           <Button type="button" loading={pending} disabled={!ready} onClick={() => change("published")}>
             Terbitkan assignment

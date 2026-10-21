@@ -1,14 +1,16 @@
-import { useId } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
+import gsap from "gsap";
 import { MousePointer2 } from "lucide-react";
 import { Bubble, BubbleContent } from "~/components/ui/bubble";
-import { cn } from "~/lib/utils";
 import {
   rotatePoint,
   rotateRect,
   type PdfGuidance,
   type PdfSelection,
 } from "../lib/pdf-tutor";
+import { buildInkPlan } from "../lib/handwriting/ink-plan";
 
+/** All drawing motion runs in original page units, with one projection for the PDF view. */
 export function PdfTutorOverlay({
   guidance,
   selection,
@@ -22,26 +24,221 @@ export function PdfTutorOverlay({
   rotation: number;
   size: { width: number; height: number };
 }) {
-  const markerId = useId().replace(/:/g, "");
-  const point = (p: { x: number; y: number }) => {
-    const rotated = rotatePoint(p, rotation);
-    return { x: rotated.x * size.width, y: rotated.y * size.height };
-  };
+  const root = useRef<HTMLDivElement>(null);
+  const drawing = useRef<SVGGElement>(null);
+  const hand = useRef<SVGGElement>(null);
+  const cursor = useRef<HTMLDivElement>(null);
+  const bubble = useRef<HTMLDivElement>(null);
+  const playback = useRef<{
+    guidance: PdfGuidance | null;
+    progress: number[];
+    finished: boolean;
+  }>({ guidance: null, progress: [], finished: false });
+  const angle = ((rotation % 360) + 360) % 360;
+  const originalWidth = angle % 180 === 0 ? size.width : size.height;
+  const originalHeight = angle % 180 === 0 ? size.height : size.width;
+  const pageHeight =
+    Math.round((originalHeight / originalWidth) * 1_000_000) / 1000;
+  const scale = originalWidth / 1000;
+  const plan = useMemo(
+    () => buildInkPlan(guidance, pageHeight),
+    [guidance, pageHeight],
+  );
+  const matrix =
+    angle === 90
+      ? `matrix(0 ${scale} ${-scale} 0 ${size.width} 0)`
+      : angle === 180
+        ? `matrix(${-scale} 0 0 ${-scale} ${size.width} ${size.height})`
+        : angle === 270
+          ? `matrix(0 ${-scale} ${scale} 0 0 ${size.height})`
+          : `matrix(${scale} 0 0 ${scale} 0 0)`;
   const first = guidance?.actions[0];
-  const cursor = first
+  const anchor = first
     ? rotatePoint(
         first.points?.[0] ?? {
           x: first.x + first.width / 2,
           y: first.y + first.height / 2,
         },
-        rotation,
+        angle,
       )
     : null;
-  const selected = selection ? rotateRect(selection, rotation) : null;
+  const selected = selection ? rotateRect(selection, angle) : null;
+
+  useLayoutEffect(() => {
+    const host = root.current;
+    const group = drawing.current;
+    const pen = hand.current;
+    if (!host || !group || !pen) return;
+    const paths = [
+      ...group.querySelectorAll<SVGPathElement>("[data-ink-stroke]"),
+    ];
+    const fallback = [
+      ...group.querySelectorAll<SVGTextElement>("[data-ink-fallback]"),
+    ];
+    if (playback.current.guidance !== guidance) {
+      playback.current = {
+        guidance,
+        progress: paths.map(() => 0),
+        finished: false,
+      };
+    }
+    const state = playback.current;
+    const lengths = paths.map((path) => path.getTotalLength());
+    paths.forEach((path, index) => {
+      path.style.visibility =
+        (state.progress[index] ?? 0) > 0 ? "visible" : "hidden";
+      path.style.strokeDasharray = String(lengths[index]);
+      path.style.strokeDashoffset = String(
+        lengths[index] * (1 - (state.progress[index] ?? 0)),
+      );
+      path.dataset.progress = String(state.progress[index] ?? 0);
+    });
+    fallback.forEach((text) => {
+      text.style.visibility = state.finished ? "visible" : "hidden";
+    });
+    pen.style.visibility = "hidden";
+    if (!guidance) {
+      host.dataset.inkState = "empty";
+      return;
+    }
+    if (state.finished) {
+      host.dataset.inkState = "complete";
+      return;
+    }
+    if (!showCursor) {
+      host.dataset.inkState = "paused";
+      return;
+    }
+
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let timeline: gsap.core.Timeline | null = null;
+    const finish = () => {
+      state.finished = true;
+      host.dataset.inkState = "complete";
+      pen.style.visibility = "hidden";
+      paths.forEach((path, index) => {
+        state.progress[index] = 1;
+        path.style.visibility = "visible";
+        path.style.strokeDashoffset = "0";
+        path.dataset.progress = "1";
+      });
+      fallback.forEach((text) => {
+        text.style.visibility = "visible";
+      });
+    };
+    const placePen = (at: { x: number; y: number }, lifted = false) => {
+      pen.setAttribute(
+        "transform",
+        `translate(${at.x} ${at.y}) rotate(${lifted ? -5 : 0})`,
+      );
+      pen.dataset.x = String(at.x);
+      pen.dataset.y = String(at.y);
+      if (cursor.current) {
+        const screen = rotatePoint(
+          { x: at.x / 1000, y: at.y / pageHeight },
+          angle,
+        );
+        cursor.current.style.transform = `translate3d(${screen.x * size.width}px,${screen.y * size.height}px,0)`;
+        if (bubble.current) {
+          bubble.current.style.left = screen.x > 0.55 ? "auto" : "26px";
+          bubble.current.style.right = screen.x > 0.55 ? "10px" : "auto";
+          bubble.current.style.top = screen.y < 0.15 ? "28px" : "auto";
+          bubble.current.style.bottom = screen.y < 0.15 ? "auto" : "20px";
+        }
+      }
+    };
+    const movePen = (path: SVGPathElement, length: number, progress: number) =>
+      placePen(path.getPointAtLength(length * progress));
+    const reduceMotion = () => {
+      if (media.matches) {
+        timeline?.kill();
+        finish();
+      }
+    };
+    if (media.matches) {
+      finish();
+      return;
+    }
+    host.dataset.inkState = "drawing";
+    timeline = gsap.timeline({ onComplete: finish });
+    let previousTip: { x: number; y: number } | null = null;
+    paths.forEach((path, index) => {
+      const initial = state.progress[index] ?? 0;
+      if (initial >= 1) return;
+      const length = lengths[index];
+      if (length <= 0) {
+        state.progress[index] = 1;
+        return;
+      }
+      const writing = plan.strokes[index].writing;
+      const start = path.getPointAtLength(length * initial);
+      if (previousTip) {
+        const travel = { x: previousTip.x, y: previousTip.y };
+        const distance = Math.hypot(start.x - travel.x, start.y - travel.y);
+        if (distance > 1)
+          timeline!.to(travel, {
+            x: start.x,
+            y: start.y,
+            duration: Math.max(0.035, Math.min(0.16, distance / 1400)),
+            ease: "power1.inOut",
+            onStart: () => {
+              pen.style.visibility = "visible";
+              pen.dataset.penDown = "false";
+            },
+            onUpdate: () => placePen(travel, true),
+          });
+      }
+      previousTip = path.getPointAtLength(length);
+      const motion = { progress: initial };
+      timeline!.to(
+        motion,
+        {
+          progress: 1,
+          duration:
+            Math.max(
+              writing ? 0.035 : 0.12,
+              Math.min(writing ? 0.7 : 1.8, length / (writing ? 300 : 550)),
+            ) *
+            (1 - initial),
+          ease: writing ? "sine.inOut" : "none",
+          onStart: () => {
+            path.style.visibility = "visible";
+            pen.style.visibility = "visible";
+            pen.dataset.penDown = "true";
+            movePen(path, length, initial);
+          },
+          onUpdate: () => {
+            state.progress[index] = motion.progress;
+            path.style.strokeDashoffset = String(
+              length * (1 - motion.progress),
+            );
+            path.dataset.progress = String(motion.progress);
+            movePen(path, length, motion.progress);
+          },
+          onComplete: () => {
+            pen.dataset.penDown = "false";
+          },
+        },
+        index ? "+=0.025" : 0,
+      );
+    });
+    // Keep a long note from holding a teaching step open for too long.
+    timeline.timeScale(Math.max(1, timeline.duration() / 10));
+    if (!paths.length) finish();
+    media.addEventListener("change", reduceMotion);
+    return () => {
+      timeline?.kill();
+      media.removeEventListener("change", reduceMotion);
+      pen.style.visibility = "hidden";
+    };
+  }, [guidance, plan, showCursor, angle, pageHeight, size.width, size.height]);
+
   return (
     <div
+      ref={root}
       className="pdf-tutor-overlay pointer-events-none absolute inset-0"
       data-testid="pdf-annotation-layer"
+      data-ink-state="empty"
     >
       <svg
         className="absolute inset-0 size-full overflow-visible text-[color:var(--pdf-tutor-ink)]"
@@ -49,19 +246,6 @@ export function PdfTutorOverlay({
         aria-label="Anotasi tutor"
         role="img"
       >
-        <defs>
-          <marker
-            id={markerId}
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
-          </marker>
-        </defs>
         {selected ? (
           <rect
             data-testid="pdf-selection"
@@ -77,151 +261,150 @@ export function PdfTutorOverlay({
             rx="3"
           />
         ) : null}
-        {guidance?.actions.map((action, index) => {
-          const bounds = rotateRect(action, rotation);
-          const x = bounds.x * size.width;
-          const y = bounds.y * size.height;
-          const width = bounds.width * size.width;
-          const height = bounds.height * size.height;
-          const common = {
-            stroke: "currentColor",
-            strokeWidth: 2.5,
-            fill: "none",
-            strokeLinecap: "round" as const,
-            strokeLinejoin: "round" as const,
-          };
-          if (action.kind === "point") {
-            const p = point(action);
-            return (
-              <circle
-                key={index}
-                cx={p.x}
-                cy={p.y}
-                r="7"
-                {...common}
-                fill="var(--secondary)"
-                fillOpacity="0.4"
-              />
-            );
-          }
-          if (action.kind === "highlight")
-            return (
-              <rect
-                key={index}
-                data-testid="tutor-highlight"
-                x={x - 2}
-                y={y - 2}
-                width={width + 4}
-                height={height + 4}
-                rx="3"
-                fill="var(--secondary)"
-                fillOpacity="0.3"
-                stroke="currentColor"
-                strokeWidth="1"
-              />
-            );
-          if (action.kind === "rectangle")
-            return (
-              <rect
-                key={index}
-                x={x}
-                y={y}
-                width={width}
-                height={height}
-                rx="5"
-                {...common}
-              />
-            );
-          if (action.kind === "ellipse")
-            return (
-              <ellipse
-                key={index}
-                cx={x + width / 2}
-                cy={y + height / 2}
-                rx={width / 2}
-                ry={height / 2}
-                {...common}
-              />
-            );
-          if (action.kind === "arrow") {
-            const a = point(action.points?.[0] ?? action);
-            const b = point(
-              action.points?.[1] ?? {
-                x: action.x + action.width,
-                y: action.y + action.height,
-              },
-            );
-            return (
-              <line
-                key={index}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                markerEnd={`url(#${markerId})`}
-                {...common}
-              />
-            );
-          }
-          if (action.kind === "path")
-            return (
-              <polyline
-                key={index}
-                points={action.points
-                  ?.map((p) => {
-                    const at = point(p);
-                    return `${at.x},${at.y}`;
-                  })
-                  .join(" ")}
-                {...common}
-              />
-            );
-          if (action.kind === "text") {
-            const at = point(action);
-            const words = action.text?.match(/.{1,28}(?:\s|$)|.{1,28}/g) ?? [];
-            return (
-              <text
-                key={index}
-                x={at.x}
-                y={at.y}
-                fill="currentColor"
-                fontFamily="inherit"
-                fontSize={Math.max(11, Math.min(18, size.width * 0.025))}
-                fontWeight="600"
-                stroke="white"
-                strokeWidth="3"
-                paintOrder="stroke"
-                data-testid="tutor-note"
+        <g transform={matrix}>
+          <g
+            ref={drawing}
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {guidance?.actions.map((action, actionIndex) => (
+              <g
+                key={actionIndex}
+                data-testid={action.kind === "text" ? "tutor-note" : undefined}
+                role="img"
+                aria-label={
+                  action.kind === "text"
+                    ? action.text
+                    : `Anotasi ${action.kind}`
+                }
               >
-                {words.map((line, i) => (
-                  <tspan key={i} x={at.x} dy={i ? "1.3em" : "0"}>
-                    {line}
-                  </tspan>
-                ))}
-              </text>
-            );
-          }
-          return null;
-        })}
+                <title>{action.text ?? `Anotasi ${action.kind}`}</title>
+                {plan.strokes.map((stroke, index) =>
+                  stroke.action === actionIndex ? (
+                    <path
+                      key={index}
+                      d={stroke.d}
+                      data-ink-stroke={index}
+                      data-stroke-kind={stroke.kind}
+                      data-testid={
+                        stroke.kind === "highlight"
+                          ? "tutor-highlight"
+                          : stroke.kind === "rectangle"
+                            ? "tutor-rectangle"
+                            : undefined
+                      }
+                      strokeWidth={stroke.width}
+                      strokeOpacity={stroke.opacity}
+                      stroke={
+                        stroke.kind === "highlight"
+                          ? "var(--brand-lavender)"
+                          : "currentColor"
+                      }
+                      style={{ visibility: "hidden" }}
+                    />
+                  ) : null,
+                )}
+                {plan.fallbacks
+                  .filter((item) => item.action === actionIndex)
+                  .map((item, index) => (
+                    <text
+                      key={index}
+                      data-ink-fallback=""
+                      x={item.x}
+                      y={item.y}
+                      fontSize={item.size}
+                      fontFamily="inherit"
+                      stroke="none"
+                      fill="currentColor"
+                      style={{ visibility: "hidden" }}
+                    >
+                      {item.text}
+                    </text>
+                  ))}
+              </g>
+            ))}
+          </g>
+          <g
+            ref={hand}
+            data-testid="tutor-drawing-hand"
+            aria-hidden="true"
+            style={{ visibility: "hidden" }}
+          >
+            <g transform="rotate(-12)">
+              {/* Nib is precisely (0,0). The stylized hand holds the pen above it. */}
+              <path
+                d="M0 0 6-15 27-42 Q29-44 32-42 L35-39 Q37-37 34-34 L13-8Z"
+                fill="var(--pdf-tutor-ink)"
+                stroke="var(--pdf-tutor-ink)"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M0 0 6-15 13-8Z"
+                fill="var(--card)"
+                stroke="var(--pdf-tutor-ink)"
+                strokeWidth="1.2"
+              />
+              <path
+                d="M5-4 9-9"
+                stroke="var(--pdf-tutor-ink)"
+                strokeWidth="2"
+              />
+              <path
+                d="M23-35 29-30"
+                stroke="var(--secondary)"
+                strokeWidth="3"
+              />
+              <path
+                d="M16-24 Q18-29 22-26 L37-16 Q40-15 41-12 L49 4 58 12 44 29 30 18 Q24 14 22 8 L13-9 Q11-14 15-16 18-18 21-12 L27-3 29-5 19-17 Q14-19 16-24Z"
+                fill="var(--brand-lavender-soft)"
+                stroke="var(--pdf-tutor-ink)"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M23-23 34-13 M27-19 36-10 M29-5 34 2 M21-12 25-5"
+                fill="none"
+                stroke="var(--pdf-tutor-ink)"
+                strokeOpacity="0.65"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+              />
+              <path
+                d="M42 24 55 9 67 20 53 36Z"
+                fill="var(--secondary)"
+                stroke="var(--pdf-tutor-ink)"
+                strokeWidth="1.6"
+              />
+            </g>
+          </g>
+        </g>
       </svg>
-      {cursor && guidance && showCursor ? (
+      {anchor && guidance && showCursor ? (
         <div
+          ref={cursor}
           data-testid="tutor-cursor"
-          className="absolute top-0 left-0 motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out"
+          className="absolute top-0 left-0"
           style={{
-            transform: `translate3d(${cursor.x * size.width}px, ${cursor.y * size.height}px, 0)`,
+            transform: `translate3d(${anchor.x * size.width}px,${anchor.y * size.height}px,0)`,
           }}
         >
           <MousePointer2
+            data-tutor-pointer=""
             className="size-6 fill-secondary text-[color:var(--pdf-tutor-ink)] drop-shadow-sm"
             aria-hidden="true"
           />
           <div
-            className={cn(
-              "absolute w-max max-w-[min(15rem,50vw)]",
-              cursor.x > 0.55 ? "right-2" : "left-5",
-              cursor.y > 0.75 ? "bottom-5" : "top-5",
-            )}
+            ref={bubble}
+            className="absolute w-max max-w-[min(15rem,50vw)]"
+            style={{
+              left: anchor.x > 0.55 ? "auto" : 26,
+              right: anchor.x > 0.55 ? 10 : "auto",
+              top: anchor.y > 0.75 ? "auto" : 24,
+              bottom: anchor.y > 0.75 ? 20 : "auto",
+            }}
           >
             <Bubble variant="secondary" className="max-w-full">
               <BubbleContent>

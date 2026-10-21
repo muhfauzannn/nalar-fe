@@ -38,7 +38,7 @@ export function CourseCard({ course }: { course: CourseSummary }) {
           {archived && <Badge variant="outline">Arsip</Badge>}
           {finished && !archived && <Badge variant="outline">Selesai</Badge>}
         </div>
-        <CardTitle className="text-pretty break-words">{course.name}</CardTitle>
+        <CardTitle className="text-pretty wrap-break-word">{course.name}</CardTitle>
         <CardDescription>{course.subjectName}</CardDescription>
       </CardHeader>
 
