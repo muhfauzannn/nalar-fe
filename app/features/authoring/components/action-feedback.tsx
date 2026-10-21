@@ -12,6 +12,7 @@ export function useAction() {
   return {
     fetcher,
     pending: fetcher.state !== "idle",
+    formData: fetcher.formData,
     error: failed?.error ?? null,
     code: failed?.code ?? null,
     submit: (values: Record<string, string>) =>
@@ -22,7 +23,7 @@ export function useAction() {
 export function ActionError({ error }: { error: string | null | undefined }) {
   if (!error) return null;
   return (
-    <Alert variant="destructive" role="alert">
+    <Alert variant="destructive" role="alert" className="enter-up">
       <CircleAlert />
       <AlertDescription>{error}</AlertDescription>
     </Alert>

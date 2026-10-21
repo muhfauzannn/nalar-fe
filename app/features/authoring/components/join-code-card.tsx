@@ -4,11 +4,11 @@ import { useState } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { Spinner } from "~/components/ui/spinner";
 import { formatJoinCode, joinLink } from "../lib/form";
 import type { PublicationStatus } from "../types";
 import { ActionError, useAction } from "./action-feedback";
 import { ConfirmAction } from "./confirm-action";
+import { IconSwap } from "./icon-swap";
 
 export function JoinCodeCard({
   joinCode,
@@ -63,20 +63,25 @@ export function JoinCodeCard({
 
         {joinCode ? (
           <>
+            {/* New code = new element: it pops in, so the change is noticed. */}
             <p
+              key={joinCode}
               data-testid="join-code"
-              className="rounded-xl border bg-muted/40 px-4 py-3 text-center font-mono text-3xl font-semibold tracking-[0.3em] select-all"
+              className="enter-pop rounded-xl border bg-muted/40 px-4 py-3 text-center font-mono text-3xl font-semibold tracking-[0.3em] select-all"
             >
               {formatJoinCode(joinCode)}
             </p>
+            <span role="status" className="sr-only">
+              {copied ? "Tersalin ke papan klip" : ""}
+            </span>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => copy("code")}>
-                {copied === "code" ? <Check /> : <Copy />}
-                {copied === "code" ? "Tersalin" : "Salin kode"}
+                <IconSwap done={copied === "code"} idle={<Copy />} finished={<Check />} />
+                Salin kode
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => copy("link")}>
-                {copied === "link" ? <Check /> : <Link2 />}
-                {copied === "link" ? "Tersalin" : "Salin tautan"}
+                <IconSwap done={copied === "link"} idle={<Link2 />} finished={<Check />} />
+                Salin tautan
               </Button>
               <ConfirmAction
                 label="Buat kode baru"
@@ -93,8 +98,7 @@ export function JoinCodeCard({
                 size="sm"
                 disabled={busy}
                 onClick={() => disable.submit({ intent: "join-code-disable" })}
-              >
-                {disable.pending ? <Spinner data-icon="inline-start" /> : null}
+               loading={disable.pending}>
                 Matikan kode
               </Button>
             </div>
@@ -107,10 +111,11 @@ export function JoinCodeCard({
             <Button
               type="button"
               size="sm"
-              disabled={busy}
+              loading={reset.pending}
+              disabled={disable.pending}
               onClick={() => reset.submit({ intent: "join-code-reset" })}
             >
-              {reset.pending ? <Spinner data-icon="inline-start" /> : <RefreshCw />}
+              <RefreshCw data-icon="inline-start" />
               Buat kode
             </Button>
           </div>

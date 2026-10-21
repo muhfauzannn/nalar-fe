@@ -2,9 +2,10 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "~/lib/utils"
+import { Spinner } from "./spinner"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button relative inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform,scale,opacity] duration-[160ms] ease-out-strong outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:active:not-aria-[haspopup]:scale-100 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -44,14 +45,52 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  loading,
+  children,
+  disabled,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & {
+    /** Pass a boolean to make the button show progress; leave it out for a plain button. */
+    loading?: boolean
+  }) {
+  // With `loading` set, label and spinner share one cell and cross-fade (blurred,
+  // so they read as one thing changing). The label keeps its space, so the button
+  // never changes width when a save starts.
+  const busy = loading === true
   return (
     <ButtonPrimitive
       data-slot="button"
+      data-loading={busy ? "" : undefined}
+      aria-busy={busy || undefined}
+      disabled={disabled}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+      onClick={busy ? (event) => event.preventDefault() : props.onClick}
+    >
+      {loading === undefined ? (
+        children
+      ) : (
+        <>
+          <span
+            className={cn(
+              "inline-flex items-center justify-center gap-[inherit] transition-[opacity,filter,scale] duration-150 ease-out-strong",
+              busy && "scale-95 opacity-0 blur-[2px] motion-reduce:scale-100 motion-reduce:blur-none"
+            )}
+          >
+            {children}
+          </span>
+          {busy ? (
+            <span
+              aria-hidden="true"
+              className="enter-fade pointer-events-none absolute inset-0 flex items-center justify-center"
+            >
+              <Spinner role="presentation" aria-label={undefined} />
+            </span>
+          ) : null}
+        </>
+      )}
+    </ButtonPrimitive>
   )
 }
 

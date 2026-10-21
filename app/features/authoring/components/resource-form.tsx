@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import type { ManagedResource, ResourceType } from "../types";
 import { ActionError, useAction, useOnSuccess } from "./action-feedback";
@@ -117,8 +116,7 @@ export function ResourceForm({
             Batal
           </Button>
         ) : null}
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? <Spinner data-icon="inline-start" /> : null}
+        <Button type="submit" size="sm" loading={pending}>
           {resource ? "Simpan resource" : "Tambah resource"}
         </Button>
       </div>

@@ -4,7 +4,6 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { ActionError } from "../components/action-feedback";
 import { NativeSelect } from "../components/native-select";
@@ -62,8 +61,7 @@ export function NewCoursePage({
               <Button variant="outline" render={<Link to="/manage" />}>
                 Batal
               </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? <Spinner data-icon="inline-start" /> : null}
+              <Button type="submit" loading={submitting}>
                 {submitting ? "Membuat" : "Buat course"}
               </Button>
             </div>

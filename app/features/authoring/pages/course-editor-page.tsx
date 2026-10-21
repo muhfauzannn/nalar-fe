@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Copy, Plus, Users } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -8,7 +8,6 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import { formatDateTime } from "~/features/lms/lib/format";
@@ -16,6 +15,7 @@ import { ActionError, useAction, useResetOnSuccess } from "../components/action-
 import { CourseContentTab } from "../components/course-content-tab";
 import { JoinCodeCard } from "../components/join-code-card";
 import { NativeSelect } from "../components/native-select";
+import { ListItem } from "../components/list-item";
 import { StatusBadge } from "../components/status-badge";
 import type {
   CourseEditorData,
@@ -38,9 +38,21 @@ export function CourseEditorPage({
   subjects: Subject[];
   scenarios: Scenario[];
 }) {
-  const [params, setParams] = useSearchParams();
-  const requested = params.get("tab");
-  const tab: TabName = TABS.find((name) => name === requested) ?? "overview";
+  const [params] = useSearchParams();
+  // The tab is local state. Putting it in the router (setSearchParams) is a
+  // navigation: it reloads the editor data and flashes the page skeleton on
+  // every click. The URL is kept in sync only so a reload or shared link opens
+  // the same tab.
+  const [tab, setTab] = useState<TabName>(
+    () => TABS.find((name) => name === params.get("tab")) ?? "overview",
+  );
+  function selectTab(value: unknown) {
+    const next = TABS.find((name) => name === value) ?? "overview";
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url);
+  }
   const { course } = data;
 
   return (
@@ -71,12 +83,7 @@ export function CourseEditorPage({
         <CourseStatusActions status={course.status} studentCount={data.studentCount} />
       </header>
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) =>
-          setParams({ tab: String(value) }, { replace: true, preventScrollReset: true })
-        }
-      >
+      <Tabs value={tab} onValueChange={selectTab}>
         <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-fit">
           <TabsTrigger value="overview">Ringkasan</TabsTrigger>
           <TabsTrigger value="content">Materi ({data.modules.length})</TabsTrigger>
@@ -124,8 +131,7 @@ function CourseStatusActions({
     <div className="flex flex-col items-end gap-2">
       <div className="flex flex-wrap justify-end gap-2">
         {status !== "published" ? (
-          <Button type="button" disabled={pending} onClick={() => change("published")}>
-            {pending ? <Spinner data-icon="inline-start" /> : null}
+          <Button type="button" loading={pending} onClick={() => change("published")}>
             {status === "archived" ? "Terbitkan lagi" : "Terbitkan course"}
           </Button>
         ) : null}
@@ -192,8 +198,7 @@ function CourseDetailsCard({
             />
           </Field>
           <div className="flex justify-end">
-            <Button type="submit" disabled={pending}>
-              {pending ? <Spinner data-icon="inline-start" /> : null}
+            <Button type="submit" loading={pending}>
               Simpan perubahan
             </Button>
           </div>
@@ -228,8 +233,8 @@ function QuizzesTab({ quizzes }: { quizzes: ManagedQuizSummary[] }) {
               <FieldLabel htmlFor="new-quiz-limit">Batas waktu (menit)</FieldLabel>
               <Input id="new-quiz-limit" name="timeLimitMinutes" type="number" min={1} max={600} placeholder="Tanpa batas" />
             </Field>
-            <Button type="submit" disabled={pending}>
-              {pending ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+            <Button type="submit" loading={pending}>
+              <Plus data-icon="inline-start" />
               Buat kuis
             </Button>
           </fetcher.Form>
@@ -243,8 +248,8 @@ function QuizzesTab({ quizzes }: { quizzes: ManagedQuizSummary[] }) {
         </p>
       ) : (
         <ul className="flex flex-col gap-3" aria-label="Daftar kuis">
-          {quizzes.map((quiz) => (
-            <li key={quiz.id}>
+          {quizzes.map((quiz, index) => (
+            <ListItem key={quiz.id} index={index}>
               <Card data-testid="quiz-row">
                 <CardContent className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex min-w-0 flex-col gap-1.5">
@@ -263,7 +268,7 @@ function QuizzesTab({ quizzes }: { quizzes: ManagedQuizSummary[] }) {
                   </Button>
                 </CardContent>
               </Card>
-            </li>
+            </ListItem>
           ))}
         </ul>
       )}
@@ -329,8 +334,8 @@ function AssignmentsTab({
                 </Field>
               </div>
               <div className="flex justify-end">
-                <Button type="submit" disabled={pending}>
-                  {pending ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+                <Button type="submit" loading={pending}>
+                  <Plus data-icon="inline-start" />
                   Buat assignment
                 </Button>
               </div>
@@ -345,8 +350,8 @@ function AssignmentsTab({
         </p>
       ) : (
         <ul className="flex flex-col gap-3" aria-label="Daftar assignment">
-          {assignments.map((assignment) => (
-            <li key={assignment.id}>
+          {assignments.map((assignment, index) => (
+            <ListItem key={assignment.id} index={index}>
               <Card data-testid="assignment-row">
                 <CardContent className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex min-w-0 flex-col gap-1.5">
@@ -369,7 +374,7 @@ function AssignmentsTab({
                   </Button>
                 </CardContent>
               </Card>
-            </li>
+            </ListItem>
           ))}
         </ul>
       )}

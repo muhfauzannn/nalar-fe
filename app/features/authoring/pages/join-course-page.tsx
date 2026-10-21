@@ -5,7 +5,6 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { ActionError } from "../components/action-feedback";
 import type { ActionResult } from "../types";
 
@@ -53,8 +52,7 @@ export function JoinCoursePage({ result }: { result?: ActionResult }) {
               />
               <FieldDescription>Contoh: K7M2-QX9P</FieldDescription>
             </Field>
-            <Button type="submit" size="lg" disabled={submitting}>
-              {submitting ? <Spinner data-icon="inline-start" /> : null}
+            <Button type="submit" size="lg" loading={submitting}>
               {submitting ? "Memeriksa" : "Gabung"}
             </Button>
           </Form>

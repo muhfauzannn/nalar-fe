@@ -7,15 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import type { ManagedLessonSummary, ManagedModule, PublicationStatus } from "../types";
 import { ActionError, useAction, useOnSuccess, useResetOnSuccess } from "./action-feedback";
+import { optimisticOrder, useFlip } from "../lib/motion";
+import { ListItem } from "./list-item";
 import { ReorderControls } from "./reorder-controls";
 import { StatusBadge } from "./status-badge";
 
 export function CourseContentTab({ modules }: { modules: ManagedModule[] }) {
   const order = useAction();
-  const ids = modules.map((module) => module.id);
+  // Show the requested order immediately; the server confirms a moment later.
+  const shown = optimisticOrder(modules, order.formData);
+  const ids = shown.map((module) => module.id);
+  const flip = useFlip<HTMLOListElement>();
 
   return (
     <div className="flex flex-col gap-6">
@@ -27,9 +31,9 @@ export function CourseContentTab({ modules }: { modules: ManagedModule[] }) {
           Belum ada modul. Modul mengelompokkan lesson; tambahkan yang pertama di atas.
         </p>
       ) : (
-        <ol className="flex flex-col gap-5" aria-label="Daftar modul">
-          {modules.map((module, index) => (
-            <li key={module.id}>
+        <ol ref={flip.ref} className="flex flex-col gap-5" aria-label="Daftar modul">
+          {shown.map((module, index) => (
+            <ListItem key={module.id} flipKey={module.id} index={index}>
               <ModuleCard
                 module={module}
                 orderControls={
@@ -37,14 +41,14 @@ export function CourseContentTab({ modules }: { modules: ManagedModule[] }) {
                     ids={ids}
                     index={index}
                     label={`modul ${module.title}`}
-                    disabled={order.pending}
-                    onChange={(next) =>
-                      order.submit({ intent: "module-order", ids: JSON.stringify(next) })
-                    }
+                    onChange={(next) => {
+                      flip.capture();
+                      order.submit({ intent: "module-order", ids: JSON.stringify(next) });
+                    }}
                   />
                 }
               />
-            </li>
+            </ListItem>
           ))}
         </ol>
       )}
@@ -83,8 +87,8 @@ function NewModuleForm() {
                 Terbitkan langsung
               </FieldLabel>
             </Field>
-            <Button type="submit" size="sm" disabled={pending}>
-              {pending ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+            <Button type="submit" size="sm" loading={pending}>
+              <Plus data-icon="inline-start" />
               Tambah modul
             </Button>
           </div>
@@ -148,7 +152,9 @@ function ModuleCard({
   const status = useAction();
   const edit = useAction();
   const lessonOrder = useAction();
-  const lessonIds = module.lessons.map((lesson) => lesson.id);
+  const lessons = optimisticOrder(module.lessons, lessonOrder.formData);
+  const lessonIds = lessons.map((lesson) => lesson.id);
+  const lessonFlip = useFlip<HTMLUListElement>();
   const archived = module.status === "archived";
   useOnSuccess(edit.fetcher, () => setEditing(false));
 
@@ -178,7 +184,7 @@ function ModuleCard({
         {editing ? (
           <edit.fetcher.Form
             method="post"
-            className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-[1fr_1fr_auto]"
+            className="enter-up grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-[1fr_1fr_auto]"
           >
             <input type="hidden" name="intent" value="module-update" />
             <input type="hidden" name="moduleId" value={module.id} />
@@ -200,27 +206,28 @@ function ModuleCard({
 
       <CardContent className="flex flex-col gap-4">
         <ActionError error={lessonOrder.error} />
-        {module.lessons.length === 0 ? (
+        {lessons.length === 0 ? (
           <p className="text-sm text-muted-foreground">Belum ada lesson di modul ini.</p>
         ) : (
-          <ul className="flex flex-col gap-2" aria-label={`Lesson di ${module.title}`}>
-            {module.lessons.map((lesson, index) => (
+          <ul ref={lessonFlip.ref} className="flex flex-col gap-2" aria-label={`Lesson di ${module.title}`}>
+            {lessons.map((lesson, index) => (
               <LessonRow
                 key={lesson.id}
+                index={index}
                 lesson={lesson}
                 orderControls={
                   <ReorderControls
                     ids={lessonIds}
                     index={index}
                     label={`lesson ${lesson.title}`}
-                    disabled={lessonOrder.pending}
-                    onChange={(next) =>
+                    onChange={(next) => {
+                      lessonFlip.capture();
                       lessonOrder.submit({
                         intent: "lesson-order",
                         moduleId: module.id,
                         ids: JSON.stringify(next),
-                      })
-                    }
+                      });
+                    }}
                   />
                 }
               />
@@ -235,14 +242,18 @@ function ModuleCard({
 
 function LessonRow({
   lesson,
+  index,
   orderControls,
 }: {
   lesson: ManagedLessonSummary;
+  index: number;
   orderControls: React.ReactNode;
 }) {
   const status = useAction();
   return (
-    <li
+    <ListItem
+      flipKey={lesson.id}
+      index={index}
       data-testid="lesson-row"
       className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 ${lesson.status === "archived" ? "opacity-60" : ""}`}
     >
@@ -262,7 +273,7 @@ function LessonRow({
         onChange={(next) => status.submit({ intent: "lesson-status", lessonId: lesson.id, status: next })}
       />
       {status.error ? <span className="w-full text-xs text-destructive">{status.error}</span> : null}
-    </li>
+    </ListItem>
   );
 }
 
@@ -287,8 +298,8 @@ function NewLessonForm({ moduleId }: { moduleId: string }) {
           Terbitkan
         </FieldLabel>
       </Field>
-      <Button type="submit" size="sm" variant="outline" disabled={pending}>
-        {pending ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+      <Button type="submit" size="sm" variant="outline" loading={pending}>
+        <Plus data-icon="inline-start" />
         Tambah lesson
       </Button>
       {error ? <div className="w-full"><ActionError error={error} /></div> : null}

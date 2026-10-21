@@ -9,14 +9,15 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { ActionError, useAction } from "../components/action-feedback";
 import { ConfirmAction } from "../components/confirm-action";
+import { ListItem } from "../components/list-item";
 import { QuestionForm } from "../components/question-form";
 import { ReorderControls } from "../components/reorder-controls";
 import { StatusBadge } from "../components/status-badge";
 import { isoToLocal } from "../lib/form";
+import { optimisticOrder, useFlip } from "../lib/motion";
 import type { ManagedQuestion, QuizEditorData, WorkStatus } from "../types";
 
 export function QuizEditorPage({ data }: { data: QuizEditorData }) {
@@ -24,7 +25,9 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
   const [adding, setAdding] = useState(false);
   const closeAdd = useCallback(() => setAdding(false), []);
   const order = useAction();
-  const ids = questions.map((question) => question.id);
+  const shownQuestions = optimisticOrder(questions, order.formData);
+  const ids = shownQuestions.map((question) => question.id);
+  const flip = useFlip<HTMLOListElement>();
   const totalPoints = questions.reduce((sum, question) => sum + question.points, 0);
 
   return (
@@ -95,7 +98,7 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
         </div>
 
         {adding ? (
-          <Card>
+          <Card className="enter-up">
             <CardContent>
               <QuestionForm quizId={quiz.id} onDone={closeAdd} />
             </CardContent>
@@ -108,8 +111,8 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
             Belum ada soal. Kuis baru bisa diterbitkan setelah punya minimal satu soal.
           </p>
         ) : (
-          <ol className="flex flex-col gap-3" aria-label="Daftar soal">
-            {questions.map((question, index) => (
+          <ol ref={flip.ref} className="flex flex-col gap-3" aria-label="Daftar soal">
+            {shownQuestions.map((question, index) => (
               <QuestionCard
                 key={question.id}
                 quizId={quiz.id}
@@ -121,10 +124,11 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
                     ids={ids}
                     index={index}
                     label={`soal ${index + 1}`}
-                    disabled={!editable || order.pending}
-                    onChange={(next) =>
-                      order.submit({ intent: "question-order", quizId: quiz.id, ids: JSON.stringify(next) })
-                    }
+                    disabled={!editable}
+                    onChange={(next) => {
+                      flip.capture();
+                      order.submit({ intent: "question-order", quizId: quiz.id, ids: JSON.stringify(next) });
+                    }}
                   />
                 }
               />
@@ -156,8 +160,7 @@ function QuizStatusActions({
     <div className="flex flex-col items-end gap-2">
       <div className="flex flex-wrap justify-end gap-2">
         {status === "draft" ? (
-          <Button type="button" disabled={pending || !ready} onClick={() => change("published")}>
-            {pending ? <Spinner data-icon="inline-start" /> : null}
+          <Button type="button" loading={pending} disabled={!ready} onClick={() => change("published")}>
             Terbitkan kuis
           </Button>
         ) : null}
@@ -188,10 +191,10 @@ function QuizStatusActions({
         <Button
           type="button"
           variant="outline"
-          disabled={copy.pending}
+          loading={copy.pending}
           onClick={() => copy.submit({ intent: "quiz-duplicate" })}
         >
-          {copy.pending ? <Spinner data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+          <Copy data-icon="inline-start" />
           Salin kuis
         </Button>
       </div>
@@ -269,8 +272,7 @@ function QuizSettingsCard({ data }: { data: QuizEditorData }) {
             </Field>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" disabled={pending}>
-              {pending ? <Spinner data-icon="inline-start" /> : null}
+            <Button type="submit" loading={pending}>
               Simpan pengaturan
             </Button>
           </div>
@@ -298,7 +300,7 @@ function QuestionCard({
   const remove = useAction();
 
   return (
-    <li>
+    <ListItem flipKey={question.id} index={number - 1}>
       <Card data-testid="question-card">
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-start gap-3">
@@ -371,12 +373,12 @@ function QuestionCard({
           ) : null}
 
           {editing ? (
-            <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="enter-up rounded-lg border bg-muted/30 p-4">
               <QuestionForm quizId={quizId} question={question} onDone={closeEdit} />
             </div>
           ) : null}
         </CardContent>
       </Card>
-    </li>
+    </ListItem>
   );
 }

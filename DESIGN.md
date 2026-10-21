@@ -275,3 +275,46 @@ asset has a transparent outer canvas.
   only in spacious marketing sections.
 - All illustration motion must be disabled or reduced through the project's
   `prefers-reduced-motion`/GSAP handling.
+
+## 6. Motion
+
+Motion explains and confirms; it never decorates something people see all day.
+Tokens and utilities live in `app/app.css` ("Motion system"); do not hard-code curves.
+
+### Does it move at all? Decide by how often it is seen
+
+| Frequency | Examples | Treatment |
+| --- | --- | --- |
+| Constantly | buttons, tabs, keyboard actions, list navigation | feedback only: press `scale(0.97)`, colour changes. Never a travelling animation. |
+| Now and then | dialogs, an error appearing, a new list row, a reorder | short enter (<= 260ms); exits faster than enters |
+| Once | onboarding, celebrations | may be playful |
+
+### Rules
+
+- Only `transform`, `opacity` and `filter` animate. Never `transition-all`; list the
+  properties. Tailwind v4 scales with the **`scale` property**, so a press feedback needs
+  `scale` in `transition-property` (not `transform`).
+- Curves: `--ease-out-strong` (enter/exit, anything that must feel instant),
+  `--ease-in-out-strong` (on-screen movement), `--ease-drawer` (sheets). Never `ease-in` on UI.
+- Nothing grows from nothing: enters start at `scale(0.96)` / `translateY(6px)` plus opacity;
+  a hint of blur (<= 2px) hides the seam when two states cross-fade.
+- Modals scale from the centre; anchored popovers use their trigger as origin.
+- Lists that change order slide with FLIP (`useFlip`) after an optimistic update, so the UI
+  responds before the server does. A row's enter class is dropped when it finishes
+  (`ListItem`), because React moving a node would otherwise replay it.
+- A button that waits uses `<Button loading={...}>`: label and spinner share one cell, so the
+  button never changes width, and double clicks are ignored.
+- Switching tabs is local state, not a router navigation (a navigation re-runs loaders and
+  flashes the page skeleton).
+- `prefers-reduced-motion`: keep the fade, drop travel, scale and blur (global layer in
+  `app.css`; JS animation checks `matchMedia`). Hover styles are already gated behind
+  `@media (hover: hover)` by Tailwind.
+- Touch targets: icon buttons grow an invisible hit area (`after:-inset-1.5`) instead of looking bigger.
+
+### How this was verified
+
+The measurements are executable, not eyeballed: computed `scale` while pressed, button width
+before/during a save, DOM order before the server answers, the easing/duration of the
+animations the browser actually created (`getAnimations()`; for CSS animations the easing is
+on the keyframes), idle infinite animations, reduced-motion behaviour and the CSSOM media
+wrapping of `:hover`.

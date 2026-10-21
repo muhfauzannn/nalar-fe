@@ -8,15 +8,16 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { ActionError, useAction } from "../components/action-feedback";
 import { ConfirmAction } from "../components/confirm-action";
 import { NativeSelect } from "../components/native-select";
+import { ListItem } from "../components/list-item";
 import { ReorderControls } from "../components/reorder-controls";
 import { ResourceForm } from "../components/resource-form";
 import { StatusBadge } from "../components/status-badge";
 import { publicationStatusLabel } from "../lib/form";
+import { optimisticOrder, useFlip } from "../lib/motion";
 import type { LessonEditorData, ManagedResource, PublicationStatus } from "../types";
 
 export function LessonEditorPage({ data }: { data: LessonEditorData }) {
@@ -25,7 +26,9 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
   const [draft, setDraft] = useState(lesson.content ?? "");
   const [adding, setAdding] = useState(false);
   const order = useAction();
-  const ids = resources.map((resource) => resource.id);
+  const shownResources = optimisticOrder(resources, order.formData);
+  const ids = shownResources.map((resource) => resource.id);
+  const flip = useFlip<HTMLUListElement>();
 
   return (
     <div className="flex flex-col gap-8">
@@ -110,8 +113,7 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
               </div>
             </div>
             <div className="flex justify-end">
-              <Button type="submit" disabled={save.pending}>
-                {save.pending ? <Spinner data-icon="inline-start" /> : null}
+              <Button type="submit" loading={save.pending}>
                 Simpan lesson
               </Button>
             </div>
@@ -138,7 +140,7 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
         </div>
 
         {adding ? (
-          <Card>
+          <Card className="enter-up">
             <CardContent>
               <ResourceForm lessonId={lesson.id} onDone={() => setAdding(false)} />
             </CardContent>
@@ -151,10 +153,11 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
             Belum ada resource.
           </p>
         ) : (
-          <ul className="flex flex-col gap-3" aria-label="Daftar resource">
-            {resources.map((resource, index) => (
+          <ul ref={flip.ref} className="flex flex-col gap-3" aria-label="Daftar resource">
+            {shownResources.map((resource, index) => (
               <ResourceRow
                 key={resource.id}
+                index={index}
                 lessonId={lesson.id}
                 resource={resource}
                 orderControls={
@@ -162,14 +165,14 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
                     ids={ids}
                     index={index}
                     label={`resource ${resource.title}`}
-                    disabled={order.pending}
-                    onChange={(next) =>
+                    onChange={(next) => {
+                      flip.capture();
                       order.submit({
                         intent: "resource-order",
                         lessonId: lesson.id,
                         ids: JSON.stringify(next),
-                      })
-                    }
+                      });
+                    }}
                   />
                 }
               />
@@ -184,10 +187,12 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
 function ResourceRow({
   lessonId,
   resource,
+  index,
   orderControls,
 }: {
   lessonId: string;
   resource: ManagedResource;
+  index: number;
   orderControls: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
@@ -195,7 +200,7 @@ function ResourceRow({
   const Icon = resource.type === "text" ? FileText : Link2;
 
   return (
-    <li>
+    <ListItem flipKey={resource.id} index={index}>
       <Card data-testid="resource-row">
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -248,12 +253,12 @@ function ResourceRow({
             </p>
           ) : null}
           {editing ? (
-            <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="enter-up rounded-lg border bg-muted/30 p-4">
               <ResourceForm lessonId={lessonId} resource={resource} onDone={() => setEditing(false)} />
             </div>
           ) : null}
         </CardContent>
       </Card>
-    </li>
+    </ListItem>
   );
 }

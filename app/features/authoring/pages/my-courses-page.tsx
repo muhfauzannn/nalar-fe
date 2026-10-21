@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/empty";
 import { StatusBadge } from "../components/status-badge";
 import { formatJoinCode } from "../lib/form";
+import { stagger } from "../lib/motion";
 import type { ManagedCourseSummary } from "../types";
 
 export function MyCoursesPage({ data }: { data: { courses: ManagedCourseSummary[] } }) {
@@ -59,8 +60,8 @@ export function MyCoursesPage({ data }: { data: { courses: ManagedCourseSummary[
         </Empty>
       ) : (
         <section aria-label="Daftar course yang dikelola" className="grid gap-5 md:grid-cols-2">
-          {data.courses.map((course) => (
-            <Card key={course.id} data-testid="managed-course">
+          {data.courses.map((course, index) => (
+            <Card key={course.id} data-testid="managed-course" className="enter-up" style={stagger(index)}>
               <CardHeader>
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={course.status} />

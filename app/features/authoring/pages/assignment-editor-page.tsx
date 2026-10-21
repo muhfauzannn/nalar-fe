@@ -8,7 +8,6 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { ActionError, useAction } from "../components/action-feedback";
 import { StatusBadge } from "../components/status-badge";
@@ -92,8 +91,7 @@ function AssignmentStatusActions({
     <div className="flex flex-col items-end gap-2">
       <div className="flex flex-wrap justify-end gap-2">
         {status === "draft" ? (
-          <Button type="button" disabled={pending || !ready} onClick={() => change("published")}>
-            {pending ? <Spinner data-icon="inline-start" /> : null}
+          <Button type="button" loading={pending} disabled={!ready} onClick={() => change("published")}>
             Terbitkan assignment
           </Button>
         ) : null}
@@ -124,10 +122,10 @@ function AssignmentStatusActions({
         <Button
           type="button"
           variant="outline"
-          disabled={copy.pending}
+          loading={copy.pending}
           onClick={() => copy.submit({ intent: "assignment-duplicate" })}
         >
-          {copy.pending ? <Spinner data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+          <Copy data-icon="inline-start" />
           Salin assignment
         </Button>
       </div>
@@ -196,8 +194,7 @@ function AssignmentSettingsCard({ data }: { data: AssignmentEditorData }) {
             </Field>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" disabled={pending}>
-              {pending ? <Spinner data-icon="inline-start" /> : null}
+            <Button type="submit" loading={pending}>
               Simpan pengaturan
             </Button>
           </div>
@@ -332,8 +329,7 @@ function RubricCard({
                 <Plus data-icon="inline-start" />
                 Tambah kriteria
               </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? <Spinner data-icon="inline-start" /> : null}
+              <Button type="submit" loading={pending}>
                 Simpan rubrik
               </Button>
             </div>

@@ -22,6 +22,7 @@ export function ReorderControls({
         type="button"
         variant="ghost"
         size="icon-xs"
+        className="after:absolute after:-inset-1.5"
         aria-label={`Naikkan ${label}`}
         disabled={disabled || index === 0}
         onClick={() => onChange(moveItem(ids, index, -1))}
@@ -32,6 +33,7 @@ export function ReorderControls({
         type="button"
         variant="ghost"
         size="icon-xs"
+        className="after:absolute after:-inset-1.5"
         aria-label={`Turunkan ${label}`}
         disabled={disabled || index === ids.length - 1}
         onClick={() => onChange(moveItem(ids, index, 1))}

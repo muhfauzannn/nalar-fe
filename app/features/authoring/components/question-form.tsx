@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import type { ManagedQuestion, QuestionDraft } from "../types";
 import { ActionError, useAction, useOnSuccess } from "./action-feedback";
@@ -260,8 +259,7 @@ export function QuestionForm({
         <Button type="button" variant="outline" size="sm" onClick={onDone}>
           Batal
         </Button>
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? <Spinner data-icon="inline-start" /> : null}
+        <Button type="submit" size="sm" loading={pending}>
           {question ? "Simpan soal" : "Tambah soal"}
         </Button>
       </div>

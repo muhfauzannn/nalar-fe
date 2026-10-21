@@ -170,9 +170,126 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
   html {
     @apply font-sans;
   }
+}
+
+/*
+ * Motion system
+ *
+ * How often a thing is seen decides whether it moves at all:
+ *   - used constantly (buttons, tabs, keyboard actions): feedback only - a press
+ *     scale and colour changes, never a travelling animation;
+ *   - used now and then (dialogs, errors, a new list item, a reorder): a short
+ *     enter, <= 260ms, exits faster than enters;
+ *   - used once (onboarding, celebrations): may be playful.
+ * Only transform, opacity and filter animate (no layout properties). The built-in
+ * CSS easings are too weak, so UI motion uses the curves below.
+ */
+@theme {
+  /* Entering/exiting and anything that must feel instantly responsive. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Elements that move or morph while staying on screen. */
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  /* Sheets and drawers (iOS-like). */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes enter-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Never grows from nothing: starts at 96% and slightly blurred so the old and new
+   value read as one object changing instead of two overlapping ones. */
+@keyframes enter-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@layer utilities {
+  /* `backwards` (not `both`): after the entrance the element goes back to its
+     normal style, so later transforms (FLIP reorder, hover) are not pinned. */
+  .enter-up {
+    animation: enter-up 200ms var(--ease-out-strong) backwards;
+    animation-delay: calc(var(--i, 0) * 35ms);
+  }
+  .enter-fade {
+    animation: enter-fade 160ms var(--ease-out-strong) backwards;
+  }
+  .enter-pop {
+    animation: enter-pop 220ms var(--ease-out-strong) backwards;
+  }
+}
+
+/*
+ * Reduced motion means fewer and gentler animations, not none: keep opacity so
+ * changes are still noticed, drop travel, scale and blur. Unlayered on purpose,
+ * so it beats the utilities (including tw-animate-css, used by dialogs,
+ * popovers, tooltips and sheets).
+ */
+@media (prefers-reduced-motion: reduce) {
+  .enter-up,
+  .enter-pop {
+    animation-name: enter-fade;
+    animation-delay: 0ms;
+  }
+
+  .animate-in,
+  .animate-out,
+  [class*="animate-in"],
+  [class*="animate-out"] {
+    --tw-enter-scale: 1;
+    --tw-exit-scale: 1;
+    --tw-enter-blur: 0;
+    --tw-exit-blur: 0;
+    --tw-enter-rotate: 0;
+    --tw-exit-rotate: 0;
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-exit-translate-x: 0;
+    --tw-exit-translate-y: 0;
+  }
+}
+
+/* tw-animate-css's animation shorthand carries its own (weak) timing function.
+   Components built on it (dialog, popover, select, tooltip, sheet) get the strong
+   curve here; unlayered, so it wins over the utilities regardless of order. */
+[data-slot="dialog-content"],
+[data-slot="dialog-overlay"],
+[data-slot="popover-content"],
+[data-slot="select-content"],
+[data-slot="tooltip-content"] {
+  animation-timing-function: var(--ease-out-strong);
+}
+
+[data-slot="sheet-content"],
+[data-slot="sheet-overlay"] {
+  animation-timing-function: var(--ease-drawer);
 }
