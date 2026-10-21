@@ -5,5 +5,6 @@ export {
   studentNav,
   footerNav,
   socialLinks,
+  postAuthPath,
   type NavItem,
 } from "./navigation";

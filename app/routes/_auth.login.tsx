@@ -6,7 +6,7 @@ import {
   LoginPage,
   loginWithEmail,
 } from "~/features/auth";
-import { siteConfig } from "~/config";
+import { postAuthPath, siteConfig } from "~/config";
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: `Masuk · ${siteConfig.name}` }];
@@ -23,7 +23,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       ? await continueWithGoogle("/login")
       : await loginWithEmail(formData);
 
-  return result.ok ? redirect(result.redirectTo ?? "/") : result;
+  return result.ok ? redirect(result.redirectTo ?? postAuthPath) : result;
 }
 
 // Nested under the `_auth` layout → renders only the form column; the shared

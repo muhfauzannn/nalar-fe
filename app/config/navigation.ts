@@ -19,6 +19,9 @@ export const studentNav: readonly NavItem[] = [
   { label: "Course saya", href: "/courses" },
 ] as const;
 
+/** Where a student lands right after signing in or registering. */
+export const postAuthPath = "/dashboard";
+
 /** Footer link columns — three groups beside the brand block. */
 export const footerNav: readonly { title: string; items: readonly NavItem[] }[] =
   [

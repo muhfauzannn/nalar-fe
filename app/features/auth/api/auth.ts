@@ -1,5 +1,6 @@
 import { authClient } from "~/lib/auth-client";
 import { env } from "~/config/env";
+import { postAuthPath } from "~/config/navigation";
 
 import type { AuthActionResult, AuthFieldErrors } from "../types";
 
@@ -41,7 +42,7 @@ export async function continueWithGoogle(
   errorPath: "/login" | "/register",
 ): Promise<AuthActionResult> {
   try {
-    const callbackURL = new URL("/", env.appUrl).toString();
+    const callbackURL = new URL(postAuthPath, env.appUrl).toString();
     const errorCallbackURL = new URL(errorPath, env.appUrl).toString();
     const { data, error } = await authClient.signIn.social({
       provider: "google",
