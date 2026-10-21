@@ -18,14 +18,17 @@ export type CourseSummary = {
   progress: ProgressSummary;
 };
 
+// There is no school concept any more: only an optional student profile.
+export type StudentProfile = { gradeLevel: number } | null;
+
 export type StudentShellData = {
   user: { id: string; name: string; email: string; image: string | null };
-  school: { id: string; name: string; gradeLevel: number | null } | null;
+  profile: StudentProfile;
 };
 
 export type DashboardData = {
   user: { name: string };
-  school: { id: string; name: string; gradeLevel: number | null } | null;
+  profile: StudentProfile;
   courses: CourseSummary[];
   upcoming: Array<{
     id: string;

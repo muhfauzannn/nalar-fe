@@ -17,6 +17,7 @@ export const mainNav: readonly NavItem[] = [
 export const studentNav: readonly NavItem[] = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Course saya", href: "/courses" },
+  { label: "Kelola course", href: "/manage" },
 ] as const;
 
 /** Where a student lands right after signing in or registering. */

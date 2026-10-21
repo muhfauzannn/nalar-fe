@@ -5,12 +5,13 @@ import {
   Clock3,
   Gauge,
   GraduationCap,
+  KeyRound,
   ListChecks,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "react-router";
 
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -23,6 +24,7 @@ import {
 } from "~/components/ui/card";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyIllustration,
@@ -57,16 +59,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
         </p>
       </header>
 
-      {!data.school ? (
-        <Alert>
-          <BookOpen />
-          <AlertTitle>Akun belum terhubung ke sekolah</AlertTitle>
-          <AlertDescription>
-            Course akan tampil setelah sekolah mengaktifkan membership dan
-            enrollment siswa.
-          </AlertDescription>
-        </Alert>
-      ) : (
+      {data.courses.length === 0 ? null : (
         <section
           aria-label="Ringkasan belajar"
           className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(17rem,0.65fr)]"
@@ -165,12 +158,12 @@ export function DashboardPage({ data }: { data: DashboardData }) {
                   description="Sudah kamu tuntaskan"
                   icon={CheckCircle2}
                 />
-                {data.school.gradeLevel && (
+                {data.profile?.gradeLevel && (
                   <>
                     <Separator />
                     <MetricRow
                       title="Tingkat kelas"
-                      value={data.school.gradeLevel}
+                      value={data.profile.gradeLevel}
                       description="Tahun ajaran aktif"
                       icon={GraduationCap}
                     />
@@ -213,10 +206,20 @@ export function DashboardPage({ data }: { data: DashboardData }) {
               <EmptyHeader>
                 <EmptyTitle>Belum ada course</EmptyTitle>
                 <EmptyDescription>
-                  Course yang sudah dipublikasikan akan muncul setelah
-                  enrollment aktif.
+                  Course yang kamu ikuti akan muncul di sini setelah kamu
+                  bergabung.
                 </EmptyDescription>
               </EmptyHeader>
+              <EmptyContent>
+                <Button render={<Link to="/courses/join" />}>
+                  <KeyRound data-icon="inline-start" />
+                  Gabung dengan kode
+                </Button>
+                <Button variant="outline" render={<Link to="/manage/courses/new" />}>
+                  <Plus data-icon="inline-start" />
+                  Buat course
+                </Button>
+              </EmptyContent>
             </Empty>
           ) : (
             <div className="grid gap-5 md:grid-cols-2">

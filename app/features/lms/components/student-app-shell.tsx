@@ -12,6 +12,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  PencilRuler,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ import type { StudentShellData } from "../types";
 const navigationIcons: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/courses": BookOpen,
+  "/manage": PencilRuler,
 };
 
 function isFocusedActivityRoute(pathname: string) {
@@ -65,6 +67,8 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
     (nextPathname === "/dashboard" ||
       nextPathname === "/courses" ||
       nextPathname.startsWith("/courses/") ||
+      nextPathname === "/manage" ||
+      nextPathname.startsWith("/manage/") ||
       nextPathname.startsWith("/lessons/") ||
       nextPathname.startsWith("/assignments/") ||
       nextPathname.startsWith("/quizzes/"))
@@ -150,7 +154,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{data.user.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {data.school?.name ?? "Belum terhubung ke sekolah"}
+                    {data.user.email}
                   </span>
                 </span>
               </SidebarMenuButton>
@@ -174,9 +178,9 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
           <div className="flex items-center gap-3">
             <SidebarTrigger aria-label="Buka navigasi" />
             <div className="hidden min-w-0 sm:block">
-              <p className="truncate text-sm font-medium">{data.school?.name ?? "NALAR"}</p>
+              <p className="truncate text-sm font-medium">NALAR</p>
               <p className="text-xs text-muted-foreground">
-                {data.school?.gradeLevel ? `Kelas ${data.school.gradeLevel}` : "Ruang belajar siswa"}
+                {data.profile?.gradeLevel ? `Kelas ${data.profile.gradeLevel}` : "Ruang belajar"}
               </p>
             </div>
           </div>

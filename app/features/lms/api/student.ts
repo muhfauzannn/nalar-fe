@@ -37,7 +37,7 @@ export const studentApi = {
     ),
   courses: (request: Request) =>
     studentRequest(request, () =>
-      http.get<{ school: { id: string; name: string } | null; courses: CourseSummary[] }>(
+      http.get<{ courses: CourseSummary[] }>(
         "/api/student/courses",
         forwardedRequestInit(request),
       ),

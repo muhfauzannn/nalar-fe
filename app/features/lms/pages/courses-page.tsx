@@ -1,7 +1,9 @@
-import { BookOpen, CheckCircle2, Layers3 } from "lucide-react";
+import { BookOpen, CheckCircle2, KeyRound, Layers3, Plus } from "lucide-react";
+import { Link } from "react-router";
 
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,6 +13,7 @@ import {
 } from "~/components/ui/card";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyIllustration,
@@ -28,7 +31,6 @@ export function CoursesPage({
   data: loaderData,
 }: {
   data: {
-    school: { id: string; name: string } | null;
     courses: CourseSummary[];
   };
 }) {
@@ -59,7 +61,7 @@ export function CoursesPage({
         <div className="relative grid min-h-72 items-center gap-8 px-6 py-8 sm:px-9 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] lg:px-12 lg:py-10">
           <header className="flex max-w-3xl flex-col items-start gap-4">
             <Badge variant="mint">
-              {loaderData.school?.name ?? "Ruang belajar siswa"}
+              Ruang belajar siswa
             </Badge>
             <div className="flex flex-col gap-3">
               <h1 className="font-heading text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
@@ -68,6 +70,16 @@ export function CoursesPage({
               <p className="max-w-2xl text-sm/relaxed text-primary-foreground/70 sm:text-base/relaxed">
                 Buka course untuk melanjutkan materi, assignment, dan quiz.
               </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" render={<Link to="/courses/join" />}>
+                <KeyRound data-icon="inline-start" />
+                Gabung dengan kode
+              </Button>
+              <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" render={<Link to="/manage/courses/new" />}>
+                <Plus data-icon="inline-start" />
+                Buat course
+              </Button>
             </div>
             {loaderData.courses.length > 0 && (
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-primary-foreground/70">
@@ -152,11 +164,19 @@ export function CoursesPage({
             <EmptyHeader>
               <EmptyTitle>Belum ada course</EmptyTitle>
               <EmptyDescription>
-                {loaderData.school
-                  ? "Course akan tampil setelah enrollment dipublikasikan."
-                  : "Membership sekolah perlu diaktifkan terlebih dahulu."}
+                Gabung dengan kode kelas dari pengajarmu, atau buat course sendiri.
               </EmptyDescription>
             </EmptyHeader>
+            <EmptyContent>
+              <Button render={<Link to="/courses/join" />}>
+                <KeyRound data-icon="inline-start" />
+                Gabung dengan kode
+              </Button>
+              <Button variant="outline" render={<Link to="/manage/courses/new" />}>
+                <Plus data-icon="inline-start" />
+                Buat course
+              </Button>
+            </EmptyContent>
           </Empty>
         ) : (
           <div className="grid gap-5 md:grid-cols-2">
