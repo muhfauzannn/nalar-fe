@@ -141,10 +141,12 @@
   --ring: #837fab;
 
   --brand-mint: #58dda9;
-  --brand-mint-foreground: #00281b;
+  /* On dark surfaces the "foreground" of a brand tint is a light shade of it:
+     every use sits on the soft tint or straight on the page, never on solid brand. */
+  --brand-mint-foreground: #8ff0c8;
   --brand-mint-soft: rgb(88 221 169 / 0.15);
   --brand-lavender: #c6c1f1;
-  --brand-lavender-foreground: #19173c;
+  --brand-lavender-foreground: #ddd8ff;
   --brand-lavender-soft: rgb(198 193 241 / 0.15);
 
   --chart-1: #c6c1f1;
@@ -283,6 +285,8 @@
    curve here; unlayered, so it wins over the utilities regardless of order. */
 [data-slot="dialog-content"],
 [data-slot="dialog-overlay"],
+[data-slot="alert-dialog-content"],
+[data-slot="alert-dialog-overlay"],
 [data-slot="popover-content"],
 [data-slot="select-content"],
 [data-slot="tooltip-content"] {

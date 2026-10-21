@@ -3,15 +3,13 @@ import {
   BookOpen,
   CheckCircle2,
   Clock3,
-  Gauge,
-  GraduationCap,
   KeyRound,
-  ListChecks,
   Plus,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "react-router";
 
+import { PageHeader } from "~/components/layout/page-header";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -31,11 +29,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/components/ui/progress";
 import { Separator } from "~/components/ui/separator";
 import { CourseCard } from "../components/course-card";
 import { formatDateTime, getGreeting, sentenceStatus } from "../lib/format";
@@ -49,129 +42,74 @@ export function DashboardPage({ data }: { data: DashboardData }) {
 
   return (
     <div className="flex flex-col gap-10 lg:gap-12">
-      <header className="flex max-w-3xl flex-col gap-3">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-          {getGreeting()}, {firstName}.
-        </h1>
-        <p className="max-w-2xl leading-relaxed text-muted-foreground text-pretty">
-          Lihat perkembangan belajarmu dan lanjutkan aktivitas yang paling perlu
-          diselesaikan.
-        </p>
-      </header>
+      <PageHeader
+        title={`${getGreeting()}, ${firstName}.`}
+        description="Lihat perkembangan belajarmu dan lanjutkan aktivitas yang paling perlu diselesaikan."
+        actions={
+          continueCourse && (
+            <Button size="lg" render={<Link to={`/courses/${continueCourse.id}`} />}>
+              Lanjut belajar
+              <ArrowRight data-icon="inline-end" />
+            </Button>
+          )
+        }
+      />
 
       {data.courses.length === 0 ? null : (
         <section
-          aria-label="Ringkasan belajar"
-          className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(17rem,0.65fr)]"
+          aria-labelledby="learning-progress-title"
+          className="relative isolate overflow-hidden rounded-2xl bg-primary text-primary-foreground shadow-card"
         >
-          <section
-            aria-labelledby="learning-progress-title"
-            className="relative isolate overflow-hidden rounded-2xl bg-primary text-primary-foreground shadow-card"
-          >
-            <img
-              src="/illustration/decoration2.svg"
-              alt=""
-              width={1402}
-              height={1122}
-              aria-hidden="true"
-              className="pointer-events-none absolute -right-10 -bottom-20 hidden w-[28rem] select-none object-contain opacity-25 xl:block"
-            />
-
-            <div className="relative flex min-h-full flex-col items-start gap-5 p-6 sm:p-8 lg:p-10  ">
-              <Badge variant="mint">Semester berjalan</Badge>
-              <div className="flex flex-col gap-2">
-                <h2
-                  id="learning-progress-title"
-                  className="font-heading text-2xl font-semibold tracking-tight text-balance sm:text-3xl"
+          <img
+            src="/illustration/decoration2.svg"
+            alt=""
+            width={1402}
+            height={1122}
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-16 -bottom-24 hidden w-[26rem] select-none object-contain opacity-20 xl:block"
+          />
+          <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end lg:gap-12 lg:p-10">
+            <div className="flex flex-col gap-5">
+              <h2
+                id="learning-progress-title"
+                className="font-heading text-xl font-semibold tracking-tight text-balance sm:text-2xl"
+              >
+                {data.summary.progress > 0
+                  ? "Terus melaju, progresmu sudah terlihat."
+                  : "Perjalanan belajarmu dimulai di sini."}
+              </h2>
+              <div className="flex max-w-lg flex-col gap-3">
+                <p className="flex items-baseline gap-3">
+                  <span className="font-heading text-5xl font-semibold tracking-tight tabular-nums">
+                    {data.summary.progress}%
+                  </span>
+                  <span className="text-sm text-primary-foreground/75">
+                    {data.summary.completedItems} dari {data.summary.totalItems} aktivitas
+                    selesai
+                  </span>
+                </p>
+                <div
+                  role="progressbar"
+                  aria-label="Progres keseluruhan"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={data.summary.progress}
+                  className="h-2 overflow-hidden rounded-full bg-primary-foreground/15"
                 >
-                  {data.summary.progress > 0
-                    ? "Terus melaju, progresmu sudah terlihat."
-                    : "Perjalanan belajarmu dimulai di sini."}
-                </h2>
-              </div>
-
-              <div className="flex w-full max-w-lg flex-col gap-4 rounded-xl bg-background p-4 text-foreground shadow-card sm:p-5">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Progres keseluruhan
-                    </p>
-                    <p className="font-heading text-4xl font-semibold tracking-tight tabular-nums">
-                      {data.summary.progress}%
-                    </p>
-                  </div>
-                  <p className="max-w-40 text-right text-xs leading-relaxed text-muted-foreground">
-                    {data.summary.completedItems} dari {data.summary.totalItems}{" "}
-                    aktivitas selesai
-                  </p>
+                  <div
+                    className="h-full rounded-full bg-brand-mint"
+                    style={{ width: `${data.summary.progress}%` }}
+                  />
                 </div>
-                <Progress value={data.summary.progress}>
-                  <ProgressLabel>Semester berjalan</ProgressLabel>
-                  <ProgressValue>
-                    {() => `${data.summary.progress}%`}
-                  </ProgressValue>
-                </Progress>
               </div>
-
-              {continueCourse && (
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  render={<Link to={`/courses/${continueCourse.id}`} />}
-                >
-                  Lanjut belajar
-                  <ArrowRight data-icon="inline-end" />
-                </Button>
-              )}
             </div>
-          </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Ringkasan aktivitas</CardTitle>
-              <CardDescription>Angka penting semester ini.</CardDescription>
-              <CardAction>
-                <span className="flex size-10 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
-                  <Gauge className="size-4" />
-                </span>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="mt-auto">
-              <dl className="flex flex-col">
-                <MetricRow
-                  title="Course aktif"
-                  value={data.summary.activeCourses}
-                  description="Siap dipelajari"
-                  icon={BookOpen}
-                />
-                <Separator />
-                <MetricRow
-                  title="Total aktivitas"
-                  value={data.summary.totalItems}
-                  description="Materi, tugas, dan quiz"
-                  icon={ListChecks}
-                />
-                <Separator />
-                <MetricRow
-                  title="Aktivitas selesai"
-                  value={data.summary.completedItems}
-                  description="Sudah kamu tuntaskan"
-                  icon={CheckCircle2}
-                />
-                {data.profile?.gradeLevel && (
-                  <>
-                    <Separator />
-                    <MetricRow
-                      title="Tingkat kelas"
-                      value={data.profile.gradeLevel}
-                      description="Tahun ajaran aktif"
-                      icon={GraduationCap}
-                    />
-                  </>
-                )}
-              </dl>
-            </CardContent>
-          </Card>
+            <dl className="grid grid-cols-3 gap-4 border-t border-primary-foreground/15 pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
+              <Metric value={data.summary.activeCourses} label="Course aktif" icon={BookOpen} />
+              <Metric value={data.summary.completedItems} label="Selesai" icon={CheckCircle2} />
+              <Metric value={data.upcoming.length} label="Tertunda" icon={Clock3} />
+            </dl>
+          </div>
         </section>
       )}
 
@@ -193,7 +131,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
               </p>
             </div>
             {data.courses.length > 0 && (
-              <Button variant="ghost" render={<Link to="/courses" />}>
+              <Button variant="outline" size="sm" render={<Link to="/courses" />}>
                 Lihat semua
                 <ArrowRight data-icon="inline-end" />
               </Button>
@@ -222,7 +160,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
               </EmptyContent>
             </Empty>
           ) : (
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 sm:grid-cols-[repeat(auto-fit,minmax(17rem,1fr))]">
               {data.courses.slice(0, 4).map((course) => (
                 <CourseCard key={course.id} course={course} />
               ))}
@@ -278,10 +216,8 @@ export function DashboardPage({ data }: { data: DashboardData }) {
                             {item.courseName}
                           </span>
                           <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span>{formatDateTime(item.dueAt)}</span>
-                            <Badge variant="ghost">
-                              {sentenceStatus(item.status)}
-                            </Badge>
+                            <span className="tabular-nums">{formatDateTime(item.dueAt)}</span>
+                            <span>{sentenceStatus(item.status)}</span>
                           </span>
                         </span>
                       </Link>
@@ -298,36 +234,22 @@ export function DashboardPage({ data }: { data: DashboardData }) {
   );
 }
 
-function MetricRow({
-  title,
+function Metric({
   value,
-  description,
+  label,
   icon: Icon,
 }: {
-  title: string;
   value: number;
-  description: string;
+  label: string;
   icon: LucideIcon;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4 first:pt-0 last:pb-0">
-      <dt className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-        <span
-          aria-hidden="true"
-          className="flex size-10 items-center justify-center rounded-lg bg-secondary text-secondary-foreground"
-        >
-          <Icon className="size-4" />
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate font-medium">{title}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {description}
-          </span>
-        </span>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <dt className="flex items-center gap-1.5 text-xs text-primary-foreground/75">
+        <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">{label}</span>
       </dt>
-      <dd className="font-heading text-2xl font-semibold tracking-tight tabular-nums">
-        {value}
-      </dd>
+      <dd className="font-heading text-3xl font-semibold tracking-tight tabular-nums">{value}</dd>
     </div>
   );
 }
