@@ -54,6 +54,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const outputContextRef = useRef<AudioContext | null>(null);
   const outputSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlaybackTimeRef = useRef(0);
+  const playbackEpochRef = useRef(0);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -75,6 +76,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
   }, []);
 
   const stopPlayback = useCallback(() => {
+    playbackEpochRef.current += 1;
     for (const source of outputSourcesRef.current) {
       try {
         source.stop();
@@ -89,12 +91,14 @@ export function useAiTutorLive(target: AiTutorTarget) {
 
   const playPcm = useCallback(async (base64: string) => {
     if (channelRef.current !== "voice" || !activeStudentEventRef.current) return;
+    const playbackEpoch = playbackEpochRef.current;
     let context = outputContextRef.current;
     if (!context) {
       context = new AudioContext({ sampleRate: 24_000 });
       outputContextRef.current = context;
     }
     if (context.state === "suspended") await context.resume();
+    if (playbackEpoch !== playbackEpochRef.current || !activeStudentEventRef.current) return;
 
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);

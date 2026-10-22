@@ -25,6 +25,8 @@ test("Realtime context stays silent, tools resume once, and interruptions suppre
   const tool = (id: string) => emit({ type: "response.done", response: { id: `response-${id}`, status: "completed", output: [
     { type: "function_call", call_id: id, name: "get_pdf_context", arguments: "{}" },
   ] } });
+  emit({ type: "response.output_audio.delta", delta: "unverified-preamble" });
+  emit({ type: "response.output_audio_transcript.delta", delta: "Unverified preamble" });
   tool("first");
   await expect.poll(() => page.evaluate(() => (window as any).tutorEvents.length)).toBe(1);
   await page.evaluate(() => (window as any).tutor.sendToolResponse({ functionResponses: [{ id: "first", response: { ok: true } }] }));

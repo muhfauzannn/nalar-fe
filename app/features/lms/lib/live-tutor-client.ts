@@ -36,6 +36,7 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
     let ready = false;
     let closed = false;
     let activeResponse: string | null = null;
+    let guardrailComplete = false;
     const ignoredResponses = new Set<string>();
     const pendingCalls = new Set<string>();
     const send = (event: Record<string, unknown>) => {
@@ -46,6 +47,7 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
       ...(continuation ? { response: { tool_choice: "auto" } } : {}),
     });
     const interrupt = () => {
+      guardrailComplete = false;
       if (activeResponse) {
         ignoredResponses.add(activeResponse);
         send({ type: "response.cancel", response_id: activeResponse });
@@ -81,13 +83,17 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
           content: turn.parts.map((part) => ({ type: "input_text", text: part.text })),
         } });
         // PDF_VIEW_STATE updates must never trigger speech.
-        if (input.turnComplete) requestResponse();
+        if (input.turnComplete) {
+          guardrailComplete = false;
+          requestResponse();
+        }
       },
       sendToolResponse(input) {
         let sent = false;
         for (const result of Array.isArray(input.functionResponses) ? input.functionResponses : [input.functionResponses]) {
           if (!result.id || !pendingCalls.delete(result.id)) continue;
           sent = true;
+          if (!result.response.error && result.response.ok !== false) guardrailComplete = true;
           send({ type: "conversation.item.create", item: {
             type: "function_call_output", call_id: result.id, output: JSON.stringify(result.response),
           } });
@@ -135,10 +141,12 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
           callbacks.onmessage({ serverContent: { inputTranscription: { text: event.transcript } } });
         }
         if (ignoredResponses.has(event.response_id ?? event.response?.id)) return;
-        if (event.type === "response.output_audio.delta") callbacks.onmessage({ serverContent: {
+        // Realtime may speak a preamble even with a forced tool choice. Never forward
+        // that audio or transcript before the application has acknowledged the tool.
+        if (guardrailComplete && event.type === "response.output_audio.delta") callbacks.onmessage({ serverContent: {
           modelTurn: { parts: [{ inlineData: { data: event.delta, mimeType: "audio/pcm;rate=24000" } }] },
         } });
-        if (event.type === "response.output_audio_transcript.delta" || event.type === "response.output_text.delta") {
+        if (guardrailComplete && (event.type === "response.output_audio_transcript.delta" || event.type === "response.output_text.delta")) {
           callbacks.onmessage({ serverContent: { outputTranscription: { text: event.delta } } });
         }
         if (event.type === "response.done") {
