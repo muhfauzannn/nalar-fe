@@ -50,8 +50,8 @@ async function setup(page: Page) {
     const resourceId = route.request().postDataJSON().resourceId;
     return route.fulfill({
       json: {
-        token: "auth_tokens/test",
-        model: "gemini-3.1-flash-live-preview",
+        token: "ek_test",
+        model: "gpt-realtime-2.1",
         resourceId,
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       },
@@ -62,34 +62,43 @@ async function setup(page: Page) {
   const responses = new Map<string, Record<string, any>>();
   let view: Context | undefined;
   let images = 0;
-  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
+  await page.routeWebSocket(/api\.openai\.com\/v1\/realtime/, (ws) => {
     socket = ws;
+    ws.send(JSON.stringify({ type: "session.created", session: { model: "gpt-realtime-2.1" } }));
     ws.onMessage((raw) => {
       const data = JSON.parse(raw.toString());
-      if (data.setup) ws.send(JSON.stringify({ setupComplete: {} }));
-      for (const item of data.clientContent?.turns ?? []) {
-        const text = item.parts?.[0]?.text;
-        if (text?.startsWith("PDF_VIEW_STATE "))
-          view = JSON.parse(text.slice(15));
+      const item = data.item;
+      for (const part of item?.content ?? []) {
+        if (part.type === "input_text" && part.text?.startsWith("PDF_VIEW_STATE "))
+          view = JSON.parse(part.text.slice(15));
+        if (part.type === "input_image") images++;
       }
-      if (
-        data.realtimeInput?.video ||
-        data.realtimeInput?.mediaChunks?.some(
-          (part: { mimeType: string }) => part.mimeType === "image/jpeg",
-        )
-      )
-        images++;
-      for (const response of data.toolResponse?.functionResponses ?? [])
-        responses.set(response.id, response.response);
+      if (item?.type === "function_call_output") responses.set(item.call_id, JSON.parse(item.output));
     });
   });
   await page.goto("/tests/fixtures/pdf-study.html");
   await expect(
     page.getByRole("button", { name: "Mulai percakapan" }),
   ).toBeEnabled();
-  const send = (value: unknown) => {
+  let responseNumber = 0;
+  const send = (value: any) => {
     if (!socket) throw new Error("No socket");
-    socket.send(JSON.stringify(value));
+    const emit = (event: unknown) => socket!.send(JSON.stringify(event));
+    if (value.toolCall) {
+      emit({ type: "response.done", response: { id: `response-${++responseNumber}`, status: "completed",
+        output: value.toolCall.functionCalls.map((call: any) => ({ type: "function_call", call_id: call.id,
+          name: call.name, arguments: JSON.stringify(call.args) })) } });
+    }
+    if (value.toolCallCancellation || value.serverContent?.interrupted)
+      emit({ type: "input_audio_buffer.speech_started" });
+    if (value.serverContent?.inputTranscription)
+      emit({ type: "conversation.item.input_audio_transcription.completed", transcript: value.serverContent.inputTranscription.text });
+    if (value.serverContent?.outputTranscription)
+      emit({ type: "response.output_audio_transcript.delta", delta: value.serverContent.outputTranscription.text });
+    for (const part of value.serverContent?.modelTurn?.parts ?? [])
+      emit({ type: "response.output_audio.delta", delta: part.inlineData.data });
+    if (value.serverContent?.turnComplete)
+      emit({ type: "response.done", response: { id: `response-${++responseNumber}`, status: "completed", output: [] } });
   };
   const call = async (id: string, name: string, args = {}) => {
     send({ toolCall: { functionCalls: [{ id, name, args }] } });
@@ -278,7 +287,7 @@ test("interruptions, cancelled tool calls and manual stop clear pending guidance
       )
     ).ok,
   ).toBe(false);
-  expect(mock.responses.has("cancelled-draw")).toBe(false);
+  expect(mock.responses.get("cancelled-draw")?.ok).not.toBe(true);
   await page.getByRole("button", { name: "Jeda mikrofon" }).click();
   await expect(
     page.getByRole("button", { name: "Lanjutkan mikrofon" }),
@@ -482,7 +491,7 @@ test("cancelling a visual tool during its render frame removes the uncommitted i
   mock.send({ toolCallCancellation: { ids: ["pending-ink"] } });
   await expect(page.getByTestId("tutor-highlight")).toHaveCount(0);
   await page.clock.runFor(100);
-  expect(mock.responses.has("pending-ink")).toBe(false);
+  expect(mock.responses.get("pending-ink")?.ok).toBe(false);
   await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
   expect(mock.errors).toEqual([]);
 });

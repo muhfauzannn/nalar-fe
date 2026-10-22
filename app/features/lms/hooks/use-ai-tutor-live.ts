@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LiveServerMessage, Session } from "@google/genai";
+import { connectTutorLive, type LiveServerMessage, type Session } from "../lib/live-tutor-client";
 
 import { HttpError } from "~/lib/http";
 import { aiTutorApi } from "../api/ai-tutor";
@@ -246,7 +246,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const handleServerMessage = useCallback(
     (message: LiveServerMessage) => {
       if (message.toolCall) {
-        // Gemini closes the function-call turn before starting the tutor's
+        // The provider closes the function-call turn before starting the tutor's
         // answer turn. Do not finalize the conversation on that first
         // turnComplete or the reply identifiers are cleared before audio lands.
         toolTurnPendingRef.current = true;
@@ -342,22 +342,17 @@ export function useAiTutorLive(target: AiTutorTarget) {
         conversationIdRef.current = sessionData.conversationId;
         modelRef.current = sessionData.model;
         setMessages(sessionData.messages);
-        const { GoogleGenAI } = await import("@google/genai");
-        const client = new GoogleGenAI({
-          apiKey: sessionData.token,
-          httpOptions: { apiVersion: "v1alpha" },
-        });
-        const session = await client.live.connect({
-          model: sessionData.model,
-          config: {},
-          callbacks: {
+        const session = await connectTutorLive(sessionData.token, sessionData.model, {
             onopen: () => mountedRef.current && setStatus("ready"),
-            onmessage: handleServerMessage,
-            onerror: () => {
-              if (!mountedRef.current) return;
+            onmessage: (message) => {
+              if (mountedRef.current && connectionGenerationRef.current === connectionGeneration)
+                handleServerMessage(message);
+            },
+            onerror: (message) => {
+              if (!mountedRef.current || connectionGenerationRef.current !== connectionGeneration) return;
               void disconnect().finally(() => {
                 if (!mountedRef.current) return;
-                setError("Koneksi Live mengalami gangguan. Coba sambungkan ulang.");
+                setError(message ?? "Koneksi tutor mengalami gangguan. Coba sambungkan ulang.");
                 setStatus("error");
               });
             },
@@ -369,7 +364,6 @@ export function useAiTutorLive(target: AiTutorTarget) {
               setIsTutorSpeaking(false);
               setStatus("idle");
             },
-          },
         });
         if (
           !mountedRef.current ||
@@ -487,7 +481,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         let binary = "";
         for (const byte of bytes) binary += String.fromCharCode(byte);
         currentSession.sendRealtimeInput({
-          audio: { data: btoa(binary), mimeType: "audio/pcm;rate=16000" },
+          audio: { data: btoa(binary), mimeType: "audio/pcm;rate=24000" },
         });
       };
       microphoneRef.current = { context, stream, source, worklet, sink };

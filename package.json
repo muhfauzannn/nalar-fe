@@ -15,7 +15,6 @@
     "@base-ui/react": "^1.6.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource/poppins": "^5.2.7",
-    "@google/genai": "^2.12.0",
     "@gsap/react": "^2.1.2",
     "@react-router/fs-routes": "^8.0.0",
     "@react-router/node": "8.0.0",

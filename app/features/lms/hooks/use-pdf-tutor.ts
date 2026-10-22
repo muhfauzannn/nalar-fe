@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LiveServerMessage, Session } from "@google/genai";
+import { connectTutorLive, type LiveServerMessage, type Session } from "../lib/live-tutor-client";
 import { HttpError } from "~/lib/http";
 import { aiTutorApi } from "../api/ai-tutor";
 import {
@@ -80,6 +80,7 @@ export function usePdfTutor(
   }, []);
 
   const cancelTurn = useCallback((clearGuidance = true) => {
+    sessionRef.current?.interrupt();
     turn.current = null;
     groundedTurn.current = null;
     speakingInput.current = false;
@@ -183,8 +184,9 @@ export function usePdfTutor(
         trace("interrupted");
         setStatus(microphoneRef.current ? "listening" : "paused");
       }
+      if (server?.inputStarted && (!turn.current || !speakingInput.current)) beginTurn();
       if (server?.inputTranscription?.text) {
-        if (!turn.current || !speakingInput.current) beginTurn();
+        if (!turn.current) beginTurn();
         transcriptRef.current += server.inputTranscription.text;
         setInputTranscript(transcriptRef.current);
       }
@@ -324,7 +326,7 @@ export function usePdfTutor(
           if (contextRef.current) sendView(session, contextRef.current);
         }
         session.sendRealtimeInput({
-          audio: { data, mimeType: "audio/pcm;rate=16000" },
+          audio: { data, mimeType: "audio/pcm;rate=24000" },
         });
       }, isCurrent);
     } finally {
@@ -372,11 +374,6 @@ export function usePdfTutor(
       if (!mounted.current || currentGeneration !== generation.current) return;
       if (data.resourceId !== resourceId)
         throw new Error("Sesi tutor tidak cocok dengan PDF.");
-      const { GoogleGenAI } = await import("@google/genai");
-      const client = new GoogleGenAI({
-        apiKey: data.token,
-        httpOptions: { apiVersion: "v1alpha" },
-      });
       const fail = (message: string) => {
         if (!mounted.current || currentGeneration !== generation.current)
           return;
@@ -393,22 +390,18 @@ export function usePdfTutor(
       );
       let session: Session;
       try {
-        session = await client.live.connect({
-          model: data.model,
-          config: {},
-          callbacks: {
+        session = await connectTutorLive(data.token, data.model, {
             onmessage: (message) => {
               void onMessage(message, currentGeneration).catch(() =>
                 fail("Koneksi tutor terputus. Silakan sambungkan ulang."),
               );
             },
-            onerror: () =>
-              fail("Koneksi tutor mengalami gangguan. Silakan coba lagi."),
+            onerror: (message) =>
+              fail(message ?? "Koneksi tutor mengalami gangguan. Silakan coba lagi."),
             onclose: () =>
               fail(
                 "Sesi tutor telah berakhir. Sambungkan ulang untuk melanjutkan.",
               ),
-          },
         });
       } finally {
         clearTimeout(connectionTimeout);

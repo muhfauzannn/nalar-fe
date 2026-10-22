@@ -1,8 +1,8 @@
 class NalarInputProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.targetSampleRate = 16000;
-    this.targetChunkSize = 1600;
+    this.targetSampleRate = 24000;
+    this.targetChunkSize = 2400;
     this.pending = [];
     this.resamplePosition = 0;
   }
