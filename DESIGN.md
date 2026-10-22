@@ -170,6 +170,21 @@ Based on the visual analysis of the screenshots, here is the inferred color pale
 - **FAQ:** Accordion style list, clean dividers.
 - **Footer:** Dark background (`#18153A`). Four-column layout (Brand info, About, Product, Help).
 
+### App shell (signed-in pages)
+
+These rules came out of a layout audit (every route at 360 / 768 / 1280 px, light and dark). Each one fixes a measured problem; keep them when adding pages.
+
+- **Every page opens with `PageHeader`** (`~/components/layout/page-header`): parent crumbs → eyebrow badges → title → description → meta, with actions beside the title on wide screens. The title is always `text-3xl sm:text-4xl`, so titles start at the same height on every route (104px with no crumbs, 178px with crumbs + eyebrow at 1280). Never hand-roll an `<h1>` block or a "back" button above it.
+- **Crumbs list parents only.** The title already names the current page.
+- **The dark navy banner is the dashboard's alone.** It is the one welcome moment. Course, lesson, quiz and assignment pages use `PageHeader`; a banner on every page made each one feel like a landing page and pushed the content below the fold.
+- **Show each number once,** in the place that explains it. Course progress lives in the course progress card; quiz counts live in the header meta.
+- **The sidebar is off-canvas below 1024px** (`MOBILE_BREAKPOINT` in `use-mobile.ts` and the `lg:` classes in `sidebar.tsx` move together). At 768px a docked sidebar left 488px for content and pushed editor pages off screen. No route collapses the sidebar by itself.
+- **Long text wraps, it never widens the page.** Titles and names use `wrap-break-word`; flex rows that hold text give the text child `min-w-0`; long badges `truncate` inside `max-w-full`.
+- **One `CourseCard`** for the dashboard and "Course saya"; grids pick their column count from the items (`auto-fit` or `sm:grid-cols-2 xl:grid-cols-3`), so one course never sits beside an empty column.
+- **Contrast comes from tokens, not opacity.** No `text-*/50`, `/60` or `/70` on readable text. `--muted-foreground` is tuned to ≥ 4.5:1 on white, `muted` and the lavender tints; in dark mode the brand `*-foreground` tokens are light shades because they always sit on the soft tint or the page.
+- **Reserve space for anything that loads late.** Images carry `width`/`height`; the Poppins weights used above the fold are preloaded in `root.tsx`; each route's skeleton has the same shape as its page (header first). Together these took CLS from 0.29 to 0.
+- **Theme** follows the system until the user picks one; the pick is stored and applied before first paint (inline script in `root.tsx`).
+
 ## 5. Imagery & Illustration
 
 ### Visual language
@@ -304,6 +319,9 @@ Tokens and utilities live in `app/app.css` ("Motion system"); do not hard-code c
   (`ListItem`), because React moving a node would otherwise replay it.
 - A button that waits uses `<Button loading={...}>`: label and spinner share one cell, so the
   button never changes width, and double clicks are ignored.
+- Reading surfaces stay still. A lesson's text is fully legible on arrival: no scroll-scrubbed
+  word fades (they left unread paragraphs at 22% opacity) and no looping marquees. A page may
+  settle in once (`y: 8px`, 240ms, 40ms stagger) and then not move again.
 - Switching tabs is local state, not a router navigation (a navigation re-runs loaders and
   flashes the page skeleton).
 - `prefers-reduced-motion`: keep the fade, drop travel, scale and blur (global layer in

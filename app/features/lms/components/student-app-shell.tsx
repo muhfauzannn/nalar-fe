@@ -95,12 +95,14 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
     <SidebarProvider>
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
-          <div className="flex h-12 items-center px-3 group-data-[collapsible=icon]:px-0">
-            <Brand className="h-7 group-data-[collapsible=icon]:hidden" />
+          <div className="flex h-12 items-center px-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <div className="shrink-0 group-data-[collapsible=icon]:hidden">
+              <Brand className="h-7" />
+            </div>
             <Link
               to="/dashboard"
               aria-label="NALAR Dashboard"
-              className="hidden size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground group-data-[collapsible=icon]:flex"
+              className="hidden size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground group-data-[collapsible=icon]:flex"
             >
               <GraduationCap className="size-4" />
             </Link>

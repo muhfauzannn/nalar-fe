@@ -54,6 +54,8 @@ export function NotFoundPage() {
         <img
           data-nf-art
           src="/illustration/sleeping.svg"
+          width={1254}
+          height={1254}
           alt=""
           aria-hidden
           draggable={false}

@@ -28,6 +28,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
           <img
             data-auth-art
             src="/illustration/auth.svg"
+            width={1254}
+            height={1254}
             alt=""
             aria-hidden
             draggable={false}

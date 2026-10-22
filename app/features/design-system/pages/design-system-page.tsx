@@ -72,6 +72,7 @@ import {
 
 import { Row, Section } from "../components/section";
 import { Swatch } from "../components/swatch";
+import { PageHeader } from "~/components/layout/page-header";
 import { ThemeToggle } from "~/components/layout/theme-toggle";
 
 const SEMANTIC_TOKENS = [
@@ -133,6 +134,31 @@ export function DesignSystemPage() {
                 <Swatch key={t.name} {...t} />
               ))}
             </div>
+          </div>
+        </Section>
+
+        <Section
+          id="page-header"
+          title="Page header"
+          description="How every signed-in page opens. Crumbs list parents only; the title is always the same size, so titles line up across routes."
+        >
+          <div className="rounded-2xl border border-dashed p-6">
+            <PageHeader
+              crumbs={[
+                { label: "Course saya", to: "/design-system#page-header" },
+                { label: "Matematika Lanjut XI", to: "/design-system#page-header" },
+              ]}
+              eyebrow={<Badge variant="lavender">Quiz</Badge>}
+              title="Quiz Aljabar dan Fungsi"
+              description="Kerjakan 20 soal secara berurutan. Jawaban tersimpan setiap kamu menjawab."
+              meta={
+                <>
+                  <span>20 soal</span>
+                  <span>60 menit</span>
+                </>
+              }
+              actions={<Button>Mulai quiz</Button>}
+            />
           </div>
         </Section>
 

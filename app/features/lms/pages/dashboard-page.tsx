@@ -105,7 +105,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
             </div>
 
             <dl className="grid grid-cols-3 gap-4 border-t border-primary-foreground/15 pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
-              <Metric value={data.summary.activeCourses} label="Course aktif" icon={BookOpen} />
+              <Metric value={data.summary.activeCourses} label="Course" icon={BookOpen} />
               <Metric value={data.summary.completedItems} label="Selesai" icon={CheckCircle2} />
               <Metric value={data.upcoming.length} label="Tertunda" icon={Clock3} />
             </dl>
@@ -113,7 +113,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
         </section>
       )}
 
-      <section className="grid items-start gap-10 xl:grid-cols-[minmax(0,1fr)_23rem]">
+      <section className="grid grid-cols-1 items-start gap-10 xl:grid-cols-[minmax(0,1fr)_23rem]">
         <div
           className="flex min-w-0 flex-col gap-6"
           aria-labelledby="my-courses-title"
@@ -168,7 +168,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
           )}
         </div>
 
-        <aside aria-labelledby="upcoming-title" className="xl:sticky xl:top-24">
+        <aside aria-labelledby="upcoming-title" className="min-w-0 xl:sticky xl:top-24">
           <Card>
             <CardHeader>
               <CardTitle id="upcoming-title">Perlu diselesaikan</CardTitle>

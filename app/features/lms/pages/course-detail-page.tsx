@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Circle,
   ClipboardList,
-  Clock3,
   FileQuestion,
   Megaphone,
   PlayCircle,
@@ -43,10 +42,9 @@ import {
   ProgressLabel,
   ProgressValue,
 } from "~/components/ui/progress";
-import { ScrollArea } from "~/components/ui/scroll-area";
 import { Separator } from "~/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { cn } from "~/lib/utils";
+import { CourseActivityPanel } from "../components/course-activity-panel";
 import { formatDateTime, sentenceStatus } from "../lib/format";
 import type { CourseData } from "../types";
 
@@ -58,15 +56,6 @@ const finishedActivityStatuses = new Set([
   "returned",
   "submitted",
 ]);
-
-type ActivityItem = {
-  id: string;
-  href: string;
-  title: string;
-  dueAt: string | null;
-  status: string | null;
-  score?: string | null;
-};
 
 export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
   const nextAction = getNextAction(loaderData);
@@ -109,11 +98,11 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
         </Alert>
       )}
 
-      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_23rem] xl:gap-10">
+      <div className="grid grid-cols-1 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_23rem] xl:gap-10">
         <CourseModules data={loaderData} />
 
         <aside className="flex min-w-0 flex-col gap-5 xl:sticky xl:top-24">
-          <ActivityPanel
+          <CourseActivityPanel
             assignments={loaderData.assignments.map((item) => ({
               id: item.id,
               href: `/assignments/${item.id}`,
@@ -378,132 +367,6 @@ function LessonStatusIcon({
       className="size-5 shrink-0 text-muted-foreground"
       aria-hidden="true"
     />
-  );
-}
-
-function ActivityPanel({
-  assignments,
-  quizzes,
-}: {
-  assignments: ActivityItem[];
-  quizzes: ActivityItem[];
-}) {
-  const hasActivities = assignments.length > 0 || quizzes.length > 0;
-  const defaultTab = assignments.length > 0 ? "assignments" : "quizzes";
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Aktivitas</CardTitle>
-        <CardDescription>
-          Assignment dan quiz yang terhubung dengan course.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {!hasActivities ? (
-          <Empty className="border border-dashed py-7">
-            <EmptyMedia variant="icon">
-              <ClipboardList />
-            </EmptyMedia>
-            <EmptyHeader>
-              <EmptyTitle>Belum ada aktivitas</EmptyTitle>
-              <EmptyDescription>
-                Assignment dan quiz akan muncul setelah dipublikasikan.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Tabs defaultValue={defaultTab}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="assignments">
-                <ClipboardList data-icon="inline-start" />
-                Assignment
-                <Badge variant="secondary">{assignments.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="quizzes">
-                <FileQuestion data-icon="inline-start" />
-                Quiz
-                <Badge variant="secondary">{quizzes.length}</Badge>
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="assignments">
-              <ActivityTab
-                items={assignments}
-                icon={ClipboardList}
-                title="Belum ada assignment"
-                description="Assignment akan muncul setelah dipublikasikan."
-              />
-            </TabsContent>
-            <TabsContent value="quizzes">
-              <ActivityTab
-                items={quizzes}
-                icon={FileQuestion}
-                title="Belum ada quiz"
-                description="Quiz akan muncul setelah dipublikasikan."
-              />
-            </TabsContent>
-          </Tabs>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActivityTab({
-  items,
-  icon: Icon,
-  title,
-  description,
-}: {
-  items: ActivityItem[];
-  icon: typeof ClipboardList;
-  title: string;
-  description: string;
-}) {
-  if (items.length === 0) {
-    return (
-      <Empty className="mt-3 border border-dashed py-7">
-        <EmptyMedia variant="icon">
-          <Icon />
-        </EmptyMedia>
-        <EmptyHeader>
-          <EmptyTitle>{title}</EmptyTitle>
-          <EmptyDescription>{description}</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
-
-  return (
-    <ScrollArea className={cn("mt-3 pr-3", items.length > 3 && "h-96")}>
-      <div className="flex flex-col divide-y">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex flex-col gap-3 py-4 first:pt-1 last:pb-0"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <p className="min-w-0 font-medium leading-snug">{item.title}</p>
-              {item.score !== null && item.score !== undefined ? (
-                <Badge variant="mint">{Number(item.score)}%</Badge>
-              ) : null}
-            </div>
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock3 className="size-3.5" aria-hidden="true" />
-              {formatDateTime(item.dueAt)}
-            </p>
-            <Button
-              variant="outline"
-              className="w-full justify-between"
-              render={<Link to={item.href} />}
-            >
-              {sentenceStatus(item.status)}
-              <ArrowRight data-icon="inline-end" />
-            </Button>
-          </div>
-        ))}
-      </div>
-    </ScrollArea>
   );
 }
 

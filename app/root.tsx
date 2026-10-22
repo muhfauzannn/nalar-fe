@@ -11,6 +11,20 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import type { Route } from "./+types/root";
 import "katex/dist/katex.min.css";
 import "./app.css";
+import poppins400 from "@fontsource/poppins/files/poppins-latin-400-normal.woff2?url";
+import poppins500 from "@fontsource/poppins/files/poppins-latin-500-normal.woff2?url";
+import poppins600 from "@fontsource/poppins/files/poppins-latin-600-normal.woff2?url";
+
+// Text weights used above the fold. Preloading them lets the first paint use
+// Poppins instead of swapping it in later, which reflowed headings by a line.
+export const links: Route.LinksFunction = () =>
+  [poppins400, poppins500, poppins600].map((href) => ({
+    rel: "preload",
+    href,
+    as: "font",
+    type: "font/woff2",
+    crossOrigin: "anonymous" as const,
+  }));
 
 const themeScript = `try{var t=localStorage.getItem("theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
 

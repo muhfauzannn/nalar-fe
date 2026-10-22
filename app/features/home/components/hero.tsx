@@ -53,14 +53,18 @@ export function Hero({ content }: { content: HomeContent }) {
       </div>
 
       {/* Illustration column */}
-      <div className="flex justify-center md:justify-end">
+      <div className="flex w-full justify-center md:justify-end">
         <img
           data-hero-art
           src="/illustration/hero.svg"
+          // Intrinsic size reserves the square before the file arrives, so the
+          // headline below it (on phones) does not jump down when it loads.
+          width={1254}
+          height={1254}
           alt=""
           aria-hidden
           draggable={false}
-          className="w-full max-md:max-w-70 max-w-lg select-none"
+          className="aspect-square w-full max-w-lg select-none max-md:max-w-70"
         />
       </div>
     </section>

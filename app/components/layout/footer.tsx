@@ -79,13 +79,13 @@ export function Footer() {
           <div className="flex items-center gap-5">
             <Link
               to="/privacy"
-              className="transition-colors hover:text-primary-foreground"
+              className="py-0.5 transition-colors hover:text-primary-foreground"
             >
               Privacy
             </Link>
             <Link
               to="/terms"
-              className="transition-colors hover:text-primary-foreground"
+              className="py-0.5 transition-colors hover:text-primary-foreground"
             >
               Terms
             </Link>
