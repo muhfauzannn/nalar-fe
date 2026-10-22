@@ -21,6 +21,7 @@ import {
   type PdfSelection,
   type PdfViewContext,
 } from "../lib/pdf-tutor";
+import { loadPdfjs } from "../lib/pdfjs";
 import { PdfTutorOverlay } from "./pdf-tutor-overlay";
 
 type Evidence = {
@@ -61,15 +62,13 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
   useEffect(() => {
     let disposed = false;
     let task:
-      ReturnType<(typeof import("pdfjs-dist"))["getDocument"]> | undefined;
+      ReturnType<Awaited<ReturnType<typeof loadPdfjs>>["getDocument"]> | undefined;
     setLoading(true);
     setError(null);
     onContext(null);
     void (async () => {
-      const pdfjs = await import("pdfjs-dist");
-      const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+      const pdfjs = await loadPdfjs();
       if (disposed) return;
-      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
       task = pdfjs.getDocument({
         url: studentResourceFileUrl(resourceId),
         withCredentials: true,
@@ -91,8 +90,9 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
         return;
       }
       setPdf(document);
-    })().catch(() => {
+    })().catch((caught) => {
       if (!disposed) {
+        console.error("PDF open failed", caught);
         setLoading(false);
         setError(
           (previous) =>
@@ -129,7 +129,7 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
     lastContext.current = "";
     onContext(null);
     void (async () => {
-      const pdfjs = await import("pdfjs-dist");
+      const pdfjs = await loadPdfjs();
       const source = await pdf.getPage(page);
       if (disposed) return;
       const original = source.getViewport({ scale: 1, rotation: 0 });
@@ -224,6 +224,7 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
       setLoading(false);
     })().catch((caught) => {
       if (disposed || caught?.name === "RenderingCancelledException") return;
+      console.error("PDF page render failed", caught);
       setLoading(false);
       setError("Halaman ini belum dapat ditampilkan. Coba muat ulang PDF.");
     });

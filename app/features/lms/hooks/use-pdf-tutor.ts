@@ -50,7 +50,6 @@ export function usePdfTutor(
   const connecting = useRef(false);
   const openingMicrophone = useRef(false);
   const lastImage = useRef("");
-  const lastPageIdentity = useRef("");
   const mounted = useRef(false);
   const playing = useRef(false);
   const turn = useRef<{ id: string; revision: number } | null>(null);
@@ -120,10 +119,9 @@ export function usePdfTutor(
   }, [cancelTurn, trace]);
 
   const beginTurn = useCallback(() => {
-    const view = contextRef.current;
-    if (!view) return;
     audioRef.current?.stop();
-    turn.current = { id: crypto.randomUUID(), revision: view.revision };
+    // While the next page loads there is no view yet; get_pdf_context grounds the turn later.
+    turn.current = { id: crypto.randomUUID(), revision: contextRef.current?.revision ?? -1 };
     groundedTurn.current = null;
     transcriptRef.current = "";
     outputRef.current = "";
@@ -196,9 +194,12 @@ export function usePdfTutor(
         try {
           const view = contextRef.current;
           const active = turn.current;
-          if (!view || !active || active.revision !== view.revision)
-            throw new Error("Konteks berubah. Tunggu pertanyaan baru siswa.");
+          if (!active) throw new Error("Tunggu pertanyaan baru siswa.");
+          if (!view)
+            throw new Error("Halaman PDF sedang dimuat. Coba lagi sebentar.");
           if (call.name === "get_pdf_context") {
+            // The student may have turned the page mid-answer: ground on what is open now.
+            active.revision = view.revision;
             sendView(session, view, true);
             groundedTurn.current = active.id;
             response = contextForModel(view, active.id);
@@ -207,6 +208,10 @@ export function usePdfTutor(
             if (groundedTurn.current !== active.id)
               throw new Error(
                 "Panggil get_pdf_context pada giliran ini dahulu.",
+              );
+            if (active.revision !== view.revision)
+              throw new Error(
+                "Tampilan PDF berubah. Panggil get_pdf_context lagi sebelum menandai halaman.",
               );
             const next = parsePdfGuidance(call.args, view, active.id);
             // Start the ink timeline before acknowledging; speech may accompany the strokes.
@@ -240,6 +245,11 @@ export function usePdfTutor(
             throw new Error("Tool tidak dikenali.");
           }
         } catch (caught) {
+          // A drawing that lost its view (the page turned meanwhile) is taken back.
+          if (pendingGuidanceCall.current === call.id) {
+            pendingGuidanceCall.current = null;
+            setGuidance(committedGuidance.current);
+          }
           response = {
             ok: false,
             error:
@@ -260,10 +270,8 @@ export function usePdfTutor(
       }
       if (generation.current !== sessionGeneration) return;
       const active = turn.current;
-      const canRespond =
-        active &&
-        groundedTurn.current === active.id &&
-        active.revision === contextRef.current?.revision;
+      // Not tied to the view revision: turning the page must not mute an answer in progress.
+      const canRespond = active && groundedTurn.current === active.id;
       if (canRespond) {
         if (
           server?.outputTranscription?.text ||
@@ -478,22 +486,10 @@ export function usePdfTutor(
       previous?.resourceId === context?.resourceId
     )
       return;
-    const pageIdentity = context
-      ? `${context.resourceId}:${context.fingerprint}:${context.page}`
-      : null;
-    // Keep committed ink anchored during zoom/rotation/scroll; cancel pending work
-    // and hide its cursor. A different source page starts with a clean layer.
-    cancelTurn(!!pageIdentity && pageIdentity !== lastPageIdentity.current);
-    if (pageIdentity) lastPageIdentity.current = pageIdentity;
-    setStatus(
-      sessionRef.current
-        ? microphoneRef.current
-          ? "listening"
-          : "paused"
-        : connecting.current
-          ? "connecting"
-          : "idle",
-    );
+    // Turning, zooming or scrolling the PDF is not an interruption: the tutor keeps
+    // talking and only the student's voice or the stop button cuts it off. Ink stays
+    // anchored to its own page (the reader shows it only there); drawing on the new
+    // view requires get_pdf_context again (see present_pdf_guidance).
     trace("context-changed");
     // Invalidate locally immediately; coalesce rapid scroll/resize updates on the wire.
     const timer = setTimeout(() => {
@@ -510,7 +506,7 @@ export function usePdfTutor(
       }
     }, 200);
     return () => clearTimeout(timer);
-  }, [context, cancelTurn, sendView, trace]);
+  }, [context, sendView, trace]);
 
   useEffect(() => {
     mounted.current = true;

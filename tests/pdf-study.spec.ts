@@ -62,11 +62,13 @@ async function setup(page: Page) {
   const responses = new Map<string, Record<string, any>>();
   let view: Context | undefined;
   let images = 0;
+  const sent: string[] = [];
   await page.routeWebSocket(/api\.openai\.com\/v1\/realtime/, (ws) => {
     socket = ws;
     ws.send(JSON.stringify({ type: "session.created", session: { model: "gpt-realtime-2.1" } }));
     ws.onMessage((raw) => {
       const data = JSON.parse(raw.toString());
+      sent.push(data.type);
       const item = data.item;
       for (const part of item?.content ?? []) {
         if (part.type === "input_text" && part.text?.startsWith("PDF_VIEW_STATE "))
@@ -141,6 +143,7 @@ async function setup(page: Page) {
     responses,
     getView: () => view,
     getImages: () => images,
+    getSent: () => sent,
   };
 }
 
@@ -235,6 +238,57 @@ test("voice tools ground the response, show cursor, draw and reject an outdated 
   await expect(
     page.getByRole("button", { name: "Mulai percakapan" }),
   ).toBeEnabled();
+  expect(mock.errors).toEqual([]);
+});
+
+test("turning the page while the tutor speaks keeps the answer going", async ({
+  page,
+}) => {
+  const mock = await setup(page);
+  await mock.start();
+  const context = await mock.ground("read-1");
+  const speak = (text: string) =>
+    mock.send({
+      serverContent: {
+        outputTranscription: { text },
+        modelTurn: {
+          parts: [
+            {
+              inlineData: {
+                data: Buffer.alloc(48_000).toString("base64"),
+                mimeType: "audio/pcm;rate=24000",
+              },
+            },
+          ],
+        },
+      },
+    });
+  speak("Pembilang menunjukkan bagian yang dipilih, ");
+  const transcript = page.getByLabel("Transkrip percakapan saat ini");
+  await expect(transcript).toContainText("Pembilang menunjukkan");
+  const cancelsBefore = mock.getSent().filter((type) => type === "response.cancel").length;
+
+  await page.getByRole("button", { name: "Halaman berikutnya" }).click();
+  await expect(page.getByTestId("pdf-page-number")).toHaveText("2 / 2");
+  // The new page reaches the tutor, but nothing cancels its answer.
+  await expect.poll(() => mock.getView()?.page).toBe(2);
+  expect(mock.getSent().filter((type) => type === "response.cancel").length).toBe(cancelsBefore);
+
+  speak("sedangkan penyebut menunjukkan banyak bagian seluruhnya.");
+  await expect(transcript).toContainText("Pembilang menunjukkan bagian yang dipilih");
+  await expect(transcript).toContainText("penyebut menunjukkan banyak bagian");
+
+  // Ink for the old view is refused; reading the context again allows drawing on page 2.
+  expect(
+    (await mock.call("stale", "present_pdf_guidance", mock.guidance(context))).ok,
+  ).toBe(false);
+  const fresh = (await mock.call("read-2", "get_pdf_context")) as Context;
+  expect(fresh.page).toBe(2);
+  expect(fresh.turnId).toBe(context.turnId);
+  expect(
+    (await mock.call("draw-2", "present_pdf_guidance", mock.guidance(fresh))).ok,
+  ).toBe(true);
+  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
   expect(mock.errors).toEqual([]);
 });
 
