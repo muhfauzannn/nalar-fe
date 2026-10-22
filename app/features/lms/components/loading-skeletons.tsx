@@ -379,7 +379,7 @@ export function StudentRouteSkeleton({ pathname }: { pathname: string }) {
   return <ActivityPageSkeleton />;
 }
 
-export function StudentAppShellSkeleton() {
+export function StudentAppShellSkeleton({ pathname = "/dashboard" }: { pathname?: string }) {
   return (
     <LoadingRegion label="Memuat ruang belajar siswa">
       <div className="flex min-h-svh w-full bg-background">
@@ -405,7 +405,7 @@ export function StudentAppShellSkeleton() {
           </header>
           <main className="flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
             <div className="mx-auto w-full max-w-7xl">
-              <DashboardSkeletonContent />
+              <StudentRouteSkeleton pathname={pathname} />
             </div>
           </main>
         </div>

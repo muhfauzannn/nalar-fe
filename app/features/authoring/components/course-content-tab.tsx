@@ -265,7 +265,7 @@ function LessonRow({
       <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
         <Link
           to={`/manage/lessons/${lesson.id}`}
-          className="line-clamp-2 font-medium wrap-break-word underline-offset-4 hover:underline"
+          className="line-clamp-2 py-0.5 font-medium wrap-break-word underline-offset-4 hover:underline"
         >
           {lesson.title}
         </Link>

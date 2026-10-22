@@ -84,7 +84,7 @@
   --secondary: #d3c5f8; /* Soft lavender */
   --secondary-foreground: #18153a;
   --muted: #f1edf1;
-  --muted-foreground: #6b6b80;
+  --muted-foreground: #5e5e72; /* >= 4.5:1 on white, muted and the lavender tints */
   --accent: #ece7fb; /* Light lavender — hover/selected surfaces */
   --accent-foreground: #18153a;
   --destructive: #ba1a1a;

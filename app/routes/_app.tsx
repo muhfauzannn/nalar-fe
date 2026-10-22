@@ -1,3 +1,5 @@
+import { useLocation } from "react-router";
+
 import type { Route } from "./+types/_app";
 import {
   StudentAppShell,
@@ -10,7 +12,9 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export function HydrateFallback() {
-  return <StudentAppShellSkeleton />;
+  // The first paint shows the skeleton of the page being opened, not always the dashboard's.
+  const { pathname } = useLocation();
+  return <StudentAppShellSkeleton pathname={pathname} />;
 }
 
 export default function StudentAppLayout({ loaderData }: Route.ComponentProps) {
