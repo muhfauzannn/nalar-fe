@@ -1,4 +1,66 @@
 /** Shared browser audio plumbing; no model credentials or session state here. */
+
+/**
+ * Wire format for tutor audio. G.711 mu-law (8 kHz, 64 kbps) instead of 24 kHz PCM
+ * (384 kbps, ~512 kbps as base64 JSON): on a 3G/weak 4G uplink PCM queues up in the socket
+ * and answers arrive seconds late. The server confirms the format; older servers say nothing
+ * and keep PCM, so both directions always match.
+ */
+export type TutorAudioFormat = "pcm" | "pcmu";
+export const REQUESTED_TUTOR_AUDIO_FORMAT: TutorAudioFormat = "pcmu";
+export const tutorAudioFormat = (value: unknown): TutorAudioFormat =>
+  value === "pcmu" ? "pcmu" : "pcm";
+const WORKLET_URL = "/audio/nalar-input-processor.js?v=2";
+
+const MU_LAW = new Float32Array(256);
+for (let i = 0; i < 256; i++) {
+  const byte = ~i & 0xff;
+  const magnitude = ((((byte & 0x0f) << 3) + 0x84) << ((byte & 0x70) >> 4)) - 0x84;
+  MU_LAW[i] = (byte & 0x80 ? -magnitude : magnitude) / 32_768;
+}
+
+/** Decodes one base64 audio delta; mimeType is what live-tutor-client attached. */
+export function decodeTutorAudio(base64: string, mimeType: string) {
+  const binary = atob(base64);
+  if (mimeType.startsWith("audio/pcmu")) {
+    const samples = new Float32Array(binary.length);
+    for (let i = 0; i < binary.length; i++) samples[i] = MU_LAW[binary.charCodeAt(i)]!;
+    return { samples, rate: 8_000 };
+  }
+  const count = Math.floor(binary.length / 2);
+  const samples = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const value = binary.charCodeAt(i * 2) | (binary.charCodeAt(i * 2 + 1) << 8);
+    samples[i] = (value << 16 >> 16) / 32_768;
+  }
+  return { samples, rate: 24_000 };
+}
+
+/** Microphone → (anti-alias filter) → encoder worklet. Returns the worklet node. */
+export async function createTutorInputNode(
+  context: AudioContext,
+  source: MediaStreamAudioSourceNode,
+  format: TutorAudioFormat,
+) {
+  await context.audioWorklet.addModule(WORKLET_URL);
+  const worklet = new AudioWorkletNode(context, "nalar-input-processor", {
+    processorOptions: { format },
+  });
+  let tail: AudioNode = source;
+  if (format === "pcmu") {
+    // Two 12 dB/oct stages: keep speech, stop >4 kHz folding back when decimating to 8 kHz.
+    for (let stage = 0; stage < 2; stage++) {
+      const filter = context.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 3_400;
+      tail.connect(filter);
+      tail = filter;
+    }
+  }
+  tail.connect(worklet);
+  return worklet;
+}
+
 export class TutorAudioOutput {
   private context: AudioContext | null = null;
   private sources = new Set<AudioBufferSourceNode>();
@@ -11,19 +73,14 @@ export class TutorAudioOutput {
     if (this.context.state === "suspended") await this.context.resume();
   }
 
-  async play(base64: string) {
+  async play(base64: string, mimeType = "audio/pcm;rate=24000") {
     const epoch = this.epoch;
     await this.prepare();
     if (epoch !== this.epoch || !this.context) return;
-    const binary = atob(base64);
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    const view = new DataView(bytes.buffer);
-    const count = Math.floor(bytes.length / 2);
-    if (!count) return;
-    const buffer = this.context.createBuffer(1, count, 24_000);
-    const samples = buffer.getChannelData(0);
-    for (let i = 0; i < count; i++)
-      samples[i] = view.getInt16(i * 2, true) / 32768;
+    const { samples, rate } = decodeTutorAudio(base64, mimeType);
+    if (!samples.length) return;
+    const buffer = this.context.createBuffer(1, samples.length, rate);
+    buffer.copyToChannel(samples, 0);
     const source = this.context.createBufferSource();
     source.buffer = buffer;
     source.connect(this.context.destination);
@@ -67,6 +124,7 @@ export type TutorMicrophone = { stop: () => Promise<void> };
 export async function openTutorMicrophone(
   onAudio: (data: string, level: number) => void,
   isCurrent: () => boolean,
+  format: TutorAudioFormat = "pcm",
 ): Promise<TutorMicrophone | null> {
   if (!navigator.mediaDevices?.getUserMedia)
     throw new Error(
@@ -100,17 +158,15 @@ export async function openTutorMicrophone(
       return null;
     }
     context = new AudioContext();
-    await context.audioWorklet.addModule("/audio/nalar-input-processor.js");
     await context.resume();
     if (!isCurrent()) {
       await stop();
       return null;
     }
     source = context.createMediaStreamSource(stream);
-    worklet = new AudioWorkletNode(context, "nalar-input-processor");
+    worklet = await createTutorInputNode(context, source, format);
     sink = context.createGain();
     sink.gain.value = 0;
-    source.connect(worklet);
     worklet.connect(sink);
     sink.connect(context.destination);
     worklet.port.onmessage = (

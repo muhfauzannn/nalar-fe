@@ -16,8 +16,9 @@ type Context = {
     height: number;
   }>;
 };
-async function setup(page: Page) {
+async function setup(page: Page, options: { audioFormat?: string } = {}) {
   const errors: string[] = [];
+  const sessionRequests: Record<string, unknown>[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
@@ -48,10 +49,12 @@ async function setup(page: Page) {
         headers,
       });
     const resourceId = route.request().postDataJSON().resourceId;
+    sessionRequests.push(route.request().postDataJSON());
     return route.fulfill({
       json: {
         token: "ek_test",
         model: "gpt-realtime-2.1",
+        ...(options.audioFormat ? { audioFormat: options.audioFormat } : {}),
         resourceId,
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       },
@@ -63,12 +66,15 @@ async function setup(page: Page) {
   let view: Context | undefined;
   let images = 0;
   const sent: string[] = [];
+  const appendedBytes: number[] = [];
   await page.routeWebSocket(/api\.openai\.com\/v1\/realtime/, (ws) => {
     socket = ws;
     ws.send(JSON.stringify({ type: "session.created", session: { model: "gpt-realtime-2.1" } }));
     ws.onMessage((raw) => {
       const data = JSON.parse(raw.toString());
       sent.push(data.type);
+      if (data.type === "input_audio_buffer.append")
+        appendedBytes.push(Buffer.from(data.audio, "base64").length);
       const item = data.item;
       for (const part of item?.content ?? []) {
         if (part.type === "input_text" && part.text?.startsWith("PDF_VIEW_STATE "))
@@ -144,6 +150,8 @@ async function setup(page: Page) {
     getView: () => view,
     getImages: () => images,
     getSent: () => sent,
+    sessionRequests,
+    appendedBytes,
   };
 }
 
@@ -238,6 +246,43 @@ test("voice tools ground the response, show cursor, draw and reject an outdated 
   await expect(
     page.getByRole("button", { name: "Mulai percakapan" }),
   ).toBeEnabled();
+  expect(mock.errors).toEqual([]);
+});
+
+test("G.711 sessions stream mu-law both ways and the same page image is not resent every turn", async ({
+  page,
+}) => {
+  const mock = await setup(page, { audioFormat: "pcmu" });
+  await mock.start();
+  expect(mock.sessionRequests.at(-1)).toMatchObject({ audioFormat: "pcmu" });
+  // 100 ms of 8 kHz mu-law per microphone chunk, instead of 4800 bytes of 24 kHz PCM.
+  await expect.poll(() => mock.appendedBytes.length).toBeGreaterThan(3);
+  expect(new Set(mock.appendedBytes)).toEqual(new Set([800]));
+  expect(mock.getImages()).toBe(1);
+  const first = await mock.ground("read-1");
+  expect(first.page).toBe(1);
+  // The model already has this page; grounding again must not re-upload it.
+  expect(mock.getImages()).toBe(1);
+  mock.send({
+    serverContent: {
+      outputTranscription: { text: "Pembilang itu bagian atas pecahan." },
+      modelTurn: { parts: [{ inlineData: { data: Buffer.alloc(8_000, 0xff).toString("base64"), mimeType: "audio/pcmu" } }] },
+      turnComplete: true,
+    },
+  });
+  await expect(page.getByLabel("Transkrip percakapan saat ini")).toContainText("bagian atas");
+  for (const id of ["read-2", "read-3"]) {
+    mock.send({ serverContent: { interrupted: true } });
+    await mock.ground(id);
+  }
+  // ...but after a few turns it is resent, in case truncation dropped the old one.
+  expect(mock.getImages()).toBe(2);
+  // A different page is always sent.
+  await page.getByRole("button", { name: "Halaman berikutnya" }).click();
+  await expect.poll(() => mock.getView()?.page).toBe(2);
+  mock.send({ serverContent: { interrupted: true } });
+  await mock.ground("read-4");
+  expect(mock.getImages()).toBe(3);
   expect(mock.errors).toEqual([]);
 });
 

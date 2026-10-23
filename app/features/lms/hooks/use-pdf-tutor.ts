@@ -10,7 +10,9 @@ import {
 } from "../lib/pdf-tutor";
 import {
   openTutorMicrophone,
+  tutorAudioFormat,
   TutorAudioOutput,
+  type TutorAudioFormat,
   type TutorMicrophone,
 } from "../lib/tutor-audio";
 
@@ -50,6 +52,10 @@ export function usePdfTutor(
   const connecting = useRef(false);
   const openingMicrophone = useRef(false);
   const lastImage = useRef("");
+  const audioFormat = useRef<TutorAudioFormat>("pcm");
+  // Student turns, and the turn the page image was last sent on (see sendView).
+  const turnCount = useRef(0);
+  const imageTurn = useRef(-Infinity);
   const mounted = useRef(false);
   const playing = useRef(false);
   const turn = useRef<{ id: string; revision: number } | null>(null);
@@ -99,6 +105,7 @@ export function usePdfTutor(
     connecting.current = false;
     openingMicrophone.current = false;
     lastImage.current = "";
+    imageTurn.current = -Infinity;
     abortRef.current?.abort();
     abortRef.current = null;
     if (expiryTimer.current) clearTimeout(expiryTimer.current);
@@ -122,6 +129,7 @@ export function usePdfTutor(
     audioRef.current?.stop();
     // While the next page loads there is no view yet; get_pdf_context grounds the turn later.
     turn.current = { id: crypto.randomUUID(), revision: contextRef.current?.revision ?? -1 };
+    turnCount.current++;
     groundedTurn.current = null;
     transcriptRef.current = "";
     outputRef.current = "";
@@ -156,6 +164,7 @@ export function usePdfTutor(
           video: { data: view.image, mimeType: "image/jpeg" },
         });
         lastImage.current = imageKey;
+        imageTurn.current = turnCount.current;
       }
       trace("context-sent");
     },
@@ -200,7 +209,10 @@ export function usePdfTutor(
           if (call.name === "get_pdf_context") {
             // The student may have turned the page mid-answer: ground on what is open now.
             active.revision = view.revision;
-            sendView(session, view, true);
+            // A changed page is resent by sendView itself. The same page is resent only every few
+            // turns, in case conversation truncation dropped it: one image is up to ~200 KB of
+            // uplink, seconds on a slow phone connection, before the tutor can answer.
+            sendView(session, view, turnCount.current - imageTurn.current >= 3);
             groundedTurn.current = active.id;
             response = contextForModel(view, active.id);
             trace("context-read");
@@ -288,7 +300,7 @@ export function usePdfTutor(
             part.inlineData.mimeType?.startsWith("audio/")
           ) {
             trace("audio-received");
-            void audioRef.current?.play(part.inlineData.data).catch(() => {
+            void audioRef.current?.play(part.inlineData.data, part.inlineData.mimeType).catch(() => {
               setError(
                 "Audio belum dapat diputar. Coba jeda dan lanjutkan mikrofon.",
               );
@@ -334,9 +346,9 @@ export function usePdfTutor(
           if (contextRef.current) sendView(session, contextRef.current);
         }
         session.sendRealtimeInput({
-          audio: { data, mimeType: "audio/pcm;rate=24000" },
+          audio: { data, mimeType: audioFormat.current === "pcmu" ? "audio/pcmu" : "audio/pcm;rate=24000" },
         });
-      }, isCurrent);
+      }, isCurrent, audioFormat.current);
     } finally {
       if (currentMicGeneration === micGeneration.current)
         openingMicrophone.current = false;
@@ -398,6 +410,7 @@ export function usePdfTutor(
       );
       let session: Session;
       try {
+        audioFormat.current = tutorAudioFormat(data.audioFormat);
         session = await connectTutorLive(data.token, data.model, {
             onmessage: (message) => {
               void onMessage(message, currentGeneration).catch(() =>
@@ -410,7 +423,7 @@ export function usePdfTutor(
               fail(
                 "Sesi tutor telah berakhir. Sambungkan ulang untuk melanjutkan.",
               ),
-        });
+        }, audioFormat.current);
       } finally {
         clearTimeout(connectionTimeout);
       }

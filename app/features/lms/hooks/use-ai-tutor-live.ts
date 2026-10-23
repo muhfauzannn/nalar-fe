@@ -3,6 +3,12 @@ import { connectTutorLive, type LiveServerMessage, type Session } from "../lib/l
 
 import { HttpError } from "~/lib/http";
 import { aiTutorApi } from "../api/ai-tutor";
+import {
+  createTutorInputNode,
+  decodeTutorAudio,
+  tutorAudioFormat,
+  type TutorAudioFormat,
+} from "../lib/tutor-audio";
 import type {
   AiTutorChannel,
   AiTutorMessage,
@@ -55,6 +61,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const outputSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlaybackTimeRef = useRef(0);
   const playbackEpochRef = useRef(0);
+  const audioFormatRef = useRef<TutorAudioFormat>("pcm");
 
   useEffect(() => {
     modeRef.current = mode;
@@ -89,7 +96,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
     setIsTutorSpeaking(false);
   }, []);
 
-  const playPcm = useCallback(async (base64: string) => {
+  const playPcm = useCallback(async (base64: string, mimeType: string) => {
     if (channelRef.current !== "voice" || !activeStudentEventRef.current) return;
     const playbackEpoch = playbackEpochRef.current;
     let context = outputContextRef.current;
@@ -100,19 +107,10 @@ export function useAiTutorLive(target: AiTutorTarget) {
     if (context.state === "suspended") await context.resume();
     if (playbackEpoch !== playbackEpochRef.current || !activeStudentEventRef.current) return;
 
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
-    }
-    const sampleCount = Math.floor(bytes.byteLength / 2);
-    if (sampleCount === 0) return;
-    const view = new DataView(bytes.buffer);
-    const audioBuffer = context.createBuffer(1, sampleCount, 24_000);
-    const samples = audioBuffer.getChannelData(0);
-    for (let index = 0; index < sampleCount; index += 1) {
-      samples[index] = view.getInt16(index * 2, true) / 32_768;
-    }
+    const { samples, rate } = decodeTutorAudio(base64, mimeType);
+    if (samples.length === 0) return;
+    const audioBuffer = context.createBuffer(1, samples.length, rate);
+    audioBuffer.copyToChannel(samples, 0);
 
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
@@ -276,7 +274,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       );
       for (const part of audioParts ?? []) {
         const audioData = part.inlineData?.data;
-        if (audioData) void playPcm(audioData);
+        if (audioData) void playPcm(audioData, part.inlineData?.mimeType ?? "");
       }
       if (outputText || (audioParts?.length ?? 0) > 0) {
         toolTurnPendingRef.current = false;
@@ -345,6 +343,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         }
         conversationIdRef.current = sessionData.conversationId;
         modelRef.current = sessionData.model;
+        audioFormatRef.current = tutorAudioFormat(sessionData.audioFormat);
         setMessages(sessionData.messages);
         const session = await connectTutorLive(sessionData.token, sessionData.model, {
             onopen: () => mountedRef.current && setStatus("ready"),
@@ -368,7 +367,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
               setIsTutorSpeaking(false);
               setStatus("idle");
             },
-        });
+        }, audioFormatRef.current);
         if (
           !mountedRef.current ||
           connectionGenerationRef.current !== connectionGeneration
@@ -469,12 +468,11 @@ export function useAiTutorLive(target: AiTutorTarget) {
         },
       });
       const context = new AudioContext();
-      await context.audioWorklet.addModule("/audio/nalar-input-processor.js");
       const source = context.createMediaStreamSource(stream);
-      const worklet = new AudioWorkletNode(context, "nalar-input-processor");
+      const format = audioFormatRef.current;
+      const worklet = await createTutorInputNode(context, source, format);
       const sink = context.createGain();
       sink.gain.value = 0;
-      source.connect(worklet);
       worklet.connect(sink);
       sink.connect(context.destination);
       worklet.port.onmessage = (event: MessageEvent<MicrophoneMessage>) => {
@@ -485,7 +483,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         let binary = "";
         for (const byte of bytes) binary += String.fromCharCode(byte);
         currentSession.sendRealtimeInput({
-          audio: { data: btoa(binary), mimeType: "audio/pcm;rate=24000" },
+          audio: { data: btoa(binary), mimeType: format === "pcmu" ? "audio/pcmu" : "audio/pcm;rate=24000" },
         });
       };
       microphoneRef.current = { context, stream, source, worklet, sink };

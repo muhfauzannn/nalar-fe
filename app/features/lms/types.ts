@@ -311,6 +311,8 @@ export type AiTutorSessionData = {
   conversationId: string;
   token: string;
   model: string;
+  /** Absent from servers that predate G.711 support: PCM. */
+  audioFormat?: string;
   expiresAt: string;
   mode: AiTutorMode;
   questionId: string | null;

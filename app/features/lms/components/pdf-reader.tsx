@@ -202,9 +202,11 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
       await Promise.all([render.promise, textLayer.render()]);
       if (disposed) return;
       // Always ground vision in a clean, unrotated page, independent of zoom/DPR.
+      // 1280 px / q0.75 is ~1/3 smaller than 1568 px / q0.82 on a text-heavy A4 page (191 vs
+      // 284 KB) and still legible; the text itself also reaches the model as blocks.
       const imageCanvas = document.createElement("canvas");
       const imageViewport = source.getViewport({
-        scale: Math.min(1.75, 1568 / Math.max(original.width, original.height)),
+        scale: Math.min(1.75, 1280 / Math.max(original.width, original.height)),
         rotation: 0,
       });
       imageCanvas.width = Math.ceil(imageViewport.width);
@@ -218,7 +220,7 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
       setEvidence({
         fingerprint: pdf.fingerprints[0] ?? resourceId,
         blocks: blocks.slice(0, 600),
-        image: imageCanvas.toDataURL("image/jpeg", 0.82).split(",")[1],
+        image: imageCanvas.toDataURL("image/jpeg", 0.75).split(",")[1],
         totalPages: pdf.numPages,
       });
       setLoading(false);

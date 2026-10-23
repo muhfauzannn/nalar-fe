@@ -1,4 +1,6 @@
 /** Direct OpenAI Realtime connection authenticated with a short-lived server token. */
+import type { TutorAudioFormat } from "./tutor-audio";
+
 export type LiveServerMessage = {
   serverContent?: {
     inputStarted?: boolean;
@@ -28,11 +30,54 @@ type Callbacks = {
   onclose?: () => void;
 };
 
-export function connectTutorLive(token: string, model: string, callbacks: Callbacks): Promise<Session> {
+/**
+ * Opt-in latency trace: `localStorage.setItem("nalar:tutor-trace", "1")`, reconnect the tutor.
+ * One row per student turn, in ms after the server detected end of speech, is logged with
+ * console.table and kept in `window.__nalarTutorTrace`. Off by default; costs nothing then.
+ */
+type TurnTrace = {
+  speechStopped: number; marks: Record<string, number>; responses: number;
+  up: number; down: number; droppedAudio: number; tokens: { input: number; cached: number; output: number };
+};
+function tutorTracer() {
+  let enabled = false;
+  try { enabled = localStorage.getItem("nalar:tutor-trace") === "1"; } catch { /* Storage blocked. */ }
+  if (!enabled) return null;
+  const rows: Record<string, unknown>[] = ((window as unknown as { __nalarTutorTrace?: Record<string, unknown>[] }).__nalarTutorTrace ??= []);
+  let turn: TurnTrace | null = null;
+  return {
+    bytes(direction: "up" | "down", size: number) { if (turn) turn[direction] += size; },
+    stopped() {
+      turn = { speechStopped: performance.now(), marks: {}, responses: 0, up: 0, down: 0, droppedAudio: 0, tokens: { input: 0, cached: 0, output: 0 } };
+    },
+    mark(name: string) { if (turn) turn.marks[name] ??= Math.round(performance.now() - turn.speechStopped); },
+    response() { if (turn) turn.responses++; },
+    dropped(size: number) { if (turn) turn.droppedAudio += size; },
+    usage(usage?: { input_tokens?: number; output_tokens?: number; input_token_details?: { cached_tokens?: number } }) {
+      if (!turn || !usage) return;
+      turn.tokens.input += usage.input_tokens ?? 0;
+      turn.tokens.cached += usage.input_token_details?.cached_tokens ?? 0;
+      turn.tokens.output += usage.output_tokens ?? 0;
+    },
+    finish() {
+      if (!turn) return;
+      rows.push({ ...turn.marks, responses: turn.responses, upKB: Math.round(turn.up / 1024), downKB: Math.round(turn.down / 1024),
+        droppedAudioKB: Math.round(turn.droppedAudio / 1024), ...turn.tokens });
+      console.table(rows.slice(-10));
+      turn = null;
+    },
+  };
+}
+
+export function connectTutorLive(token: string, model: string, callbacks: Callbacks, audioFormat: TutorAudioFormat = "pcm"): Promise<Session> {
+  const audioMimeType = audioFormat === "pcmu" ? "audio/pcmu" : "audio/pcm;rate=24000";
+  // 600 ms of silence in the session's input format (mu-law silence is 0xFF, not 0x00).
+  const trailingSilence = audioFormat === "pcmu" ? btoa("\xff".repeat(8_000 * 0.6)) : btoa("\0".repeat(24_000 * 2 * 0.6));
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`, [
       "realtime", `openai-insecure-api-key.${token}`,
     ]);
+    const trace = tutorTracer();
     let ready = false;
     let closed = false;
     let activeResponse: string | null = null;
@@ -41,7 +86,9 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
     const pendingCalls = new Set<string>();
     const send = (event: Record<string, unknown>) => {
       if (socket.readyState !== WebSocket.OPEN) throw new Error("Tutor connection closed");
-      socket.send(JSON.stringify(event));
+      const data = JSON.stringify(event);
+      trace?.bytes("up", data.length);
+      socket.send(data);
     };
     const requestResponse = (continuation = false) => send({ type: "response.create",
       ...(continuation ? { response: { tool_choice: "auto" } } : {}),
@@ -69,7 +116,7 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
         if (input.audioStreamEnd) {
           // Let VAD commit the last utterance when the microphone is paused mid-speech.
           // Explicitly clearing the buffer would discard the student's final words.
-          send({ type: "input_audio_buffer.append", audio: btoa("\0".repeat(24_000 * 2 * 0.6)) });
+          send({ type: "input_audio_buffer.append", audio: trailingSilence });
         }
         if (input.video) send({ type: "conversation.item.create", item: {
           type: "message", role: "user",
@@ -98,6 +145,7 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
             type: "function_call_output", call_id: result.id, output: JSON.stringify(result.response),
           } });
         }
+        if (sent) trace?.mark("toolOutputSent");
         if (sent && !pendingCalls.size) requestResponse(true);
       },
       interrupt,
@@ -114,7 +162,24 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
     socket.onmessage = (message) => {
       if (closed) return;
       try {
-        const event = JSON.parse(String(message.data));
+        const data = String(message.data);
+        const event = JSON.parse(data);
+        if (trace) {
+          if (event.type === "input_audio_buffer.speech_stopped") trace.stopped();
+          trace.bytes("down", data.length);
+          if (event.type === "conversation.item.input_audio_transcription.completed") trace.mark("transcribed");
+          if (event.type === "response.created") { trace.response(); trace.mark("response1Created"); }
+          if (event.type === "response.function_call_arguments.done") trace.mark("toolArgsDone");
+          if (event.type === "response.output_audio.delta") {
+            if (guardrailComplete) trace.mark("firstAudio"); else trace.dropped(event.delta.length);
+          }
+          if (event.type === "response.done") {
+            trace.usage(event.response.usage);
+            if (!(event.response.output ?? []).some((item: { type: string }) => item.type === "function_call")) {
+              trace.mark("done"); trace.finish();
+            } else trace.mark("toolCallDone");
+          }
+        }
         if (event.type === "session.created") {
           ready = true;
           clearTimeout(timeout);
@@ -144,7 +209,7 @@ export function connectTutorLive(token: string, model: string, callbacks: Callba
         // Realtime may speak a preamble even with a forced tool choice. Never forward
         // that audio or transcript before the application has acknowledged the tool.
         if (guardrailComplete && event.type === "response.output_audio.delta") callbacks.onmessage({ serverContent: {
-          modelTurn: { parts: [{ inlineData: { data: event.delta, mimeType: "audio/pcm;rate=24000" } }] },
+          modelTurn: { parts: [{ inlineData: { data: event.delta, mimeType: audioMimeType } }] },
         } });
         if (guardrailComplete && (event.type === "response.output_audio_transcript.delta" || event.type === "response.output_text.delta")) {
           callbacks.onmessage({ serverContent: { outputTranscription: { text: event.delta } } });
