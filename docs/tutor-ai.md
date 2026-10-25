@@ -9,7 +9,7 @@ di atas pembaca PDF agar dapat digunakan sambil melihat materi.
 
 ## Menjalankan
 
-Backend memakai `OPENAI_API_KEY` yang sama dengan tutor tugas/kuis. Tidak ada
+Backend memakai `GEMINI_API_KEY` yang sama dengan tutor tugas/kuis. Tidak ada
 migrasi database atau perubahan konfigurasi storage. Backend harus memuat endpoint
 baru `POST /api/student/ai-tutor/pdf-sessions` bersama frontend ini.
 
@@ -24,8 +24,7 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
 
 ## Kontrak dan keputusan
 
-- Sesi memakai OpenAI `gpt-realtime-2.1` melalui WebSocket dengan audio PCM 24 kHz.
-  Credential sementara berlaku 60 detik untuk mulai tersambung; sesi aplikasi maksimal 55 menit. Endpoint
+- Sesi memakai Gemini Live dan token sekali pakai berumur 15 menit. Endpoint
   backend menerapkan otorisasi yang sama dengan pembacaan file asli, membatasi
   frekuensi sesi per akun, dan tidak mengirim API key ke browser.
 - `PdfReader` membaca file asli dengan kredensial siswa. Model menerima JPEG halaman

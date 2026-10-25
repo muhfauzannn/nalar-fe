@@ -1,5 +1,4 @@
 import { http } from "~/lib/http";
-import { REQUESTED_TUTOR_AUDIO_FORMAT } from "../lib/tutor-audio";
 import type {
   AiTutorClassification,
   AiTutorMode,
@@ -9,14 +8,13 @@ import type {
 
 export const aiTutorApi = {
   createPdfSession: (resourceId: string, signal: AbortSignal) =>
-    http.post<{ token: string; model: string; expiresAt: string; resourceId: string; audioFormat?: string }>(
-      "/api/student/ai-tutor/pdf-sessions", { resourceId, audioFormat: REQUESTED_TUTOR_AUDIO_FORMAT }, { signal },
+    http.post<{ token: string; model: string; expiresAt: string; resourceId: string }>(
+      "/api/student/ai-tutor/pdf-sessions", { resourceId }, { signal },
     ),
   createSession: (target: AiTutorTarget, mode: AiTutorMode) =>
     http.post<AiTutorSessionData>("/api/student/ai-tutor/sessions", {
       ...target,
       mode,
-      audioFormat: REQUESTED_TUTOR_AUDIO_FORMAT,
     }),
   classify: (
     conversationId: string,

@@ -10,9 +10,8 @@ import {
 } from "../lib/pdf-tutor";
 import {
   openTutorMicrophone,
-  tutorAudioFormat,
+  TUTOR_INPUT_MIME_TYPE,
   TutorAudioOutput,
-  type TutorAudioFormat,
   type TutorMicrophone,
 } from "../lib/tutor-audio";
 
@@ -52,7 +51,6 @@ export function usePdfTutor(
   const connecting = useRef(false);
   const openingMicrophone = useRef(false);
   const lastImage = useRef("");
-  const audioFormat = useRef<TutorAudioFormat>("pcm");
   // Student turns, and the turn the page image was last sent on (see sendView).
   const turnCount = useRef(0);
   const imageTurn = useRef(-Infinity);
@@ -85,7 +83,6 @@ export function usePdfTutor(
   }, []);
 
   const cancelTurn = useCallback((clearGuidance = true) => {
-    sessionRef.current?.interrupt();
     turn.current = null;
     groundedTurn.current = null;
     speakingInput.current = false;
@@ -191,9 +188,8 @@ export function usePdfTutor(
         trace("interrupted");
         setStatus(microphoneRef.current ? "listening" : "paused");
       }
-      if (server?.inputStarted && (!turn.current || !speakingInput.current)) beginTurn();
       if (server?.inputTranscription?.text) {
-        if (!turn.current) beginTurn();
+        if (!turn.current || !speakingInput.current) beginTurn();
         transcriptRef.current += server.inputTranscription.text;
         setInputTranscript(transcriptRef.current);
       }
@@ -346,9 +342,9 @@ export function usePdfTutor(
           if (contextRef.current) sendView(session, contextRef.current);
         }
         session.sendRealtimeInput({
-          audio: { data, mimeType: audioFormat.current === "pcmu" ? "audio/pcmu" : "audio/pcm;rate=24000" },
+          audio: { data, mimeType: TUTOR_INPUT_MIME_TYPE },
         });
-      }, isCurrent, audioFormat.current);
+      }, isCurrent);
     } finally {
       if (currentMicGeneration === micGeneration.current)
         openingMicrophone.current = false;
@@ -410,20 +406,19 @@ export function usePdfTutor(
       );
       let session: Session;
       try {
-        audioFormat.current = tutorAudioFormat(data.audioFormat);
         session = await connectTutorLive(data.token, data.model, {
             onmessage: (message) => {
               void onMessage(message, currentGeneration).catch(() =>
                 fail("Koneksi tutor terputus. Silakan sambungkan ulang."),
               );
             },
-            onerror: (message) =>
-              fail(message ?? "Koneksi tutor mengalami gangguan. Silakan coba lagi."),
+            onerror: () =>
+              fail("Koneksi tutor mengalami gangguan. Silakan coba lagi."),
             onclose: () =>
               fail(
                 "Sesi tutor telah berakhir. Sambungkan ulang untuk melanjutkan.",
               ),
-        }, audioFormat.current);
+        });
       } finally {
         clearTimeout(connectionTimeout);
       }

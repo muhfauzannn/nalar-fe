@@ -6,8 +6,7 @@ import { aiTutorApi } from "../api/ai-tutor";
 import {
   createTutorInputNode,
   decodeTutorAudio,
-  tutorAudioFormat,
-  type TutorAudioFormat,
+  TUTOR_INPUT_MIME_TYPE,
 } from "../lib/tutor-audio";
 import type {
   AiTutorChannel,
@@ -61,7 +60,6 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const outputSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlaybackTimeRef = useRef(0);
   const playbackEpochRef = useRef(0);
-  const audioFormatRef = useRef<TutorAudioFormat>("pcm");
 
   useEffect(() => {
     modeRef.current = mode;
@@ -248,7 +246,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const handleServerMessage = useCallback(
     (message: LiveServerMessage) => {
       if (message.toolCall) {
-        // The provider closes the function-call turn before starting the tutor's
+        // Gemini closes the function-call turn before starting the tutor's
         // answer turn. Do not finalize the conversation on that first
         // turnComplete or the reply identifiers are cleared before audio lands.
         toolTurnPendingRef.current = true;
@@ -343,7 +341,6 @@ export function useAiTutorLive(target: AiTutorTarget) {
         }
         conversationIdRef.current = sessionData.conversationId;
         modelRef.current = sessionData.model;
-        audioFormatRef.current = tutorAudioFormat(sessionData.audioFormat);
         setMessages(sessionData.messages);
         const session = await connectTutorLive(sessionData.token, sessionData.model, {
             onopen: () => mountedRef.current && setStatus("ready"),
@@ -351,11 +348,11 @@ export function useAiTutorLive(target: AiTutorTarget) {
               if (mountedRef.current && connectionGenerationRef.current === connectionGeneration)
                 handleServerMessage(message);
             },
-            onerror: (message) => {
+            onerror: () => {
               if (!mountedRef.current || connectionGenerationRef.current !== connectionGeneration) return;
               void disconnect().finally(() => {
                 if (!mountedRef.current) return;
-                setError(message ?? "Koneksi tutor mengalami gangguan. Coba sambungkan ulang.");
+                setError("Koneksi Live mengalami gangguan. Coba sambungkan ulang.");
                 setStatus("error");
               });
             },
@@ -367,7 +364,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
               setIsTutorSpeaking(false);
               setStatus("idle");
             },
-        }, audioFormatRef.current);
+        });
         if (
           !mountedRef.current ||
           connectionGenerationRef.current !== connectionGeneration
@@ -469,8 +466,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       });
       const context = new AudioContext();
       const source = context.createMediaStreamSource(stream);
-      const format = audioFormatRef.current;
-      const worklet = await createTutorInputNode(context, source, format);
+      const worklet = await createTutorInputNode(context, source);
       const sink = context.createGain();
       sink.gain.value = 0;
       worklet.connect(sink);
@@ -483,7 +479,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         let binary = "";
         for (const byte of bytes) binary += String.fromCharCode(byte);
         currentSession.sendRealtimeInput({
-          audio: { data: btoa(binary), mimeType: format === "pcmu" ? "audio/pcmu" : "audio/pcm;rate=24000" },
+          audio: { data: btoa(binary), mimeType: TUTOR_INPUT_MIME_TYPE },
         });
       };
       microphoneRef.current = { context, stream, source, worklet, sink };

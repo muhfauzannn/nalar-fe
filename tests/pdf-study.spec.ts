@@ -16,9 +16,8 @@ type Context = {
     height: number;
   }>;
 };
-async function setup(page: Page, options: { audioFormat?: string } = {}) {
+async function setup(page: Page) {
   const errors: string[] = [];
-  const sessionRequests: Record<string, unknown>[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
@@ -49,12 +48,10 @@ async function setup(page: Page, options: { audioFormat?: string } = {}) {
         headers,
       });
     const resourceId = route.request().postDataJSON().resourceId;
-    sessionRequests.push(route.request().postDataJSON());
     return route.fulfill({
       json: {
-        token: "ek_test",
-        model: "gpt-realtime-2.1",
-        ...(options.audioFormat ? { audioFormat: options.audioFormat } : {}),
+        token: "auth_tokens/test",
+        model: "gemini-3.8-live",
         resourceId,
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       },
@@ -65,48 +62,37 @@ async function setup(page: Page, options: { audioFormat?: string } = {}) {
   const responses = new Map<string, Record<string, any>>();
   let view: Context | undefined;
   let images = 0;
-  const sent: string[] = [];
   const appendedBytes: number[] = [];
-  await page.routeWebSocket(/api\.openai\.com\/v1\/realtime/, (ws) => {
+  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
     socket = ws;
-    ws.send(JSON.stringify({ type: "session.created", session: { model: "gpt-realtime-2.1" } }));
     ws.onMessage((raw) => {
       const data = JSON.parse(raw.toString());
-      sent.push(data.type);
-      if (data.type === "input_audio_buffer.append")
-        appendedBytes.push(Buffer.from(data.audio, "base64").length);
-      const item = data.item;
-      for (const part of item?.content ?? []) {
-        if (part.type === "input_text" && part.text?.startsWith("PDF_VIEW_STATE "))
-          view = JSON.parse(part.text.slice(15));
-        if (part.type === "input_image") images++;
+      if (data.setup) ws.send(JSON.stringify({ setupComplete: {} }));
+      for (const item of data.clientContent?.turns ?? []) {
+        const text = item.parts?.[0]?.text;
+        if (text?.startsWith("PDF_VIEW_STATE "))
+          view = JSON.parse(text.slice(15));
       }
-      if (item?.type === "function_call_output") responses.set(item.call_id, JSON.parse(item.output));
+      if (data.realtimeInput?.audio)
+        appendedBytes.push(Buffer.from(data.realtimeInput.audio.data, "base64").length);
+      if (
+        data.realtimeInput?.video ||
+        data.realtimeInput?.mediaChunks?.some(
+          (part: { mimeType: string }) => part.mimeType === "image/jpeg",
+        )
+      )
+        images++;
+      for (const response of data.toolResponse?.functionResponses ?? [])
+        responses.set(response.id, response.response);
     });
   });
   await page.goto("/tests/fixtures/pdf-study.html");
   await expect(
     page.getByRole("button", { name: "Mulai percakapan" }),
   ).toBeEnabled();
-  let responseNumber = 0;
-  const send = (value: any) => {
+  const send = (value: unknown) => {
     if (!socket) throw new Error("No socket");
-    const emit = (event: unknown) => socket!.send(JSON.stringify(event));
-    if (value.toolCall) {
-      emit({ type: "response.done", response: { id: `response-${++responseNumber}`, status: "completed",
-        output: value.toolCall.functionCalls.map((call: any) => ({ type: "function_call", call_id: call.id,
-          name: call.name, arguments: JSON.stringify(call.args) })) } });
-    }
-    if (value.toolCallCancellation || value.serverContent?.interrupted)
-      emit({ type: "input_audio_buffer.speech_started" });
-    if (value.serverContent?.inputTranscription)
-      emit({ type: "conversation.item.input_audio_transcription.completed", transcript: value.serverContent.inputTranscription.text });
-    if (value.serverContent?.outputTranscription)
-      emit({ type: "response.output_audio_transcript.delta", delta: value.serverContent.outputTranscription.text });
-    for (const part of value.serverContent?.modelTurn?.parts ?? [])
-      emit({ type: "response.output_audio.delta", delta: part.inlineData.data });
-    if (value.serverContent?.turnComplete)
-      emit({ type: "response.done", response: { id: `response-${++responseNumber}`, status: "completed", output: [] } });
+    socket.send(JSON.stringify(value));
   };
   const call = async (id: string, name: string, args = {}) => {
     send({ toolCall: { functionCalls: [{ id, name, args }] } });
@@ -149,8 +135,6 @@ async function setup(page: Page, options: { audioFormat?: string } = {}) {
     responses,
     getView: () => view,
     getImages: () => images,
-    getSent: () => sent,
-    sessionRequests,
     appendedBytes,
   };
 }
@@ -249,15 +233,14 @@ test("voice tools ground the response, show cursor, draw and reject an outdated 
   expect(mock.errors).toEqual([]);
 });
 
-test("G.711 sessions stream mu-law both ways and the same page image is not resent every turn", async ({
+test("the microphone streams 16 kHz PCM and the same page image is not resent every turn", async ({
   page,
 }) => {
-  const mock = await setup(page, { audioFormat: "pcmu" });
+  const mock = await setup(page);
   await mock.start();
-  expect(mock.sessionRequests.at(-1)).toMatchObject({ audioFormat: "pcmu" });
-  // 100 ms of 8 kHz mu-law per microphone chunk, instead of 4800 bytes of 24 kHz PCM.
+  // 100 ms of 16 kHz 16-bit mono per microphone chunk.
   await expect.poll(() => mock.appendedBytes.length).toBeGreaterThan(3);
-  expect(new Set(mock.appendedBytes)).toEqual(new Set([800]));
+  expect(new Set(mock.appendedBytes)).toEqual(new Set([3_200]));
   expect(mock.getImages()).toBe(1);
   const first = await mock.ground("read-1");
   expect(first.page).toBe(1);
@@ -266,7 +249,7 @@ test("G.711 sessions stream mu-law both ways and the same page image is not rese
   mock.send({
     serverContent: {
       outputTranscription: { text: "Pembilang itu bagian atas pecahan." },
-      modelTurn: { parts: [{ inlineData: { data: Buffer.alloc(8_000, 0xff).toString("base64"), mimeType: "audio/pcmu" } }] },
+      modelTurn: { parts: [{ inlineData: { data: Buffer.alloc(48_000).toString("base64"), mimeType: "audio/pcm;rate=24000" } }] },
       turnComplete: true,
     },
   });
@@ -311,13 +294,11 @@ test("turning the page while the tutor speaks keeps the answer going", async ({
   speak("Pembilang menunjukkan bagian yang dipilih, ");
   const transcript = page.getByLabel("Transkrip percakapan saat ini");
   await expect(transcript).toContainText("Pembilang menunjukkan");
-  const cancelsBefore = mock.getSent().filter((type) => type === "response.cancel").length;
 
   await page.getByRole("button", { name: "Halaman berikutnya" }).click();
   await expect(page.getByTestId("pdf-page-number")).toHaveText("2 / 2");
-  // The new page reaches the tutor, but nothing cancels its answer.
+  // The new page reaches the tutor, and the answer keeps playing.
   await expect.poll(() => mock.getView()?.page).toBe(2);
-  expect(mock.getSent().filter((type) => type === "response.cancel").length).toBe(cancelsBefore);
 
   speak("sedangkan penyebut menunjukkan banyak bagian seluruhnya.");
   await expect(transcript).toContainText("Pembilang menunjukkan bagian yang dipilih");
@@ -386,7 +367,7 @@ test("interruptions, cancelled tool calls and manual stop clear pending guidance
       )
     ).ok,
   ).toBe(false);
-  expect(mock.responses.get("cancelled-draw")?.ok).not.toBe(true);
+  expect(mock.responses.has("cancelled-draw")).toBe(false);
   await page.getByRole("button", { name: "Jeda mikrofon" }).click();
   await expect(
     page.getByRole("button", { name: "Lanjutkan mikrofon" }),
@@ -590,7 +571,7 @@ test("cancelling a visual tool during its render frame removes the uncommitted i
   mock.send({ toolCallCancellation: { ids: ["pending-ink"] } });
   await expect(page.getByTestId("tutor-highlight")).toHaveCount(0);
   await page.clock.runFor(100);
-  expect(mock.responses.get("pending-ink")?.ok).toBe(false);
+  expect(mock.responses.has("pending-ink")).toBe(false);
   await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
   expect(mock.errors).toEqual([]);
 });
