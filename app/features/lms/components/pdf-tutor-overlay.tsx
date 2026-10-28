@@ -62,7 +62,7 @@ export function PdfTutorOverlay({
         angle,
       )
     : null;
-  const selected = selection ? rotateRect(selection, angle) : null;
+  const selected = selection ? (selection.rects ?? [selection]).map((rect) => rotateRect(rect, angle)) : [];
 
   useLayoutEffect(() => {
     const host = root.current;
@@ -171,6 +171,7 @@ export function PdfTutorOverlay({
         return;
       }
       const writing = plan.strokes[index].writing;
+      const selecting = plan.strokes[index].kind === "highlight";
       const start = path.getPointAtLength(length * initial);
       if (previousTip) {
         const travel = { x: previousTip.x, y: previousTip.y };
@@ -182,7 +183,8 @@ export function PdfTutorOverlay({
             duration: Math.max(0.035, Math.min(0.16, distance / 1400)),
             ease: "power1.inOut",
             onStart: () => {
-              pen.style.visibility = "visible";
+              host.dataset.pointerMode = selecting ? "selecting" : "ink";
+              pen.style.visibility = selecting ? "hidden" : "visible";
               pen.dataset.penDown = "false";
             },
             onUpdate: () => placePen(travel, true),
@@ -203,7 +205,8 @@ export function PdfTutorOverlay({
           ease: writing ? "sine.inOut" : "none",
           onStart: () => {
             path.style.visibility = "visible";
-            pen.style.visibility = "visible";
+            host.dataset.pointerMode = selecting ? "selecting" : "ink";
+            pen.style.visibility = selecting ? "hidden" : "visible";
             pen.dataset.penDown = "true";
             movePen(path, length, initial);
           },
@@ -246,13 +249,14 @@ export function PdfTutorOverlay({
         aria-label="Anotasi tutor"
         role="img"
       >
-        {selected ? (
+        {selected.map((rect, index) => (
           <rect
+            key={index}
             data-testid="pdf-selection"
-            x={selected.x * size.width}
-            y={selected.y * size.height}
-            width={Math.max(5, selected.width * size.width)}
-            height={Math.max(5, selected.height * size.height)}
+            x={rect.x * size.width}
+            y={rect.y * size.height}
+            width={Math.max(5, rect.width * size.width)}
+            height={Math.max(5, rect.height * size.height)}
             fill="var(--secondary)"
             fillOpacity="0.12"
             stroke="var(--pdf-tutor-ink)"
@@ -260,7 +264,7 @@ export function PdfTutorOverlay({
             strokeDasharray="5 3"
             rx="3"
           />
-        ) : null}
+        ))}
         <g transform={matrix}>
           <g
             ref={drawing}
@@ -295,6 +299,7 @@ export function PdfTutorOverlay({
                             ? "tutor-rectangle"
                             : undefined
                       }
+                      strokeLinecap={stroke.kind === "highlight" ? "butt" : "round"}
                       strokeWidth={stroke.width}
                       strokeOpacity={stroke.opacity}
                       stroke={

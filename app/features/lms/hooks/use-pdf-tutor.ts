@@ -80,6 +80,12 @@ export function usePdfTutor(
   const imageTurn = useRef(-Infinity);
   const mounted = useRef(false);
   const playing = useRef(false);
+  // A response spans tool turns, generation and playback. Audio gaps are not completion.
+  const responding = useRef(false);
+  const toolContinuation = useRef(false);
+  const replacingTurn = useRef(false);
+  const toolQueue = useRef<Promise<void>>(Promise.resolve());
+  const responseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const turn = useRef<{ id: string; revision: number } | null>(null);
   const groundedTurn = useRef<string | null>(null);
   const speechFrames = useRef(0);
@@ -121,6 +127,10 @@ export function usePdfTutor(
   }, []);
 
   const cancelTurn = useCallback((clearGuidance = true) => {
+    responding.current = false;
+    toolContinuation.current = false;
+    replacingTurn.current = false;
+    if (responseTimer.current) clearTimeout(responseTimer.current);
     turn.current = null;
     groundedTurn.current = null;
     speakingInput.current = false;
@@ -155,6 +165,18 @@ export function usePdfTutor(
     if (lines.length) setMessages((current) => [...current, ...lines]);
   }, []);
 
+  const markProgress = useCallback(() => {
+    if (responseTimer.current) clearTimeout(responseTimer.current);
+    responseTimer.current = setTimeout(() => {
+      if (!mounted.current || !responding.current) return;
+      commitTurn();
+      cancelTurn(false);
+      setError("Tutor belum menyelesaikan respons. Kirim ulang pertanyaan atau sambungkan ulang sesi.");
+      setStatus(microphoneRef.current ? "listening" : "paused");
+      trace("response-timeout");
+    }, 45_000);
+  }, [cancelTurn, commitTurn, trace]);
+
   const disconnect = useCallback(async () => {
     generation.current++;
     micGeneration.current++;
@@ -188,6 +210,9 @@ export function usePdfTutor(
   const beginTurn = useCallback(() => {
     commitTurn();
     audioRef.current?.stop();
+    responding.current = true;
+    toolContinuation.current = false;
+    markProgress();
     // While the next page loads there is no view yet; get_pdf_context grounds the turn later.
     turn.current = { id: crypto.randomUUID(), revision: contextRef.current?.revision ?? -1 };
     turnCount.current++;
@@ -202,15 +227,15 @@ export function usePdfTutor(
     setGuidance(null);
     setStatus("thinking");
     trace("student-turn");
-  }, [commitTurn, trace]);
+  }, [commitTurn, markProgress, trace]);
 
   const sendView = useCallback(
-    (session: Session, view: PdfViewContext, forceImage = false) => {
+    (session: Session, view: PdfViewContext, forceImage = false, publishState = true) => {
       const { blocks: _blocks, ...state } = contextForModel(
         view,
         turn.current?.id ?? "waiting-for-student",
       );
-      session.sendClientContent({
+      if (publishState) session.sendClientContent({
         turns: [
           {
             role: "user",
@@ -253,13 +278,16 @@ export function usePdfTutor(
   }, [trace]);
 
   const onMessage = useCallback(
-    async (message: LiveServerMessage, sessionGeneration: number) => {
+    async (message: LiveServerMessage, sessionGeneration: number, requestedTurnId: string | null = turn.current?.id ?? null) => {
       if (!mounted.current || generation.current !== sessionGeneration) return;
       const session = sessionRef.current;
       if (!session) return;
       for (const id of message.toolCallCancellation?.ids ?? []) {
         cancelledCalls.current.add(id);
-        if (pendingGuidanceCall.current === id) cancelTurn();
+        if (pendingGuidanceCall.current === id) {
+          cancelTurn();
+          setStatus(microphoneRef.current ? "listening" : "paused");
+        }
       }
       // Keep cancellation memory bounded over long sessions.
       if (cancelledCalls.current.size > 200)
@@ -267,7 +295,12 @@ export function usePdfTutor(
           [...cancelledCalls.current].slice(-100),
         );
       const server = message.serverContent;
-      if (server?.interrupted) {
+      if (server?.interrupted && replacingTurn.current) {
+        // clientContent(turnComplete=true) interrupted the previous answer, not the
+        // new typed question that already owns turn.current.
+        replacingTurn.current = false;
+        return;
+      } else if (server?.interrupted) {
         commitTurn();
         cancelTurn();
         trace("interrupted");
@@ -275,16 +308,26 @@ export function usePdfTutor(
       }
       if (server?.inputTranscription?.text) {
         if (!turn.current || !speakingInput.current) beginTurn();
+        requestedTurnId = turn.current?.id ?? null;
+        markProgress();
         transcriptRef.current += server.inputTranscription.text;
         setInputTranscript(transcriptRef.current);
       }
-      for (const call of message.toolCall?.functionCalls ?? []) {
+      const calls = message.toolCall?.functionCalls ?? [];
+      const functionResponses = [];
+      if (calls.length && turn.current && turn.current.id === requestedTurnId) {
+        responding.current = true;
+        toolContinuation.current = true;
+        markProgress();
+        setStatus(playing.current ? "speaking" : "thinking");
+      }
+      for (const call of calls) {
         if (!call.id || cancelledCalls.current.has(call.id)) continue;
         let response: Record<string, unknown>;
         try {
           const view = contextRef.current;
           const active = turn.current;
-          if (!active) throw new Error("Tunggu pertanyaan baru siswa.");
+          if (!active || active.id !== requestedTurnId) throw new Error("Tunggu pertanyaan baru siswa.");
           if (!view)
             throw new Error("Halaman PDF sedang dimuat. Coba lagi sebentar.");
           if (call.name === "get_pdf_context") {
@@ -293,7 +336,9 @@ export function usePdfTutor(
             // A changed page is resent by sendView itself. The same page is resent only every few
             // turns, in case conversation truncation dropped it: one image is up to ~200 KB of
             // uplink, seconds on a slow phone connection, before the tutor can answer.
-            sendView(session, view, turnCount.current - imageTurn.current >= 3);
+            // Return context as the tool response, without appending a second user
+            // message in the middle of a blocking function call.
+            sendView(session, view, turnCount.current - imageTurn.current >= 3, false);
             groundedTurn.current = active.id;
             response = contextForModel(view, active.id);
             trace("context-read");
@@ -356,21 +401,24 @@ export function usePdfTutor(
           generation.current === sessionGeneration &&
           !cancelledCalls.current.has(call.id)
         ) {
-          session.sendToolResponse({
-            functionResponses: [{ id: call.id, name: call.name, response }],
-          });
+          functionResponses.push({ id: call.id, name: call.name, response });
         }
       }
       if (generation.current !== sessionGeneration) return;
+      const validResponses = functionResponses.filter((response) => !cancelledCalls.current.has(response.id));
+      if (validResponses.length) session.sendToolResponse({ functionResponses: validResponses });
       const active = turn.current;
       // Not tied to the view revision: turning the page must not mute an answer in progress.
       const canRespond = active && groundedTurn.current === active.id;
       if (canRespond) {
-        if (
-          server?.outputTranscription?.text ||
-          server?.modelTurn?.parts?.length
-        )
+        const hasOutput = !!server?.outputTranscription?.text ||
+          !!server?.modelTurn?.parts?.some((part) => !part.thought && (part.text || part.inlineData));
+        if (hasOutput) {
+          replacingTurn.current = false;
           speakingInput.current = false;
+          toolContinuation.current = false;
+          markProgress();
+        }
         if (server?.outputTranscription?.text) {
           outputRef.current += server.outputTranscription.text;
           setOutputTranscript(outputRef.current);
@@ -390,12 +438,25 @@ export function usePdfTutor(
           }
         }
       }
-      if (server?.turnComplete) commitTurn();
-      if (server?.turnComplete && !message.toolCall && !playing.current) {
+      const reason = server?.turnCompleteReason;
+      if (server?.turnComplete && reason && reason !== "TURN_COMPLETE_REASON_UNSPECIFIED" && reason !== "NEED_MORE_INPUT") {
+        commitTurn();
+        cancelTurn(false);
+        setError("Tutor belum berhasil menyelesaikan tindakan. Coba minta satu langkah singkat atau kirim ulang pertanyaan.");
         setStatus(microphoneRef.current ? "listening" : "paused");
+        trace("response-rejected");
+        return;
+      }
+      // A function-call boundary can arrive in its own frame while its async tool is
+      // still rendering. Only the answer boundary completes the student's response.
+      if (server?.turnComplete && !message.toolCall && !toolContinuation.current) {
+        responding.current = false;
+        if (responseTimer.current) clearTimeout(responseTimer.current);
+        commitTurn();
+        if (!playing.current) setStatus(microphoneRef.current ? "listening" : "paused");
       }
     },
-    [beginTurn, cancelTurn, commitTurn, sendView, trace],
+    [beginTurn, cancelTurn, commitTurn, markProgress, sendView, trace],
   );
 
   const startMicrophone = useCallback(async () => {
@@ -446,7 +507,7 @@ export function usePdfTutor(
       voiceRef.current = true;
       setVoice(true);
     }
-    setStatus(playing.current ? "speaking" : "listening");
+    setStatus(playing.current ? "speaking" : responding.current ? "thinking" : "listening");
   }, [beginTurn, sendView]);
 
   // The timer of a scheduled retry fired. The page may have been swapped out meanwhile.
@@ -500,9 +561,19 @@ export function usePdfTutor(
       return {
         onmessage: (message: LiveServerMessage) => {
           if (stale()) return;
-          void onMessage(message, gen).catch(() =>
-            failHard("Koneksi tutor terputus. Silakan sambungkan ulang."),
-          );
+          const requestedTurnId = turn.current?.id ?? null;
+          const run = () => {
+            if (stale()) return Promise.resolve();
+            return onMessage(message, gen, requestedTurnId).catch(() =>
+              failHard("Koneksi tutor terputus. Silakan sambungkan ulang."),
+            );
+          };
+          if (message.toolCall?.functionCalls?.length) {
+            if (turn.current && message.toolCall.functionCalls.some((call) => call.id && !cancelledCalls.current.has(call.id)))
+              toolContinuation.current = true;
+            // Serialize mutations only. Cancellation and interruption must stay immediate.
+            toolQueue.current = toolQueue.current.then(run);
+          } else void run();
         },
         onerror: lost,
         onclose: lost,
@@ -582,9 +653,11 @@ export function usePdfTutor(
         setStatus(
           isPlaying
             ? "speaking"
-            : microphoneRef.current
-              ? "listening"
-              : "paused",
+            : responding.current
+              ? "thinking"
+              : microphoneRef.current
+                ? "listening"
+                : "paused",
         );
         if (isPlaying) trace("audio-playing");
       });
@@ -706,17 +779,28 @@ export function usePdfTutor(
         return true;
       }
       setError(null);
+      replacingTurn.current = responding.current;
       beginTurn();
       // Not speech: a sound on the microphone must start a new turn, not extend this one.
       speakingInput.current = false;
       transcriptRef.current = content;
       commitTurn();
-      sendView(session, view);
-      session.sendRealtimeInput({ text: content });
-      trace("text-sent");
-      return true;
+      try {
+        sendView(session, view);
+        session.sendClientContent({
+          turns: [{ role: "user", parts: [{ text: content }] }],
+          turnComplete: true,
+        });
+        trace("text-sent");
+        return true;
+      } catch {
+        cancelTurn(false);
+        setError("Pesan belum dapat dikirim. Sambungkan ulang tutor lalu coba lagi.");
+        setStatus("error");
+        return false;
+      }
     },
-    [begin, beginTurn, commitTurn, sendView, trace],
+    [begin, beginTurn, cancelTurn, commitTurn, sendView, trace],
   );
   sendRef.current = send;
 
@@ -748,7 +832,7 @@ export function usePdfTutor(
       sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true });
       setListening(false);
       inputLevel.current = 0;
-      setStatus(playing.current ? "speaking" : "paused");
+      setStatus(playing.current ? "speaking" : responding.current ? "thinking" : "paused");
       await mic.stop();
     } else {
       try {

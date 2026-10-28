@@ -2,7 +2,7 @@
 export type PdfPoint = { x: number; y: number };
 export type PdfRect = PdfPoint & { width: number; height: number };
 export type PdfBlock = PdfRect & { id: string; text: string };
-export type PdfSelection = PdfRect & { text: string };
+export type PdfSelection = PdfRect & { text: string; rects?: PdfRect[] };
 export type PdfViewContext = {
   resourceId: string;
   fingerprint: string;
@@ -14,12 +14,15 @@ export type PdfViewContext = {
   blocks: PdfBlock[];
   /** A clean image without the annotation layer, in the original orientation. */
   image: string;
+  /** Local DOM measurement; never serialized to the provider. */
+  resolveTextRange?: (blockId: string, start: number, end: number) => PdfRect[];
 };
 export type PdfAction = PdfRect & {
   kind:
     "point" | "highlight" | "arrow" | "rectangle" | "ellipse" | "text" | "path";
   text?: string;
   points?: PdfPoint[];
+  rects?: PdfRect[];
 };
 export type PdfGuidance = {
   resourceId: string;
@@ -121,6 +124,19 @@ export function parsePdfGuidance(
         : context.blocks.find((b) => b.id === value.blockId);
     if (value.blockId !== undefined && !block)
       throw new Error("Block tidak ditemukan pada halaman ini.");
+    let rects: PdfRect[] | undefined;
+    if (value.startOffset !== undefined || value.endOffset !== undefined || value.quote !== undefined) {
+      if (!block || kind !== "highlight") throw new Error("Rentang teks memerlukan highlight dan blockId.");
+      const start = value.quote !== undefined && typeof value.quote === "string"
+        ? block.text.indexOf(value.quote) : value.startOffset;
+      const end = typeof value.quote === "string" && typeof start === "number"
+        ? start + value.quote.length : value.endOffset;
+      if (typeof start !== "number" || typeof end !== "number" ||
+          !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > block.text.length)
+        throw new Error("Rentang teks tidak valid. Gunakan quote persis dari block atau offset 0-based.");
+      rects = context.resolveTextRange?.(block.id, start, end);
+      if (!rects?.length) throw new Error("Rentang teks belum tersedia. Gunakan blockId tanpa offset.");
+    }
     let points: PdfPoint[] | undefined;
     if (kind === "path" || (kind === "arrow" && value.points !== undefined)) {
       if (
@@ -147,7 +163,13 @@ export function parsePdfGuidance(
             Math.min(...points.map((p) => p.y)),
         }
       : null;
-    const rect = pathBox ??
+    const rangeBox = rects ? {
+      x: Math.min(...rects.map((r) => r.x)),
+      y: Math.min(...rects.map((r) => r.y)),
+      width: Math.max(...rects.map((r) => r.x + r.width)) - Math.min(...rects.map((r) => r.x)),
+      height: Math.max(...rects.map((r) => r.y + r.height)) - Math.min(...rects.map((r) => r.y)),
+    } : null;
+    const rect = rangeBox ?? pathBox ??
       block ?? {
         x: value.x,
         y: value.y,
@@ -206,6 +228,7 @@ export function parsePdfGuidance(
       height: box.height,
       ...(kind === "text" ? { text: value.text as string } : {}),
       ...(points ? { points } : {}),
+      ...(rects ? { rects } : {}),
     };
   });
   return {
@@ -219,7 +242,7 @@ export function parsePdfGuidance(
 }
 
 export function contextForModel(context: PdfViewContext, turnId: string) {
-  const { image: _image, ...view } = context;
+  const { image: _image, resolveTextRange: _resolve, ...view } = context;
   return {
     ...view,
     turnId,

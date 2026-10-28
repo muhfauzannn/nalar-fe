@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   parsePdfGuidance,
+  contextForModel,
   rotatePoint,
   rotateRect,
   type PdfViewContext,
@@ -118,4 +119,33 @@ test("drawing supports free paths, horizontal arrows and arrows in either direct
   expect(parsed.actions[0].points).toHaveLength(3);
   expect(parsed.actions[1].height).toBe(0);
   expect(parsed.actions[2].points?.[0]).toEqual({ x: 0.4, y: 0.3 });
+});
+
+
+test("partial highlights use measured glyph geometry and do not serialize the DOM resolver", () => {
+  const rect = { x: 0.12, y: 0.2, width: 0.06, height: 0.05 };
+  const view: PdfViewContext = { ...context, resolveTextRange: (id, start, end) => {
+    expect(id).toBe("p2-b1");
+    expect(start).toBe(0);
+    expect(end).toBe(4);
+    return [rect];
+  } };
+  for (const range of [{ quote: "Satu" }, { startOffset: 0, endOffset: 4 }]) {
+    const result = parsePdfGuidance({ ...payload(), actions: [
+      { kind: "highlight", blockId: "p2-b1", ...range },
+    ] }, view, "turn-1");
+    expect(result.actions[0].rects).toEqual([rect]);
+    expect(result.actions[0].width).toBeCloseTo(rect.width);
+  }
+  expect(contextForModel(view, "turn-1")).not.toHaveProperty("resolveTextRange");
+});
+
+test("invalid text ranges are rejected before any guidance is applied", () => {
+  for (const range of [{ quote: "tidak ada" }, { quote: "" },
+    { startOffset: -1, endOffset: 4 }, { startOffset: 3, endOffset: 2 },
+    { startOffset: 0, endOffset: 100 }, { startOffset: 0.5, endOffset: 4 }]) {
+    expect(() => parsePdfGuidance({ ...payload(), actions: [
+      { kind: "highlight", blockId: "p2-b1", ...range },
+    ] }, context, "turn-1")).toThrow(/Rentang/);
+  }
 });

@@ -29,6 +29,7 @@ type Evidence = {
   blocks: PdfBlock[];
   image: string;
   totalPages: number;
+  resolveTextRange?: PdfViewContext["resolveTextRange"];
 };
 type Props = {
   resourceId: string;
@@ -217,7 +218,29 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
       });
       await imageRender.promise;
       if (disposed) return;
+      // PDF.js exposes one text div per text item, including empty items.
+      const textItems = content.items.filter((item) => "str" in item);
+      const resolveTextRange = (blockId: string, start: number, end: number) => {
+        const item = content.items[Number(blockId.split("-b")[1])];
+        const index = textItems.indexOf(item as typeof textItems[number]);
+        const span = textLayer?.textDivs[index];
+        const host = pageHost.current;
+        if (!span?.firstChild || !host || !span.isConnected) return [];
+        const range = document.createRange();
+        range.setStart(span.firstChild, start);
+        range.setEnd(span.firstChild, end);
+        const pageRect = host.getBoundingClientRect();
+        return [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map((r) =>
+          rotateRect({
+            x: clampUnit((r.left - pageRect.left) / pageRect.width),
+            y: clampUnit((r.top - pageRect.top) / pageRect.height),
+            width: clampUnit(r.width / pageRect.width),
+            height: clampUnit(r.height / pageRect.height),
+          }, -angle),
+        );
+      };
       setEvidence({
+        resolveTextRange,
         fingerprint: pdf.fingerprints[0] ?? resourceId,
         blocks: blocks.slice(0, 600),
         image: imageCanvas.toDataURL("image/jpeg", 0.75).split(",")[1],
@@ -305,34 +328,49 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
     onContext(null);
   }, [onContext]);
 
+  const readSelection = useCallback(() => {
+    const host = pageHost.current;
+    const selected = window.getSelection();
+    if (!host || loading || !selected?.rangeCount || selected.isCollapsed ||
+        !host.contains(selected.anchorNode) || !host.contains(selected.focusNode)) return false;
+    const text = selected.toString().trim().slice(0, 1500);
+    if (!text) return false;
+    const pageRect = host.getBoundingClientRect();
+    const range = selected.getRangeAt(0);
+    const normalized = (r: DOMRect): PdfRect => rotateRect({
+      x: clampUnit((r.left - pageRect.left) / pageRect.width),
+      y: clampUnit((r.top - pageRect.top) / pageRect.height),
+      width: clampUnit(r.width / pageRect.width),
+      height: clampUnit(r.height / pageRect.height),
+    }, -effectiveRotation);
+    const next = {
+      text,
+      ...normalized(range.getBoundingClientRect()),
+      rects: [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map(normalized),
+    };
+    setSelection((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+    return true;
+  }, [effectiveRotation, loading]);
+
+  useEffect(() => {
+    let frame = 0;
+    const changed = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => { readSelection(); });
+    };
+    document.addEventListener("selectionchange", changed);
+    return () => {
+      document.removeEventListener("selectionchange", changed);
+      cancelAnimationFrame(frame);
+    };
+  }, [readSelection]);
+
   const selectAt = useCallback(
     (event: React.MouseEvent | React.TouchEvent) => {
       const host = pageHost.current;
       if (!host || !currentEvidence.current || loading) return;
+      if (readSelection()) return;
       const rect = host.getBoundingClientRect();
-      const selected = window.getSelection();
-      const text = selected?.toString().trim().slice(0, 1500) ?? "";
-      if (
-        text &&
-        selected?.rangeCount &&
-        host.contains(selected.anchorNode) &&
-        host.contains(selected.focusNode)
-      ) {
-        const range = selected.getRangeAt(0).getBoundingClientRect();
-        setSelection({
-          text,
-          ...rotateRect(
-            {
-              x: clampUnit((range.left - rect.left) / rect.width),
-              y: clampUnit((range.top - rect.top) / rect.height),
-              width: clampUnit(range.width / rect.width),
-              height: clampUnit(range.height / rect.height),
-            },
-            -effectiveRotation,
-          ),
-        });
-        return;
-      }
       const client =
         "changedTouches" in event ? event.changedTouches[0] : event;
       if (!client) return;
@@ -363,7 +401,7 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
             },
       );
     },
-    [effectiveRotation, loading],
+    [effectiveRotation, loading, readSelection],
   );
 
   const changePage = (next: number) => {

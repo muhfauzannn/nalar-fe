@@ -80,6 +80,10 @@ async function setup(page: Page) {
         if (text?.startsWith("PDF_VIEW_STATE "))
           view = JSON.parse(text.slice(15));
         if (text?.startsWith("CONVERSATION_HISTORY")) order.push(`history:${text}`);
+        if (data.clientContent.turnComplete && text) {
+          texts.push(text);
+          order.push(`text:${text}`);
+        }
       }
       if (data.realtimeInput?.text) {
         texts.push(data.realtimeInput.text);
@@ -675,4 +679,67 @@ test("cancelling a visual tool during its render frame removes the uncommitted i
   expect(mock.responses.has("pending-ink")).toBe(false);
   await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
   expect(mock.errors).toEqual([]);
+});
+
+
+test("writing stays busy across separate tool boundaries, then accepts the answer", async ({ page }) => {
+  const mock = await setup(page);
+  await page.getByRole("textbox", { name: "Pesan untuk tutor" }).fill("Tulis rumus luas");
+  await page.getByRole("textbox", { name: "Pesan untuk tutor" }).press("Enter");
+  await expect.poll(() => mock.texts).toEqual(["Tulis rumus luas"]);
+  const context = await mock.call("write-context", "get_pdf_context") as Context;
+  mock.send({ serverContent: { turnComplete: true } });
+  await expect(page.getByText("Berpikir…", { exact: true })).toBeVisible();
+  expect((await mock.call("write-note", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "text", x: 0.1, y: 0.25, text: "L = p × l" },
+  ]))).ok).toBe(true);
+  mock.send({ serverContent: { turnComplete: true } });
+  await expect(page.getByText("Berpikir…", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("tutor-note")).toBeVisible();
+  mock.send({ serverContent: { outputTranscription: { text: "Rumusnya sudah kutulis." }, turnComplete: true } });
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="tutor"]')).toHaveText("Rumusnya sudah kutulis.");
+  await expect(page.getByText("Berpikir…", { exact: true })).toHaveCount(0);
+  expect(mock.errors).toEqual([]);
+});
+
+test("drag selects part of a line before release, and AI can highlight the exact quote", async ({ page }) => {
+  const mock = await setup(page);
+  const line = page.locator(".pdf-study-text-layer span").filter({ hasText: "Pembilang" }).first();
+  const box = (await line.boundingBox())!;
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2, { steps: 12 });
+  await expect(page.getByText(/^Dipilih:/)).toBeVisible();
+  const selected = await page.evaluate(() => window.getSelection()?.toString());
+  expect(selected?.length).toBeGreaterThan(1);
+  expect(selected!.length).toBeLessThan((await line.textContent())!.length);
+  await page.mouse.up();
+  await mock.start();
+  const context = await mock.ground("partial-context");
+  const block = context.blocks.find((b) => b.text.includes("Pembilang"))!;
+  expect((await mock.call("partial-highlight", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "highlight", blockId: block.id, quote: "Pembilang" },
+  ]))).ok).toBe(true);
+  const highlight = page.getByTestId("tutor-highlight");
+  await expect(highlight).toBeAttached();
+  const length = await highlight.evaluate((path: SVGPathElement) => path.getTotalLength());
+  expect(length).toBeLessThan(block.width * 1000 * 0.7);
+  expect(mock.errors).toEqual([]);
+});
+
+test("an unanswered tool continuation times out visibly and the student can ask again", async ({ page }) => {
+  await page.clock.install();
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Tulis rumus");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  await mock.call("timeout-context", "get_pdf_context");
+  mock.send({ serverContent: { turnComplete: true } });
+  await page.clock.fastForward(46_000);
+  await expect(page.getByText(/Tutor belum menyelesaikan respons/)).toBeVisible();
+  await composer.fill("Coba lagi");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(2);
+  expect((await mock.call("retry-context", "get_pdf_context")).turnId).toBeTruthy();
 });

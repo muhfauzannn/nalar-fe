@@ -200,14 +200,14 @@ export function buildInkPlan(
         action.kind,
       );
     }
-    if (action.kind === "highlight")
-      add(
-        `M${p(x, y + h / 2)} Q${p(x + w / 2, y + h / 2 - Math.min(2, h * 0.08))} ${p(x + w, y + h / 2)}`,
-        index,
-        action.kind,
-        Math.max(h + 3, 5),
-        0.3,
-      );
+    if (action.kind === "highlight") {
+      for (const rect of action.rects ?? [action]) {
+        const x = rect.x * 1000, y = rect.y * pageHeight;
+        const w = rect.width * 1000, h = rect.height * pageHeight;
+        add(`M${p(x, y + h / 2)} L${p(x + w, y + h / 2)}`,
+          index, action.kind, Math.max(h, 3), 0.3);
+      }
+    }
     if (action.kind === "arrow") {
       const a = at(action.points?.[0] ?? action);
       const b = at(

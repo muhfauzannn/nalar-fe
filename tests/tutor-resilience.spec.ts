@@ -121,7 +121,8 @@ async function advance(page: Page, ms: number, step = 4_000) {
   }
 }
 
-const sentText = (messages: any[], text: string) => messages.some((message) => message.realtimeInput?.text === text);
+const sentText = (messages: any[], text: string) => messages.some((message) => message.realtimeInput?.text === text ||
+  (message.clientContent?.turnComplete && message.clientContent.turns?.some((turn: any) => turn.parts?.some((part: any) => part.text === text))));
 
 test.describe("PDF tutor", () => {
   test("a refused session is retried on its own and the student is told why", async ({ page }) => {

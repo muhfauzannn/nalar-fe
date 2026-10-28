@@ -12,8 +12,9 @@ belajar terlihat, agar dapat dipakai sambil membaca.
 Berlaku untuk tutor PDF dan tutor kuis/tugas (`tutor-conversation.tsx`).
 
 - Kolom tulis selalu tersedia, juga saat mikrofon menyala. Pertanyaan yang diketik
-  dikirim sebagai `realtimeInput.text` ke sesi Live yang sama; mengetik tidak menutup
-  mikrofon.
+  dikirim ke sesi Live yang sama; mengetik tidak menutup mikrofon. Tutor PDF memakai
+  `clientContent` dengan `turnComplete: true` agar pertanyaan ketikan memiliki batas
+  giliran eksplisit; tutor kuis/tugas memakai `realtimeInput.text`.
 - Pertanyaan pertama yang diketik membuka sesi tanpa mikrofon. Jawabannya tampil
   sebagai teks saja; audio dari model tidak diputar. Tombol suara di kolom tulis
   membuka mikrofon pada sesi yang sama, dan sejak itu jawaban juga diucapkan.
@@ -52,10 +53,26 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
   600 block/24.000 karakter; gambar melengkapi teks yang tidak tersedia.
 - Viewport berasal dari irisan halaman, area scroll, dan jendela browser. Ini bukan
   pelacakan mata. Rujukan ambigu tanpa pilihan harus diklarifikasi oleh tutor.
+- Status respons dipisahkan dari playback audio. Jeda audio dan `turnComplete` milik
+  pemanggilan tool tidak menyelesaikan respons siswa. Tool diproses berurutan dan
+  hasil dalam satu pesan dibalas sebagai satu batch; pembatalan tetap diproses segera.
+  Tidak ada kemajuan selama 45 detik memunculkan pesan pemulihan dan membatalkan
+  giliran lokal agar respons terlambat tidak menimpa halaman. Kegagalan pembuatan
+  function call dari provider juga ditampilkan, bukan kembali diam tanpa jawaban.
+- Seleksi teks mengikuti `selectionchange` dengan satu pembaruan per frame; drag,
+  pemilihan mundur, seleksi kata, dan keyboard tetap memakai perilaku native browser.
+  Sorotan disimpan per rect baris sehingga pilihan beberapa baris tidak menutup
+  celah antarteks. AI dapat memakai `quote` atau `startOffset`/`endOffset` pada
+  `blockId` untuk menyorot sebagian teks. Posisi karakter diukur memakai DOM Range,
+  bukan perkiraan lebar huruf; resolver DOM tidak dikirim ke provider.
 - `get_pdf_context` wajib sebelum menjawab. `present_pdf_guidance` harus membawa
   `resourceId`, `page`, `revision`, dan `turnId` terbaru. Gunakan `blockId` untuk teks;
   geometri memakai koordinat 0..1 pada halaman asli tanpa rotasi. Untuk garis bebas
   gunakan `points`; panah juga mendukung dua titik untuk arah mana pun.
+- Konteks dari `get_pdf_context` dibalas melalui tool response; pembacaan ini tidak
+  menambahkan pesan user baru saat tool masih berjalan. Anggaran keluaran 4096 token
+  memberi ruang untuk parameter tindakan sekaligus jawaban; tulisan tetap maksimal
+  100 karakter per tindakan, delapan tindakan per batch.
 - Seluruh batch tindakan divalidasi sebelum dipasang. Tidak ada eksekusi kode model,
   pengambilalihan mouse sistem, atau navigasi/scroll otomatis. PDF tidak dimodifikasi.
 - Aplikasi mengakui tindakan setelah satu frame render (batas tunggu 80 ms), lalu

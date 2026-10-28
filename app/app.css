@@ -373,6 +373,7 @@
   cursor: text;
   transform-origin: 0 0;
   user-select: text;
+  -webkit-user-select: text;
 }
 .pdf-study-text-layer > :not(.markedContent),
 .pdf-study-text-layer .markedContent span:not(.markedContent) {
@@ -388,6 +389,6 @@
 /* Annotations live on the white PDF page in either app theme. */
 .pdf-tutor-overlay { --pdf-tutor-ink: var(--brand-lavender-foreground); }
 
-.pdf-tutor-overlay[data-ink-state="drawing"] [data-tutor-pointer] {
+.pdf-tutor-overlay[data-ink-state="drawing"][data-pointer-mode="ink"] [data-tutor-pointer] {
   visibility: hidden;
 }
