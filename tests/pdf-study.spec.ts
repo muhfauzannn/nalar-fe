@@ -63,8 +63,15 @@ async function setup(page: Page) {
   let view: Context | undefined;
   let images = 0;
   const appendedBytes: number[] = [];
+  const texts: string[] = [];
+  // What reached the tutor, in order: "history:…" or "text:…", and how many sockets opened/closed.
+  const order: string[] = [];
+  let sockets = 0;
+  let closed = 0;
   await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
     socket = ws;
+    sockets++;
+    ws.onClose(() => closed++);
     ws.onMessage((raw) => {
       const data = JSON.parse(raw.toString());
       if (data.setup) ws.send(JSON.stringify({ setupComplete: {} }));
@@ -72,6 +79,11 @@ async function setup(page: Page) {
         const text = item.parts?.[0]?.text;
         if (text?.startsWith("PDF_VIEW_STATE "))
           view = JSON.parse(text.slice(15));
+        if (text?.startsWith("CONVERSATION_HISTORY")) order.push(`history:${text}`);
+      }
+      if (data.realtimeInput?.text) {
+        texts.push(data.realtimeInput.text);
+        order.push(`text:${data.realtimeInput.text}`);
       }
       if (data.realtimeInput?.audio)
         appendedBytes.push(Buffer.from(data.realtimeInput.audio.data, "base64").length);
@@ -136,8 +148,97 @@ async function setup(page: Page) {
     getView: () => view,
     getImages: () => images,
     appendedBytes,
+    texts,
+    order,
+    getSockets: () => sockets,
+    getClosed: () => closed,
   };
 }
+
+test("an idle text-only session is closed, and the next question reopens it with the thread", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Apa itu pembilang?");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts).toEqual(["Apa itu pembilang?"]);
+  await mock.call("idle-read", "get_pdf_context");
+  mock.send({
+    serverContent: { outputTranscription: { text: "Angka di atas garis." }, turnComplete: true },
+  });
+  const thread = page.getByLabel("Transkrip percakapan saat ini");
+  await expect(thread.locator('[data-author="tutor"]')).toHaveText("Angka di atas garis.");
+  await expect(page.getByRole("button", { name: "Akhiri sesi" })).toBeVisible();
+
+  await page.clock.fastForward(59_000);
+  expect(mock.getClosed()).toBe(0);
+  await page.clock.fastForward(2_000);
+  await expect.poll(() => mock.getClosed()).toBe(1);
+  await expect(page.getByRole("button", { name: "Akhiri sesi" })).toHaveCount(0);
+  // The thread stays where it was.
+  await expect(thread.locator('[data-author]')).toHaveCount(2);
+
+  await composer.fill("Lalu penyebut?");
+  await composer.press("Enter");
+  await expect.poll(() => mock.getSockets()).toBe(2);
+  await expect.poll(() => mock.texts).toEqual(["Apa itu pembilang?", "Lalu penyebut?"]);
+  // The new session heard the earlier turns before the new question.
+  const history = mock.order.findIndex((entry) => entry.startsWith("history:"));
+  expect(history).toBeGreaterThan(-1);
+  expect(mock.order[history]).toContain("Siswa: Apa itu pembilang?");
+  expect(mock.order[history]).toContain("NALAR: Angka di atas garis.");
+  expect(history).toBeLessThan(mock.order.indexOf("text:Lalu penyebut?"));
+  expect(mock.errors).toEqual([]);
+});
+
+test("a typed question opens a text-only session; voice can join the same conversation later", async ({
+  page,
+}) => {
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  const thread = page.getByLabel("Transkrip percakapan saat ini");
+  await composer.fill("Apa itu pembilang?");
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("");
+  await expect.poll(() => mock.texts).toEqual(["Apa itu pembilang?"]);
+  // The page reached the tutor before the question did, and no microphone was opened.
+  expect(mock.getView()?.page).toBe(1);
+  await expect(thread.locator('[data-author="student"]')).toHaveText("Apa itu pembilang?");
+  await expect(page.getByRole("button", { name: "Jeda mikrofon" })).toHaveCount(0);
+  expect(mock.appendedBytes).toHaveLength(0);
+
+  const context = (await mock.call("text-read", "get_pdf_context")) as Context;
+  expect(context.turnId).toBeTruthy();
+  mock.send({
+    serverContent: {
+      outputTranscription: { text: "Pembilang adalah angka di atas garis." },
+      modelTurn: {
+        parts: [{ inlineData: { data: Buffer.alloc(4_800).toString("base64"), mimeType: "audio/pcm;rate=24000" } }],
+      },
+      turnComplete: true,
+    },
+  });
+  await expect(thread.locator('[data-author="tutor"]')).toHaveText("Pembilang adalah angka di atas garis.");
+  // A typed question is answered in text: nothing is played, so no voice bar appears.
+  await expect(page.getByRole("status").filter({ hasText: "Menjelaskan" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Mulai percakapan suara" }).click();
+  await expect(page.getByRole("button", { name: "Jeda mikrofon" })).toBeVisible();
+  await expect.poll(() => mock.appendedBytes.length).toBeGreaterThan(0);
+  // Typing while talking keeps the microphone open and the earlier turns in place.
+  await composer.fill("Lalu penyebut?");
+  await page.getByRole("button", { name: "Kirim pesan" }).click();
+  await expect.poll(() => mock.texts).toEqual(["Apa itu pembilang?", "Lalu penyebut?"]);
+  await expect(page.getByRole("button", { name: "Jeda mikrofon" })).toBeVisible();
+  await expect(thread.locator('[data-author="student"]')).toHaveText(["Apa itu pembilang?", "Lalu penyebut?"]);
+
+  await page.getByRole("button", { name: "Matikan suara" }).click();
+  await expect(page.getByRole("button", { name: "Jeda mikrofon" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Mulai percakapan suara" })).toBeVisible();
+  expect(mock.errors).toEqual([]);
+});
 
 test("renders original PDF, selectable text, geometry, zoom, rotation and a second page", async ({
   page,

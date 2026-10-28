@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { connectTutorLive, type LiveServerMessage, type Session } from "../lib/live-tutor-client";
+import {
+  connectTutorLive,
+  type LiveCloseInfo,
+  type LiveServerMessage,
+  type Session,
+} from "../lib/live-tutor-client";
 
 import { HttpError } from "~/lib/http";
-import { aiTutorApi } from "../api/ai-tutor";
+import { aiTutorApi, type LiveSessionEvent } from "../api/ai-tutor";
+import {
+  classifyLiveClose,
+  classifyStartError,
+  DEFAULT_MAX_SESSION_MS,
+  waitUntil,
+} from "../lib/live-session-policy";
+import { useIdleClose } from "./use-idle-close";
+import { useLiveRetry } from "./use-live-retry";
+import { useSessionRenewal } from "./use-session-renewal";
 import {
   createTutorInputNode,
   decodeTutorAudio,
+  LevelMeter,
   TUTOR_INPUT_MIME_TYPE,
 } from "../lib/tutor-audio";
 import type {
@@ -27,10 +42,11 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [messages, setMessages] = useState<AiTutorMessage[]>([]);
   const [mode, setModeState] = useState<AiTutorMode>("hint");
-  const [channel, setChannel] = useState<AiTutorChannel>("voice");
+  // "voice" while the student is in a spoken conversation: replies are played aloud. Typed
+  // questions are answered as text only, and can be sent in either channel.
+  const [channel, setChannel] = useState<AiTutorChannel>("chat");
   const [error, setError] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const [inputLevel, setInputLevel] = useState(0);
   const [isTutorSpeaking, setIsTutorSpeaking] = useState(false);
   const [inputTranscript, setInputTranscript] = useState("");
   const [outputTranscript, setOutputTranscript] = useState("");
@@ -49,6 +65,18 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const inputTextRef = useRef("");
   const awaitingClassificationRef = useRef(false);
   const toolTurnPendingRef = useRef(false);
+  const statusRef = useRef<ConnectionStatus>("idle");
+  const connectingRef = useRef(false);
+  // True while a scheduled reconnect is pending: what the student asks for meanwhile is queued.
+  const waitingRef = useRef(false);
+  const pendingIntentRef = useRef<{ text?: string; mic?: boolean }>({});
+  const lastSentTextRef = useRef<string | null>(null);
+  const maxSessionMs = useRef(DEFAULT_MAX_SESSION_MS);
+  const connectRef = useRef<(mode?: AiTutorMode) => Promise<void>>(async () => {});
+  const sendTextRef = useRef<(content: string) => Promise<boolean>>(async () => false);
+  const toggleListeningRef = useRef<() => Promise<void>>(async () => {});
+  const disarmRenewalRef = useRef<() => void>(() => {});
+  const retry = useLiveRetry();
   const microphoneRef = useRef<{
     context: AudioContext;
     stream: MediaStream;
@@ -57,6 +85,8 @@ export function useAiTutorLive(target: AiTutorTarget) {
     sink: GainNode;
   } | null>(null);
   const outputContextRef = useRef<AudioContext | null>(null);
+  const outputMeterRef = useRef<LevelMeter | null>(null);
+  const inputLevelRef = useRef(0);
   const outputSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlaybackTimeRef = useRef(0);
   const playbackEpochRef = useRef(0);
@@ -64,6 +94,16 @@ export function useAiTutorLive(target: AiTutorTarget) {
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  const surface = target.targetType;
+  const report = useCallback(
+    (event: Omit<LiveSessionEvent, "surface">) => void aiTutorApi.reportEvent({ surface, ...event }),
+    [surface],
+  );
 
   useEffect(() => {
     channelRef.current = channel;
@@ -101,6 +141,8 @@ export function useAiTutorLive(target: AiTutorTarget) {
     if (!context) {
       context = new AudioContext({ sampleRate: 24_000 });
       outputContextRef.current = context;
+      outputMeterRef.current = new LevelMeter(context);
+      outputMeterRef.current.node.connect(context.destination);
     }
     if (context.state === "suspended") await context.resume();
     if (playbackEpoch !== playbackEpochRef.current || !activeStudentEventRef.current) return;
@@ -112,7 +154,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
 
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(context.destination);
+    source.connect(outputMeterRef.current?.node ?? context.destination);
     const startAt = Math.max(context.currentTime, nextPlaybackTimeRef.current);
     source.start(startAt);
     nextPlaybackTimeRef.current = startAt + audioBuffer.duration;
@@ -135,6 +177,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
     activeWasRedirectedRef.current = false;
     const wasAwaitingClassification = awaitingClassificationRef.current;
     awaitingClassificationRef.current = false;
+    lastSentTextRef.current = null;
     setOutputTranscript("");
     if (outputSourcesRef.current.size === 0) setIsTutorSpeaking(false);
 
@@ -143,6 +186,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         setError("Pesan belum berhasil diverifikasi. Silakan ulangi pertanyaanmu.");
       }
       awaitingClassificationRef.current = false;
+      lastSentTextRef.current = null;
       inputTextRef.current = "";
       setInputTranscript("");
       setStatus("ready");
@@ -197,6 +241,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
           activeStudentEventRef.current = studentEventId;
           activeWasRedirectedRef.current = classification.wasRedirected;
           awaitingClassificationRef.current = false;
+          lastSentTextRef.current = null;
           replyEventRef.current = crypto.randomUUID();
           inputTextRef.current = "";
           setInputTranscript("");
@@ -226,6 +271,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
           });
         } catch (caught) {
           awaitingClassificationRef.current = false;
+          lastSentTextRef.current = null;
           setError(errorMessage(caught, "Pertanyaan suara belum dapat diverifikasi."));
           setStatus("ready");
           session.sendToolResponse({
@@ -296,8 +342,13 @@ export function useAiTutorLive(target: AiTutorTarget) {
     [finalizeTutorTurn, handleToolCall, playPcm, stopPlayback],
   );
 
-  const disconnect = useCallback(async () => {
+  // Closes everything the live session owns. Keeps queued intent and the retry timer, so a
+  // reconnect that follows an unexpected drop can pick the student's request back up.
+  const teardown = useCallback(async () => {
     connectionGenerationRef.current += 1;
+    connectingRef.current = false;
+    waitingRef.current = false;
+    disarmRenewalRef.current();
     const microphone = microphoneRef.current;
     if (microphone) {
       microphone.worklet.disconnect();
@@ -308,7 +359,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       microphoneRef.current = null;
     }
     setIsListening(false);
-    setInputLevel(0);
+    inputLevelRef.current = 0;
     setIsTutorSpeaking(false);
     setInputTranscript("");
     setOutputTranscript("");
@@ -318,19 +369,128 @@ export function useAiTutorLive(target: AiTutorTarget) {
     activeStudentEventRef.current = null;
     activeWasRedirectedRef.current = false;
     awaitingClassificationRef.current = false;
+    lastSentTextRef.current = null;
     toolTurnPendingRef.current = false;
     replyEventRef.current = null;
     stopPlayback();
     setStatus("idle");
   }, [stopPlayback]);
 
+  // The student (or unmount) ended it: nothing is retried or replayed afterwards.
+  const disconnect = useCallback(async () => {
+    retry.cancel();
+    pendingIntentRef.current = {};
+    lastSentTextRef.current = null;
+    await teardown();
+  }, [retry.cancel, teardown]);
+
+  const runRetry = useCallback(() => {
+    if (!mountedRef.current) return;
+    waitingRef.current = false;
+    void connectRef.current(modeRef.current);
+  }, []);
+
+  // Callbacks for one Live session. `holder.session` is that session once it exists: after a
+  // renewal swapped it out, whatever the old socket still says is ignored.
+  const callbacksFor = useCallback(
+    (gen: number, holder: { session: Session | null }) => {
+      const stale = () =>
+        !mountedRef.current ||
+        connectionGenerationRef.current !== gen ||
+        (holder.session !== null && sessionRef.current !== holder.session);
+      // The session was accepted and later ended without us asking.
+      const lost = (info: LiveCloseInfo) => {
+        if (stale()) return;
+        const failure = classifyLiveClose(info, maxSessionMs.current);
+        report({ event: "closed", phase: "live", kind: failure.kind, code: info.code, reason: info.reason, ageMs: info.ageMs });
+        // What the student was in the middle of, so the new session can finish it.
+        const text = awaitingClassificationRef.current ? lastSentTextRef.current : null;
+        const wantedMic = microphoneRef.current !== null;
+        void teardown().then(() => {
+          if (!mountedRef.current) return;
+          if (text) pendingIntentRef.current.text = text;
+          if (wantedMic) pendingIntentRef.current.mic = true;
+          const scheduled = retry.schedule(failure, runRetry, (attempt) =>
+            report({ event: "retry_scheduled", kind: failure.kind, attempt }),
+          );
+          if (scheduled) {
+            waitingRef.current = true;
+            setStatus("connecting");
+            return;
+          }
+          pendingIntentRef.current = {};
+          setError(`${failure.message} Sambungkan ulang untuk melanjutkan.`);
+          setStatus("error");
+        });
+      };
+      return {
+        onmessage: (message: LiveServerMessage) => {
+          if (!stale()) handleServerMessage(message);
+        },
+        onerror: lost,
+        onclose: lost,
+      };
+    },
+    [handleServerMessage, report, retry.schedule, runRetry, teardown],
+  );
+
+  // Hands the conversation to a fresh session shortly before Google's 10-minute cut-off.
+  const renew = useCallback(
+    async (deadlineAt: number) => {
+      const old = sessionRef.current;
+      const gen = connectionGenerationRef.current;
+      if (!old) return false;
+      const replaced = () =>
+        !mountedRef.current || connectionGenerationRef.current !== gen || sessionRef.current !== old;
+      const holder: { session: Session | null } = { session: null };
+      const began = Date.now();
+      let next: Session | null = null;
+      try {
+        const data = await aiTutorApi.createSession(target, modeRef.current);
+        if (data.maxSessionSeconds) maxSessionMs.current = data.maxSessionSeconds * 1000;
+        next = await connectTutorLive(data.token, data.model, callbacksFor(gen, holder));
+        holder.session = next;
+        // Swap in a quiet moment so nothing the student is saying is split between two sessions.
+        await waitUntil(
+          () =>
+            statusRef.current === "ready" &&
+            outputSourcesRef.current.size === 0 &&
+            !awaitingClassificationRef.current &&
+            !toolTurnPendingRef.current,
+          deadlineAt,
+          { cancelled: replaced },
+        );
+        if (replaced()) {
+          next.close();
+          return false;
+        }
+        sessionRef.current = next;
+        old.close();
+        retry.markReady();
+        report({ event: "renewed", phase: "live", ageMs: Date.now() - began });
+        return true;
+      } catch (error) {
+        next?.close();
+        const failure = classifyStartError(error, maxSessionMs.current);
+        report({ event: "renew_failed", phase: "connect", kind: failure?.kind });
+        return false;
+      }
+    },
+    [callbacksFor, report, retry.markReady, target],
+  );
+  const renewal = useSessionRenewal(renew, () => maxSessionMs.current);
+  disarmRenewalRef.current = renewal.disarm;
+
   const connect = useCallback(
     async (requestedMode: AiTutorMode = modeRef.current) => {
-      if (sessionRef.current || status === "connecting") return;
+      if (sessionRef.current || connectingRef.current) return;
+      connectingRef.current = true;
+      waitingRef.current = false;
       const connectionGeneration = connectionGenerationRef.current + 1;
       connectionGenerationRef.current = connectionGeneration;
       setStatus("connecting");
       setError(null);
+      const holder: { session: Session | null } = { session: null };
       try {
         const sessionData = await aiTutorApi.createSession(target, requestedMode);
         if (
@@ -341,30 +501,14 @@ export function useAiTutorLive(target: AiTutorTarget) {
         }
         conversationIdRef.current = sessionData.conversationId;
         modelRef.current = sessionData.model;
+        if (sessionData.maxSessionSeconds) maxSessionMs.current = sessionData.maxSessionSeconds * 1000;
         setMessages(sessionData.messages);
-        const session = await connectTutorLive(sessionData.token, sessionData.model, {
-            onopen: () => mountedRef.current && setStatus("ready"),
-            onmessage: (message) => {
-              if (mountedRef.current && connectionGenerationRef.current === connectionGeneration)
-                handleServerMessage(message);
-            },
-            onerror: () => {
-              if (!mountedRef.current || connectionGenerationRef.current !== connectionGeneration) return;
-              void disconnect().finally(() => {
-                if (!mountedRef.current) return;
-                setError("Koneksi Live mengalami gangguan. Coba sambungkan ulang.");
-                setStatus("error");
-              });
-            },
-            onclose: () => {
-              if (!mountedRef.current || !sessionRef.current) return;
-              sessionRef.current = null;
-              setIsListening(false);
-              setInputLevel(0);
-              setIsTutorSpeaking(false);
-              setStatus("idle");
-            },
-        });
+        const session = await connectTutorLive(
+          sessionData.token,
+          sessionData.model,
+          callbacksFor(connectionGeneration, holder),
+        );
+        holder.session = session;
         if (
           !mountedRef.current ||
           connectionGenerationRef.current !== connectionGeneration
@@ -374,13 +518,61 @@ export function useAiTutorLive(target: AiTutorTarget) {
         }
         sessionRef.current = session;
         setStatus("ready");
+        retry.markReady();
+        renewal.arm();
+        // Finish what the student asked for while the tutor was unreachable.
+        const intent = pendingIntentRef.current;
+        pendingIntentRef.current = {};
+        if (intent.text) void sendTextRef.current(intent.text);
+        if (intent.mic) void toggleListeningRef.current();
       } catch (caught) {
-        if (!mountedRef.current) return;
-        setError(errorMessage(caught, "AI Tutor belum dapat disambungkan."));
+        if (!mountedRef.current || connectionGenerationRef.current !== connectionGeneration) return;
+        const failure = classifyStartError(caught, maxSessionMs.current);
+        if (failure) {
+          const detail = caught as { info?: LiveCloseInfo };
+          report({
+            event: "connect_failed",
+            phase: "connect",
+            kind: failure.kind,
+            code: detail.info?.code,
+            reason: detail.info?.reason ?? failure.reason,
+            ageMs: detail.info?.ageMs,
+            attempt: retry.attempts.current,
+          });
+          connectingRef.current = false;
+          const scheduled = retry.schedule(failure, runRetry, (attempt) =>
+            report({ event: "retry_scheduled", kind: failure.kind, attempt }),
+          );
+          if (scheduled) {
+            waitingRef.current = true;
+            setStatus("connecting");
+            return;
+          }
+        }
+        const unsent = pendingIntentRef.current.text;
+        pendingIntentRef.current = {};
+        const message = failure
+          ? failure.autoRetry
+            ? `${failure.message} Silakan coba lagi sebentar lagi.`
+            : failure.message
+          : errorMessage(caught, "AI Tutor belum dapat disambungkan.");
+        setError(unsent ? `${message} Pesanmu belum terkirim.` : message);
         setStatus("error");
+      } finally {
+        if (connectionGenerationRef.current === connectionGeneration) connectingRef.current = false;
       }
     },
-    [disconnect, handleServerMessage, status, target],
+    [callbacksFor, renewal.arm, report, retry.attempts, retry.markReady, retry.schedule, runRetry, target],
+  );
+  connectRef.current = connect;
+
+  // The student asked: a fresh retry allowance.
+  const connectManually = useCallback(
+    async (requestedMode?: AiTutorMode) => {
+      retry.reset();
+      await connect(requestedMode);
+    },
+    [connect, retry.reset],
   );
 
   const setMode = useCallback(
@@ -410,7 +602,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         await microphone.context.close();
         microphoneRef.current = null;
         setIsListening(false);
-        setInputLevel(0);
+        inputLevelRef.current = 0;
         stopPlayback();
       }
     },
@@ -421,9 +613,16 @@ export function useAiTutorLive(target: AiTutorTarget) {
     async (rawContent: string) => {
       const content = rawContent.trim();
       const session = sessionRef.current;
-      if (!content || !session || status === "responding") return false;
+      if (!content || status === "responding") return false;
+      if (!session) {
+        // A reconnect is on its way: keep the message and send it as soon as the tutor is back.
+        if (!waitingRef.current) return false;
+        pendingIntentRef.current.text = content;
+        return true;
+      }
       setError(null);
       try {
+        lastSentTextRef.current = content;
         awaitingClassificationRef.current = true;
         setStatus("responding");
         session.sendRealtimeInput({ text: content });
@@ -439,6 +638,10 @@ export function useAiTutorLive(target: AiTutorTarget) {
 
   const toggleListening = useCallback(async () => {
     const session = sessionRef.current;
+    if (!session && waitingRef.current && channelRef.current === "voice") {
+      pendingIntentRef.current.mic = true;
+      return;
+    }
     if (!session || channelRef.current !== "voice") return;
     if (microphoneRef.current) {
       session.sendRealtimeInput({ audioStreamEnd: true });
@@ -450,7 +653,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       await microphone.context.close();
       microphoneRef.current = null;
       setIsListening(false);
-      setInputLevel(0);
+      inputLevelRef.current = 0;
       return;
     }
 
@@ -474,7 +677,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       worklet.port.onmessage = (event: MessageEvent<MicrophoneMessage>) => {
         const currentSession = sessionRef.current;
         if (!currentSession || event.data.type !== "audio") return;
-        setInputLevel(event.data.level);
+        inputLevelRef.current = event.data.level;
         const bytes = new Uint8Array(event.data.pcm);
         let binary = "";
         for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -493,6 +696,37 @@ export function useAiTutorLive(target: AiTutorTarget) {
     }
   }, []);
 
+  sendTextRef.current = sendText;
+  toggleListeningRef.current = toggleListening;
+
+  // Opens the microphone, connecting first when needed. Replies are spoken from now on.
+  const startVoice = useCallback(async () => {
+    channelRef.current = "voice";
+    setChannel("voice");
+    if (!sessionRef.current && !waitingRef.current) await connectManually();
+    if (!microphoneRef.current) await toggleListening();
+  }, [connectManually, toggleListening]);
+
+  // Back to text only; the session and the conversation stay.
+  const endVoice = useCallback(() => setTutorChannel("chat"), [setTutorChannel]);
+
+  // Loudness of whoever is speaking now, read by the voice orb every frame.
+  const readLevel = useCallback(() => {
+    if (outputSourcesRef.current.size > 0) return outputMeterRef.current?.level() ?? 0;
+    return microphoneRef.current ? Math.min(1, inputLevelRef.current * 1.8) : 0;
+  }, []);
+
+  // Typed questions only and nothing happening: give the Live session back. The conversation
+  // stays on screen and on the server (a new session gets it in its instructions); the next
+  // question reconnects.
+  useIdleClose(
+    status === "ready" && channel === "chat" && !isListening && !isTutorSpeaking,
+    () => {
+      report({ event: "idle_closed", phase: "live" });
+      void disconnect();
+    },
+  );
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -500,6 +734,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       void disconnect();
       void outputContextRef.current?.close();
       outputContextRef.current = null;
+      outputMeterRef.current = null;
     };
   }, [disconnect]);
 
@@ -509,18 +744,19 @@ export function useAiTutorLive(target: AiTutorTarget) {
     mode,
     channel,
     error,
+    notice: retry.notice,
     isListening,
-    inputLevel,
-    isUserSpeaking: isListening && inputLevel > 0.06,
     isTutorSpeaking,
     inputTranscript,
     outputTranscript,
-    connect,
+    connect: connectManually,
     disconnect,
     setMode,
-    setChannel: setTutorChannel,
     sendText,
     toggleListening,
+    startVoice,
+    endVoice,
+    readLevel,
   };
 }
 

@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { connectTutorLive, type LiveServerMessage, type Session } from "../lib/live-tutor-client";
+import {
+  connectTutorLive,
+  type LiveCloseInfo,
+  type LiveServerMessage,
+  type Session,
+} from "../lib/live-tutor-client";
 import { HttpError } from "~/lib/http";
-import { aiTutorApi } from "../api/ai-tutor";
+import { aiTutorApi, type LiveSessionEvent } from "../api/ai-tutor";
+import {
+  classifyLiveClose,
+  classifyStartError,
+  DEFAULT_MAX_SESSION_MS,
+  waitUntil,
+} from "../lib/live-session-policy";
+import { useIdleClose } from "./use-idle-close";
+import { useLiveRetry } from "./use-live-retry";
+import { useSessionRenewal } from "./use-session-renewal";
+import type { TutorThreadMessage } from "../types";
 import {
   contextForModel,
   parsePdfGuidance,
@@ -41,7 +56,16 @@ export function usePdfTutor(
   const [inputTranscript, setInputTranscript] = useState("");
   const [outputTranscript, setOutputTranscript] = useState("");
   const [listening, setListening] = useState(false);
-  const [level, setLevel] = useState(0);
+  // Finished turns of this session, kept after it ends so the student can read them back.
+  const [messages, setMessages] = useState<TutorThreadMessage[]>([]);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  // A spoken conversation: replies are played aloud. Typed questions alone get text replies.
+  const [voice, setVoice] = useState(false);
+  const voiceRef = useRef(false);
+  const inputLevel = useRef(0);
+  const pendingText = useRef<string | null>(null);
+  const committedQuestion = useRef<string | null>(null);
   const contextRef = useRef(context);
   const sessionRef = useRef<Session | null>(null);
   const microphoneRef = useRef<TutorMicrophone | null>(null);
@@ -67,7 +91,21 @@ export function usePdfTutor(
   const committedGuidance = useRef<PdfGuidance | null>(null);
   const pendingGuidanceCall = useRef<string | null>(null);
   const events = useRef<PdfTutorEvent[]>([]);
-  const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusRef = useRef<Status>("idle");
+  const maxSessionMs = useRef(DEFAULT_MAX_SESSION_MS);
+  const startRef = useRef<() => Promise<void>>(async () => {});
+  const sendRef = useRef<(content: string) => boolean>(() => false);
+  // Whether the session being opened (or reopened by a retry) should open the microphone.
+  const wantMicrophone = useRef(true);
+  const disarmRenewalRef = useRef<() => void>(() => {});
+  const retry = useLiveRetry();
+  const report = useCallback(
+    (event: Omit<LiveSessionEvent, "surface">) => void aiTutorApi.reportEvent({ surface: "pdf", ...event }),
+    [],
+  );
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
   const trace = useCallback((name: string) => {
     const view = contextRef.current;
     events.current = [
@@ -96,6 +134,27 @@ export function usePdfTutor(
     setInputTranscript("");
   }, []);
 
+  // Moves what was said in the current turn into the thread. Called again later in the same
+  // turn only adds what is new: the question once, then each piece of the answer.
+  const commitTurn = useCallback(() => {
+    const active = turn.current;
+    if (!active) return;
+    const lines: TutorThreadMessage[] = [];
+    const question = transcriptRef.current.replace(/\s+/g, " ").trim();
+    if (question && committedQuestion.current !== active.id) {
+      committedQuestion.current = active.id;
+      lines.push({ id: `${active.id}:student`, author: "student", content: question });
+      setInputTranscript("");
+    }
+    const answer = outputRef.current.replace(/\s+/g, " ").trim();
+    if (answer) {
+      outputRef.current = "";
+      lines.push({ id: crypto.randomUUID(), author: "tutor", content: answer });
+      setOutputTranscript("");
+    }
+    if (lines.length) setMessages((current) => [...current, ...lines]);
+  }, []);
+
   const disconnect = useCallback(async () => {
     generation.current++;
     micGeneration.current++;
@@ -105,24 +164,29 @@ export function usePdfTutor(
     imageTurn.current = -Infinity;
     abortRef.current?.abort();
     abortRef.current = null;
-    if (expiryTimer.current) clearTimeout(expiryTimer.current);
-    expiryTimer.current = null;
+    pendingText.current = null;
+    retry.cancel();
+    disarmRenewalRef.current();
     const session = sessionRef.current;
     sessionRef.current = null;
     session?.close();
     const mic = microphoneRef.current;
     microphoneRef.current = null;
+    commitTurn();
     cancelTurn();
     setListening(false);
-    setLevel(0);
+    inputLevel.current = 0;
+    voiceRef.current = false;
+    setVoice(false);
     setStatus("idle");
     const audio = audioRef.current;
     audioRef.current = null;
     await Promise.all([mic?.stop(), audio?.close()]);
     trace("disconnected");
-  }, [cancelTurn, trace]);
+  }, [cancelTurn, commitTurn, retry.cancel, trace]);
 
   const beginTurn = useCallback(() => {
+    commitTurn();
     audioRef.current?.stop();
     // While the next page loads there is no view yet; get_pdf_context grounds the turn later.
     turn.current = { id: crypto.randomUUID(), revision: contextRef.current?.revision ?? -1 };
@@ -138,7 +202,7 @@ export function usePdfTutor(
     setGuidance(null);
     setStatus("thinking");
     trace("student-turn");
-  }, [trace]);
+  }, [commitTurn, trace]);
 
   const sendView = useCallback(
     (session: Session, view: PdfViewContext, forceImage = false) => {
@@ -168,6 +232,26 @@ export function usePdfTutor(
     [trace],
   );
 
+  // A new session knows nothing of earlier ones (reconnects, renewals, sessions closed while
+  // idle). The thread lives only in this page, so the page hands its latest turns over.
+  const sendHistory = useCallback((session: Session) => {
+    const lines: string[] = [];
+    let length = 0;
+    for (const message of messagesRef.current.slice(-12).reverse()) {
+      const text = message.content.length > 600 ? `${message.content.slice(0, 600)}…` : message.content;
+      const line = `${message.author === "student" ? "Siswa" : "NALAR"}: ${text}`;
+      if (length + line.length > 4_000) break;
+      lines.unshift(line);
+      length += line.length + 1;
+    }
+    if (!lines.length) return;
+    session.sendClientContent({
+      turns: [{ role: "user", parts: [{ text: `CONVERSATION_HISTORY\n${lines.join("\n")}` }] }],
+      turnComplete: false,
+    });
+    trace("history-sent");
+  }, [trace]);
+
   const onMessage = useCallback(
     async (message: LiveServerMessage, sessionGeneration: number) => {
       if (!mounted.current || generation.current !== sessionGeneration) return;
@@ -184,6 +268,7 @@ export function usePdfTutor(
         );
       const server = message.serverContent;
       if (server?.interrupted) {
+        commitTurn();
         cancelTurn();
         trace("interrupted");
         setStatus(microphoneRef.current ? "listening" : "paused");
@@ -292,6 +377,7 @@ export function usePdfTutor(
         }
         for (const part of server?.modelTurn?.parts ?? []) {
           if (
+            voiceRef.current &&
             part.inlineData?.data &&
             part.inlineData.mimeType?.startsWith("audio/")
           ) {
@@ -304,11 +390,12 @@ export function usePdfTutor(
           }
         }
       }
+      if (server?.turnComplete) commitTurn();
       if (server?.turnComplete && !message.toolCall && !playing.current) {
         setStatus(microphoneRef.current ? "listening" : "paused");
       }
     },
-    [beginTurn, cancelTurn, sendView, trace],
+    [beginTurn, cancelTurn, commitTurn, sendView, trace],
   );
 
   const startMicrophone = useCallback(async () => {
@@ -328,12 +415,12 @@ export function usePdfTutor(
       !!sessionRef.current;
     let microphone: TutorMicrophone | null;
     try {
-      microphone = await openTutorMicrophone((data, inputLevel) => {
+      microphone = await openTutorMicrophone((data, level) => {
         const session = sessionRef.current;
         if (!session) return;
-        setLevel(inputLevel);
+        inputLevel.current = level;
         // Two loud frames avoid interrupting for a single click or a small breath.
-        speechFrames.current = inputLevel > 0.16 ? speechFrames.current + 1 : 0;
+        speechFrames.current = level > 0.16 ? speechFrames.current + 1 : 0;
         if (
           speechFrames.current === 2 &&
           (!turn.current || !speakingInput.current)
@@ -355,8 +442,131 @@ export function usePdfTutor(
     }
     microphoneRef.current = microphone;
     setListening(!!microphone);
-    setStatus("listening");
+    if (microphone) {
+      voiceRef.current = true;
+      setVoice(true);
+    }
+    setStatus(playing.current ? "speaking" : "listening");
   }, [beginTurn, sendView]);
+
+  // The timer of a scheduled retry fired. The page may have been swapped out meanwhile.
+  const runRetry = useCallback(() => {
+    if (!mounted.current) return;
+    if (!contextRef.current) {
+      setError("Halaman PDF belum siap. Coba sambungkan lagi.");
+      setStatus("error");
+      return;
+    }
+    void startRef.current();
+  }, []);
+
+  // Callbacks for one Live session. `holder.session` is that session once it exists: after a
+  // renewal swapped it out, whatever the old socket still says is ignored.
+  const makeCallbacks = useCallback(
+    (gen: number, holder: { session: Session | null }) => {
+      const stale = () =>
+        !mounted.current ||
+        generation.current !== gen ||
+        (holder.session !== null && sessionRef.current !== holder.session);
+      const failHard = (message: string) => {
+        if (stale()) return;
+        void disconnect().then(() => {
+          if (mounted.current) {
+            setError(message);
+            setStatus("error");
+          }
+        });
+      };
+      // The session was accepted and later ended without us asking.
+      const lost = (info: LiveCloseInfo) => {
+        if (stale()) return;
+        const failure = classifyLiveClose(info, maxSessionMs.current);
+        report({ event: "closed", phase: "live", kind: failure.kind, code: info.code, reason: info.reason, ageMs: info.ageMs });
+        void disconnect().then(() => {
+          if (!mounted.current) return;
+          const scheduled = retry.schedule(
+            failure,
+            runRetry,
+            (attempt) => report({ event: "retry_scheduled", kind: failure.kind, attempt }),
+          );
+          if (scheduled) {
+            setStatus("connecting");
+            return;
+          }
+          setError(`${failure.message} Sambungkan ulang untuk melanjutkan.`);
+          setStatus("error");
+        });
+      };
+      return {
+        onmessage: (message: LiveServerMessage) => {
+          if (stale()) return;
+          void onMessage(message, gen).catch(() =>
+            failHard("Koneksi tutor terputus. Silakan sambungkan ulang."),
+          );
+        },
+        onerror: lost,
+        onclose: lost,
+      };
+    },
+    [disconnect, onMessage, report, retry.schedule, runRetry],
+  );
+
+  // Hands the conversation to a fresh session shortly before Google's 10-minute cut-off.
+  const renew = useCallback(
+    async (deadlineAt: number) => {
+      const old = sessionRef.current;
+      const gen = generation.current;
+      const view = contextRef.current;
+      if (!old || !view) return false;
+      const holder: { session: Session | null } = { session: null };
+      const began = Date.now();
+      const replaced = () => !mounted.current || generation.current !== gen || sessionRef.current !== old;
+      let next: Session | null = null;
+      try {
+        const abort = new AbortController();
+        const timeout = setTimeout(() => abort.abort(), 20_000);
+        let data;
+        try {
+          data = await aiTutorApi.createPdfSession(resourceId, abort.signal);
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (data.resourceId !== resourceId) return false;
+        if (data.maxSessionSeconds) maxSessionMs.current = data.maxSessionSeconds * 1000;
+        next = await connectTutorLive(data.token, data.model, makeCallbacks(gen, holder));
+        holder.session = next;
+        // Swap in a quiet moment so nothing the student is saying is split between two sessions.
+        await waitUntil(
+          () => !playing.current && (statusRef.current === "listening" || statusRef.current === "paused"),
+          deadlineAt,
+          { cancelled: replaced },
+        );
+        if (replaced()) {
+          next.close();
+          return false;
+        }
+        sessionRef.current = next;
+        old.close();
+        // The new session has seen neither the page nor its image.
+        lastImage.current = "";
+        imageTurn.current = -Infinity;
+        sendView(next, contextRef.current ?? view, true);
+        sendHistory(next);
+        retry.markReady();
+        report({ event: "renewed", phase: "live", ageMs: Date.now() - began });
+        trace("session-renewed");
+        return true;
+      } catch (error) {
+        next?.close();
+        const failure = classifyStartError(error, maxSessionMs.current);
+        report({ event: "renew_failed", phase: "connect", kind: failure?.kind });
+        return false;
+      }
+    },
+    [makeCallbacks, report, resourceId, retry.markReady, sendHistory, sendView, trace],
+  );
+  const renewal = useSessionRenewal(renew, () => maxSessionMs.current);
+  disarmRenewalRef.current = renewal.disarm;
 
   const start = useCallback(async () => {
     if (connecting.current || sessionRef.current || !contextRef.current) return;
@@ -367,7 +577,8 @@ export function usePdfTutor(
     try {
       audioRef.current = new TutorAudioOutput((isPlaying) => {
         playing.current = isPlaying;
-        if (!mounted.current) return;
+        // Closing the output (disconnect) reports "stopped" too: that must not undo "idle".
+        if (!mounted.current || currentGeneration !== generation.current) return;
         setStatus(
           isPlaying
             ? "speaking"
@@ -390,72 +601,143 @@ export function usePdfTutor(
       if (!mounted.current || currentGeneration !== generation.current) return;
       if (data.resourceId !== resourceId)
         throw new Error("Sesi tutor tidak cocok dengan PDF.");
-      const fail = (message: string) => {
-        if (!mounted.current || currentGeneration !== generation.current)
-          return;
-        void disconnect().then(() => {
-          if (mounted.current) {
-            setError(message);
-            setStatus("error");
-          }
-        });
-      };
-      const connectionTimeout = setTimeout(
-        () => fail("Koneksi tutor terlalu lama. Silakan coba lagi."),
-        20_000,
-      );
-      let session: Session;
-      try {
-        session = await connectTutorLive(data.token, data.model, {
-            onmessage: (message) => {
-              void onMessage(message, currentGeneration).catch(() =>
-                fail("Koneksi tutor terputus. Silakan sambungkan ulang."),
-              );
-            },
-            onerror: () =>
-              fail("Koneksi tutor mengalami gangguan. Silakan coba lagi."),
-            onclose: () =>
-              fail(
-                "Sesi tutor telah berakhir. Sambungkan ulang untuk melanjutkan.",
-              ),
-        });
-      } finally {
-        clearTimeout(connectionTimeout);
-      }
+      if (data.maxSessionSeconds) maxSessionMs.current = data.maxSessionSeconds * 1000;
+      const holder: { session: Session | null } = { session: null };
+      const session = await connectTutorLive(data.token, data.model, makeCallbacks(currentGeneration, holder));
+      holder.session = session;
       if (!mounted.current || currentGeneration !== generation.current) {
         session.close();
         return;
       }
       sessionRef.current = session;
+      retry.markReady();
+      renewal.arm();
       if (contextRef.current) sendView(session, contextRef.current);
-      expiryTimer.current = setTimeout(
-        () =>
-          fail(
-            "Sesi tutor selesai. Sambungkan kembali untuk melanjutkan belajar.",
-          ),
-        Math.max(0, Date.parse(data.expiresAt) - Date.now()),
-      );
-      await startMicrophone();
+      sendHistory(session);
+      if (wantMicrophone.current) await startMicrophone();
+      else setStatus("paused");
       trace("connected");
+      const text = pendingText.current;
+      pendingText.current = null;
+      if (text) sendRef.current(text);
     } catch (caught) {
       if (currentGeneration !== generation.current || !mounted.current) return;
+      const failure = classifyStartError(caught, maxSessionMs.current);
+      if (failure) {
+        const detail = caught as { info?: LiveCloseInfo };
+        report({
+          event: "connect_failed",
+          phase: "connect",
+          kind: failure.kind,
+          code: detail.info?.code,
+          reason: detail.info?.reason ?? failure.reason,
+          ageMs: detail.info?.ageMs,
+          attempt: retry.attempts.current,
+        });
+      }
       const message =
-        caught instanceof HttpError
+        failure?.message ??
+        (caught instanceof HttpError
           ? caught.message
           : caught instanceof DOMException && caught.name === "NotAllowedError"
             ? "Izin mikrofon ditolak. Izinkan mikrofon di browser, lalu sambungkan kembali."
             : caught instanceof Error && caught.message.includes("HTTPS")
               ? caught.message
-              : "Tutor belum dapat disambungkan. Periksa jaringan dan izin mikrofon, lalu coba lagi.";
+              : "Tutor belum dapat disambungkan. Periksa jaringan dan izin mikrofon, lalu coba lagi.");
+      const unsent = pendingText.current;
       await disconnect();
-      if (mounted.current) {
-        setError(message);
-        setStatus("error");
+      if (!mounted.current) return;
+      pendingText.current = unsent;
+      const scheduled =
+        failure !== null &&
+        retry.schedule(
+          failure,
+          runRetry,
+          (attempt) => report({ event: "retry_scheduled", kind: failure.kind, attempt }),
+        );
+      if (scheduled) {
+        setStatus("connecting");
+        return;
       }
+      pendingText.current = null;
+      const shown = failure && failure.autoRetry ? `${message} Silakan coba lagi sebentar lagi.` : message;
+      setError(unsent ? `${shown} Pesanmu belum terkirim.` : shown);
+      setStatus("error");
     } finally {
       if (currentGeneration === generation.current) connecting.current = false;
     }
-  }, [disconnect, onMessage, resourceId, sendView, startMicrophone, trace]);
+  }, [
+    disconnect,
+    makeCallbacks,
+    renewal.arm,
+    report,
+    resourceId,
+    retry.attempts,
+    retry.markReady,
+    retry.schedule,
+    runRetry,
+    sendHistory,
+    sendView,
+    startMicrophone,
+    trace,
+  ]);
+  startRef.current = start;
+
+  // The student pressed a button: a fresh retry allowance.
+  const begin = useCallback(
+    async (microphone = true) => {
+      wantMicrophone.current = microphone;
+      retry.reset();
+      await start();
+    },
+    [retry.reset, start],
+  );
+
+  // A typed question. Starts a session (without the microphone) when there is none yet.
+  const send = useCallback(
+    (raw: string) => {
+      const content = raw.trim();
+      const session = sessionRef.current;
+      const view = contextRef.current;
+      if (!content || !view) return false;
+      if (!session) {
+        pendingText.current = content;
+        if (!connecting.current && statusRef.current !== "connecting") void begin(false);
+        return true;
+      }
+      setError(null);
+      beginTurn();
+      // Not speech: a sound on the microphone must start a new turn, not extend this one.
+      speakingInput.current = false;
+      transcriptRef.current = content;
+      commitTurn();
+      sendView(session, view);
+      session.sendRealtimeInput({ text: content });
+      trace("text-sent");
+      return true;
+    },
+    [begin, beginTurn, commitTurn, sendView, trace],
+  );
+  sendRef.current = send;
+
+  // Speak instead of (or as well as) typing. Connects first when needed.
+  const startVoice = useCallback(async () => {
+    if (!sessionRef.current) return begin(true);
+    setError(null);
+    try {
+      await audioRef.current?.prepare();
+      await startMicrophone();
+    } catch {
+      setError("Mikrofon belum dapat digunakan. Periksa izin mikrofon di browser.");
+    }
+  }, [begin, startMicrophone]);
+
+  // Loudness of whoever is speaking now, read by the voice orb every frame.
+  const readLevel = useCallback(() => {
+    const tutor = audioRef.current?.level() ?? 0;
+    if (tutor > 0) return tutor;
+    return microphoneRef.current ? Math.min(1, inputLevel.current * 1.8) : 0;
+  }, []);
 
   const toggleMicrophone = useCallback(async () => {
     setError(null);
@@ -465,7 +747,7 @@ export function usePdfTutor(
       microphoneRef.current = null;
       sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true });
       setListening(false);
-      setLevel(0);
+      inputLevel.current = 0;
       setStatus(playing.current ? "speaking" : "paused");
       await mic.stop();
     } else {
@@ -480,11 +762,21 @@ export function usePdfTutor(
     }
   }, [startMicrophone]);
 
+  // Back to text only: the microphone closes and replies are no longer spoken. The session
+  // stays, and an answer in progress keeps arriving as text.
+  const endVoice = useCallback(async () => {
+    voiceRef.current = false;
+    setVoice(false);
+    audioRef.current?.stop();
+    if (microphoneRef.current) await toggleMicrophone();
+  }, [toggleMicrophone]);
+
   const stopExplanation = useCallback(() => {
+    commitTurn();
     cancelTurn();
     setStatus(microphoneRef.current ? "listening" : "paused");
     trace("student-stopped");
-  }, [cancelTurn, trace]);
+  }, [cancelTurn, commitTurn, trace]);
 
   useEffect(() => {
     const previous = contextRef.current;
@@ -516,6 +808,13 @@ export function usePdfTutor(
     return () => clearTimeout(timer);
   }, [context, sendView, trace]);
 
+  // Typed questions only and nothing happening: give the Live session back. The thread stays
+  // and is handed to the next session, opened by the next question.
+  useIdleClose(status === "paused" && !voice, () => {
+    report({ event: "idle_closed", phase: "live" });
+    void disconnect();
+  });
+
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -527,13 +826,20 @@ export function usePdfTutor(
   return {
     status,
     error,
+    notice: retry.notice,
     guidance,
     inputTranscript,
     outputTranscript,
     listening,
-    level,
+    voice,
+    messages,
     connected: !!sessionRef.current,
-    start,
+    start: begin,
+    retry: () => begin(wantMicrophone.current),
+    send,
+    startVoice,
+    endVoice,
+    readLevel,
     disconnect,
     toggleMicrophone,
     stopExplanation,

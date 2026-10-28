@@ -307,11 +307,16 @@ export type AiTutorMessage = {
     | null;
 };
 
+/** One line of a tutor conversation as the thread shows it. */
+export type TutorThreadMessage = Pick<AiTutorMessage, "id" | "author" | "content">;
+
 export type AiTutorSessionData = {
   conversationId: string;
   token: string;
   model: string;
   expiresAt: string;
+  /** Google's hard cap on one Live connection; clients renew before it. Absent on older servers. */
+  maxSessionSeconds?: number;
   mode: AiTutorMode;
   questionId: string | null;
   messages: AiTutorMessage[];

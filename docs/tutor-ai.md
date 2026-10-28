@@ -1,11 +1,30 @@
 # TutorAI untuk pembelajaran PDF
 
 Di halaman materi yang memiliki PDF unggahan, siswa dapat membaca PDF di aplikasi,
-memilih teks atau mengetuk gambar, lalu memulai percakapan suara. Tutor membaca
+memilih teks atau mengetuk gambar, lalu bertanya lewat teks atau suara. Tutor membaca
 halaman aktif, menunjukkan rujukan dengan cursor sendiri, dan membuat sorotan,
 panah, kotak, lingkaran, garis bebas, atau catatan singkat. Bubble di cursor berisi
-ringkasan langkah; transkrip suara juga tersedia. Pada ponsel kontrol suara berada
-di atas pembaca PDF agar dapat digunakan sambil melihat materi.
+ringkasan langkah. Pada ponsel kolom tulis menempel di bawah layar selama ruang
+belajar terlihat, agar dapat dipakai sambil membaca.
+
+## Teks dan suara dalam satu percakapan
+
+Berlaku untuk tutor PDF dan tutor kuis/tugas (`tutor-conversation.tsx`).
+
+- Kolom tulis selalu tersedia, juga saat mikrofon menyala. Pertanyaan yang diketik
+  dikirim sebagai `realtimeInput.text` ke sesi Live yang sama; mengetik tidak menutup
+  mikrofon.
+- Pertanyaan pertama yang diketik membuka sesi tanpa mikrofon. Jawabannya tampil
+  sebagai teks saja; audio dari model tidak diputar. Tombol suara di kolom tulis
+  membuka mikrofon pada sesi yang sama, dan sejak itu jawaban juga diucapkan.
+  "Matikan suara" kembali ke teks tanpa memutus sesi; jawaban yang sedang berjalan
+  diteruskan sebagai teks.
+- Giliran suara dan teks masuk ke satu thread. Tutor PDF menyimpan thread hanya di
+  memori browser selama halaman terbuka (tetap terlihat setelah sesi diakhiri); tutor
+  kuis/tugas tetap menyimpan transkrip di backend seperti sebelumnya.
+- Bola suara mengikuti kenyaringan nyata: mikrofon saat siswa bicara, `AnalyserNode`
+  pada output saat tutor bicara. Nilainya dibaca setiap frame dan ditulis langsung ke
+  `transform`, tanpa render ulang React. Reduced motion hanya mengubah opacity.
 
 ## Menjalankan
 
@@ -64,6 +83,44 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
   percakapan baru. AudioContext, track mikrofon, request, timer, dan socket dilepas
   saat sesi ditutup atau komponen dilepas. Tidak ada rekaman suara yang disimpan
   oleh aplikasi. Pengiriman ke provider tetap mengikuti pengaturan akun provider.
+
+## Ketahanan koneksi
+
+Browser tersambung langsung ke Gemini Live, jadi penolakan atau pemutusan dari Google tidak
+pernah melewati backend. Perilaku berikut diukur pada layanan sungguhan (Okt 2026), bukan
+diasumsikan:
+
+- **Satu key hanya menampung sekitar 6 sesi Live yang terbuka bersamaan.** Sesi ke-7 tersambung,
+  lalu ditutup Google ±1,5 detik kemudian dengan kode `1011 "You exceeded your current quota"`.
+  Sesi yang ditutup dalam beberapa detik setelah dibuka tidak dihitung. Satu kelas yang memakai tutor
+  bersamaan bisa melewatinya; solusi tuntasnya menaikkan tier/billing project Gemini.
+- **SDK tidak pernah menolak promise `live.connect()` untuk sesi yang ditolak.** Tanpa penanganan,
+  tutor macet di "Menyambungkan…". `connectTutorLive` karena itu berlomba dengan event close dan
+  batas waktu 20 detik, lalu menolak dengan `LiveConnectError` yang membawa kode, alasan, dan umur.
+- **Setiap koneksi dihentikan Google pada menit ke-10** (`1011 "The service is currently
+  unavailable"`, tanpa `goAway` sebelumnya). Sekitar 45 detik sebelumnya klien membuka sesi kedua,
+  menunggu momen hening, lalu menukar sesi (`useSessionRenewal`); mikrofon dan halaman PDF ikut
+  berpindah tanpa jeda. Kalau pergantian gagal, pemutusan paksa ditangani sebagai jalur
+  sambung ulang biasa.
+- **Token hanya berlaku untuk memulai sesi selama 2 menit** (`newSessionExpireTime`).
+- **Sesi yang hanya dipakai mengetik ditutup setelah 60 detik tanpa aktivitas** (`useIdleClose`,
+  `TEXT_IDLE_CLOSE_MS`), karena setiap sesi terbuka memakai jatah ±6 sesi per key. Sesi suara
+  tidak ditutup. Pertanyaan berikutnya membuka sesi baru (±1 detik, satu dari 30 sesi per 10 menit
+  per akun) dan tercatat sebagai event `idle_closed`.
+- **Sesi baru tetap tahu percakapan sebelumnya.** Untuk kuis/tugas backend memasukkan maksimal
+  12 giliran tersimpan terakhir (≤ 4.000 karakter) ke system instruction sebagai data. Tutor PDF
+  tidak menyimpan percakapan di server, jadi browser mengirim thread-nya sebagai pesan
+  `CONVERSATION_HISTORY` (batas yang sama) setiap kali sesi dibuka ulang, termasuk saat renewal.
+
+`live-session-policy.ts` mengubah semua itu menjadi pesan untuk siswa dan keputusan retry.
+Penolakan kuota, token terlambat, batas 10 menit, dan layanan tidak tersedia dicoba ulang otomatis
+(maksimal 3 kali, jeda 0,3 detik sampai 60 detik ditambah acak agar satu kelas tidak mencoba
+serempak, dengan hitung mundur di layar). Jatah retry baru pulih setelah sesi bertahan 30 detik.
+Pertanyaan teks atau ketukan mikrofon saat menunggu disimpan dan dijalankan begitu tutor kembali;
+pertanyaan yang belum dijawab saat koneksi putus diajukan ulang.
+
+Setiap kegagalan dilaporkan ke `POST /api/student/ai-tutor/session-events` dan dicatat di log
+backend (`tutor_client_event`), sehingga frekuensi dan penyebabnya dapat dilihat di prod.
 
 ## Verifikasi yang dapat diulang
 

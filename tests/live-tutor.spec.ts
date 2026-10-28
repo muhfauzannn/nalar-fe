@@ -87,3 +87,75 @@ test("assessment tutor verifies the student prompt before showing or saving its 
   expect(saved.inReplyToEventId).toBe(classified.clientEventId);
   await expect(page.getByTestId("error")).toBeEmpty();
 });
+
+test("assessment tutor: typing while talking keeps the microphone open, ending voice keeps the session", async ({ page }) => {
+  const events: any[] = [];
+  const headers = { "access-control-allow-origin": "http://127.0.0.1:4174", "access-control-allow-credentials": "true", "access-control-allow-headers": "content-type" };
+  await page.route("**/api/student/ai-tutor/**", async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers });
+    return route.fulfill({ headers, json: {
+      conversationId: "conversation-a", token: "auth_tokens/test", model: "gemini-3.8-live", messages: [], mode: "hint", questionId: "question-a",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    } });
+  });
+  const sockets: WebSocketRoute[] = [];
+  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
+    sockets.push(ws);
+    ws.onMessage((message) => {
+      const data = JSON.parse(message.toString());
+      events.push(data);
+      if (data.setup) ws.send(JSON.stringify({ setupComplete: {} }));
+    });
+  });
+  await page.goto("/tests/fixtures/assessment-tutor.html");
+  await page.getByRole("button", { name: "Start voice" }).click();
+  await expect(page.getByTestId("listening")).toHaveText("true");
+  await expect.poll(() => events.some((event) => event.realtimeInput?.audio)).toBe(true);
+
+  await page.getByRole("button", { name: "Send question" }).click();
+  await expect.poll(() => events.some((event) => event.realtimeInput?.text === "Berikan jawaban soal ini")).toBe(true);
+  await expect(page.getByTestId("listening")).toHaveText("true");
+
+  await page.getByRole("button", { name: "End voice" }).click();
+  await expect(page.getByTestId("listening")).toHaveText("false");
+  await expect.poll(() => events.some((event) => event.realtimeInput?.audioStreamEnd)).toBe(true);
+  expect(sockets).toHaveLength(1);
+  await expect(page.getByTestId("status")).not.toHaveText("idle");
+});
+
+test("assessment tutor: a text-only session is given back after a minute idle, a voice one is not", async ({ page }) => {
+  await page.clock.install();
+  const reported: any[] = [];
+  const headers = { "access-control-allow-origin": "http://127.0.0.1:4174", "access-control-allow-credentials": "true", "access-control-allow-headers": "content-type" };
+  await page.route("**/api/student/ai-tutor/**", async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers });
+    if (route.request().url().endsWith("/session-events")) {
+      reported.push(route.request().postDataJSON());
+      return route.fulfill({ status: 204, headers });
+    }
+    return route.fulfill({ headers, json: {
+      conversationId: "conversation-a", token: "auth_tokens/test", model: "gemini-3.8-live", messages: [], mode: "hint", questionId: "question-a",
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+    } });
+  });
+  let closed = 0;
+  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
+    ws.onClose(() => closed++);
+    ws.onMessage((message) => {
+      if (JSON.parse(message.toString()).setup) ws.send(JSON.stringify({ setupComplete: {} }));
+    });
+  });
+  await page.goto("/tests/fixtures/assessment-tutor.html");
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await expect(page.getByTestId("status")).toHaveText("ready");
+  await page.clock.fastForward(61_000);
+  await expect(page.getByTestId("status")).toHaveText("idle");
+  await expect.poll(() => closed).toBe(1);
+  await expect.poll(() => reported.some((event) => event.event === "idle_closed" && event.surface === "quiz")).toBe(true);
+
+  await page.getByRole("button", { name: "Start voice" }).click();
+  await expect(page.getByTestId("listening")).toHaveText("true");
+  await page.clock.fastForward(120_000);
+  await expect(page.getByTestId("status")).toHaveText("ready");
+  expect(closed).toBe(1);
+});

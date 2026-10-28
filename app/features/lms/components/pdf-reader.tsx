@@ -525,13 +525,9 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
           </div>
         </div>
       </div>
-      <div className="flex min-h-12 items-center justify-between gap-3 border-t px-4 py-3 text-xs text-muted-foreground">
-        <p className="min-w-0 truncate">
-          {selection
-            ? `Dipilih: ${selection.text}`
-            : "Pilih teks atau ketuk gambar, lalu tanyakan lewat suara."}
-        </p>
-        {selection ? (
+      {selection ? (
+        <div className="flex min-h-12 items-center justify-between gap-3 border-t px-4 py-3 text-xs text-muted-foreground">
+          <p className="min-w-0 truncate">Dipilih: {selection.text}</p>
           <Button
             variant="ghost"
             size="xs"
@@ -542,8 +538,8 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
           >
             Lepas pilihan
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -6,9 +6,14 @@ function Fixture() {
   return <main>
     <button onClick={() => tutor.connect()}>Connect</button>
     <button onClick={() => tutor.sendText("Berikan jawaban soal ini")}>Send question</button>
+    <button onClick={() => tutor.disconnect()}>Disconnect</button>
+    <button onClick={() => tutor.startVoice()}>Start voice</button>
+    <button onClick={() => tutor.endVoice()}>End voice</button>
+    <output data-testid="listening">{String(tutor.isListening)}</output>
     <output data-testid="status">{tutor.status}</output>
     <output data-testid="transcript">{tutor.outputTranscript}</output>
     <output data-testid="error">{tutor.error}</output>
+    <output data-testid="notice">{tutor.notice}</output>
     <ol>{tutor.messages.map((message) => <li key={message.id} data-author={message.author} data-redirected={message.wasRedirected}>{message.content}</li>)}</ol>
   </main>;
 }

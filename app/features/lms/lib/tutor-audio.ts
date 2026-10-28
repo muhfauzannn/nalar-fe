@@ -29,15 +29,39 @@ export async function createTutorInputNode(
   return worklet;
 }
 
+/** How loud the audio passing through `node` is right now, for the voice orb (0..1). */
+export class LevelMeter {
+  readonly node: AnalyserNode;
+  private samples: Float32Array<ArrayBuffer>;
+  constructor(context: AudioContext) {
+    this.node = context.createAnalyser();
+    this.node.fftSize = 512;
+    this.samples = new Float32Array(this.node.fftSize);
+  }
+
+  level() {
+    this.node.getFloatTimeDomainData(this.samples);
+    let sum = 0;
+    for (const sample of this.samples) sum += sample * sample;
+    // Speech RMS sits around 0.05-0.2; scale it into a range the orb can use.
+    return Math.min(1, Math.sqrt(sum / this.samples.length) * 5);
+  }
+}
+
 export class TutorAudioOutput {
   private context: AudioContext | null = null;
+  private meter: LevelMeter | null = null;
   private sources = new Set<AudioBufferSourceNode>();
   private nextTime = 0;
   private epoch = 0;
   constructor(private onPlaying: (playing: boolean) => void) {}
 
   async prepare() {
-    this.context ??= new AudioContext({ sampleRate: 24_000 });
+    if (!this.context) {
+      this.context = new AudioContext({ sampleRate: 24_000 });
+      this.meter = new LevelMeter(this.context);
+      this.meter.node.connect(this.context.destination);
+    }
     if (this.context.state === "suspended") await this.context.resume();
   }
 
@@ -51,7 +75,7 @@ export class TutorAudioOutput {
     buffer.copyToChannel(samples, 0);
     const source = this.context.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.context.destination);
+    source.connect(this.meter?.node ?? this.context.destination);
     const start = Math.max(this.context.currentTime, this.nextTime);
     this.nextTime = start + buffer.duration;
     this.sources.add(source);
@@ -62,6 +86,11 @@ export class TutorAudioOutput {
       if (!this.sources.size) this.onPlaying(false);
     };
     source.start(start);
+  }
+
+  /** Loudness of the tutor's voice right now; 0 when nothing plays. */
+  level() {
+    return this.sources.size && this.meter ? this.meter.level() : 0;
   }
 
   stop() {
@@ -84,6 +113,7 @@ export class TutorAudioOutput {
     this.stop();
     const context = this.context;
     this.context = null;
+    this.meter = null;
     return context?.close().catch(() => {});
   }
 }
