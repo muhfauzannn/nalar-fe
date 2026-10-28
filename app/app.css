@@ -235,7 +235,37 @@
   }
 }
 
+/* Page loads are used constantly, so their feedback is a thin bar, not motion of
+   the page. It stays hidden for 150ms (a prefetched page opens before that), then
+   runs fast and slows down, never reaching the end on its own. */
+@keyframes nav-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(0.9);
+  }
+}
+
+/* "Still working" on a short wait (the tutor thinking): a slow breath, no travel. */
+@keyframes shimmer {
+  to {
+    opacity: 0.45;
+  }
+}
+
 @layer utilities {
+  .shimmer {
+    animation: shimmer 900ms var(--ease-in-out-strong) infinite alternate;
+  }
+
+  .nav-progress {
+    transform-origin: left;
+    animation:
+      enter-fade 1ms linear 150ms backwards,
+      nav-progress 8s var(--ease-out-strong) 150ms both;
+  }
+
   /* `backwards` (not `both`): after the entrance the element goes back to its
      normal style, so later transforms (FLIP reorder, hover) are not pinned. */
   .enter-up {
@@ -261,6 +291,15 @@
   .enter-pop {
     animation-name: enter-fade;
     animation-delay: 0ms;
+  }
+
+  .nav-progress {
+    transform: scaleX(0.9);
+    animation: enter-fade 1ms linear 150ms backwards;
+  }
+
+  .shimmer {
+    animation: none;
   }
 
   .animate-in,

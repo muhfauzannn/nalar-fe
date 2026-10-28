@@ -6,8 +6,11 @@ import {
   StudentAppShellSkeleton,
   studentApi,
 } from "~/features/lms";
+import { clearRecentReads } from "~/lib/http";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  // Runs when the app is entered (after sign-in too): never reuse another account's reads.
+  clearRecentReads();
   return studentApi.shell(request);
 }
 

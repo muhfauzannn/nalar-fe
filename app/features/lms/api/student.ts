@@ -26,6 +26,26 @@ async function studentRequest<T>(request: Request, operation: () => Promise<T>) 
   }
 }
 
+// Pages whose data may come from `http.getRecent`. Quizzes and assignments always
+// load fresh: their attempt and stage state changes while the student works.
+const prefetchable: [RegExp, (id: string) => string][] = [
+  [/^\/dashboard$/, () => "/api/student/dashboard"],
+  [/^\/courses$/, () => "/api/student/courses"],
+  [/^\/courses\/(?!join$)([^/]+)$/, (id) => `/api/student/courses/${id}`],
+  [/^\/lessons\/([^/]+)$/, (id) => `/api/student/lessons/${id}`],
+];
+
+/** Warms the data of a student page the user is about to open (hover, focus, touch). */
+export function prefetchStudentPage(pathname: string) {
+  for (const [pattern, apiPath] of prefetchable) {
+    const match = pattern.exec(pathname);
+    if (match) {
+      http.getRecent(apiPath(match[1] ?? "")).catch(() => {});
+      return;
+    }
+  }
+}
+
 export const studentApi = {
   shell: (request: Request) =>
     studentRequest(request, () =>
@@ -33,22 +53,22 @@ export const studentApi = {
     ),
   dashboard: (request: Request) =>
     studentRequest(request, () =>
-      http.get<DashboardData>("/api/student/dashboard", forwardedRequestInit(request)),
+      http.getRecent<DashboardData>("/api/student/dashboard", forwardedRequestInit(request)),
     ),
   courses: (request: Request) =>
     studentRequest(request, () =>
-      http.get<{ courses: CourseSummary[] }>(
+      http.getRecent<{ courses: CourseSummary[] }>(
         "/api/student/courses",
         forwardedRequestInit(request),
       ),
     ),
   course: (request: Request, courseId: string) =>
     studentRequest(request, () =>
-      http.get<CourseData>(`/api/student/courses/${courseId}`, forwardedRequestInit(request)),
+      http.getRecent<CourseData>(`/api/student/courses/${courseId}`, forwardedRequestInit(request)),
     ),
   lesson: (request: Request, lessonId: string) =>
     studentRequest(request, () =>
-      http.get<LessonData>(`/api/student/lessons/${lessonId}`, forwardedRequestInit(request)),
+      http.getRecent<LessonData>(`/api/student/lessons/${lessonId}`, forwardedRequestInit(request)),
     ),
   setLessonProgress: (
     request: Request,

@@ -1,4 +1,4 @@
-export { studentApi } from "./api/student";
+export { prefetchStudentPage, studentApi } from "./api/student";
 export { StudentAppShell } from "./components/student-app-shell";
 export {
   ActivityPageSkeleton,
