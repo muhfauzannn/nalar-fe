@@ -21,6 +21,7 @@ export type PdfAction = PdfRect & {
   kind:
     "point" | "highlight" | "arrow" | "rectangle" | "ellipse" | "text" | "path";
   caption?: string;
+  holdSeconds?: number;
   text?: string;
   points?: PdfPoint[];
   rects?: PdfRect[];
@@ -31,6 +32,7 @@ export type PdfGuidance = {
   revision: number;
   turnId: string;
   caption: string;
+  holdSeconds?: number;
   actions: PdfAction[];
 };
 
@@ -44,6 +46,19 @@ export function parsePdfCursor(raw: unknown, context: PdfViewContext, turnId: st
   }] }, context, turnId);
   const { actions, ...identity } = guidance;
   return { ...identity, x: actions[0].x, y: actions[0].y };
+}
+
+/** Durations are supplied by the model; omitted values support older Live sessions. */
+export function parsePdfHoldSeconds(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 1 || value > 20)
+    throw new Error("holdSeconds harus berupa angka antara 1 dan 20 detik.");
+  return value;
+}
+
+export function pdfActionHoldSeconds(guidance: PdfGuidance, index: number) {
+  const action = guidance.actions[index];
+  return action.holdSeconds ?? (action.caption || index === guidance.actions.length - 1 ? guidance.holdSeconds ?? 0 : 0);
 }
 
 const unit = (v: unknown): v is number =>
@@ -116,6 +131,7 @@ export function parsePdfGuidance(
   ) {
     throw new Error("Caption atau jumlah tindakan tidak valid.");
   }
+  const holdSeconds = parsePdfHoldSeconds(raw.holdSeconds);
   const actions = raw.actions.map((value): PdfAction => {
     if (
       !record(value) ||
@@ -131,6 +147,7 @@ export function parsePdfGuidance(
     )
       throw new Error("Jenis tindakan tidak valid.");
     const kind = value.kind as PdfAction["kind"];
+    const actionHoldSeconds = parsePdfHoldSeconds(value.holdSeconds);
     if (value.caption !== undefined && (typeof value.caption !== "string" ||
         !value.caption.trim() || value.caption.length > 120))
       throw new Error("Caption tindakan harus berisi 1–120 karakter.");
@@ -239,6 +256,7 @@ export function parsePdfGuidance(
     return {
       kind,
       ...(value.caption !== undefined ? { caption: value.caption as string } : {}),
+      ...(actionHoldSeconds !== undefined ? { holdSeconds: actionHoldSeconds } : {}),
       x: box.x,
       y: box.y,
       width: box.width,
@@ -254,6 +272,7 @@ export function parsePdfGuidance(
     revision: context.revision,
     turnId,
     caption: raw.caption,
+    ...(holdSeconds !== undefined ? { holdSeconds } : {}),
     actions,
   };
 }

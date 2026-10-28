@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   parsePdfGuidance,
   parsePdfCursor,
+  pdfActionHoldSeconds,
   contextForModel,
   rotatePoint,
   rotateRect,
@@ -179,5 +180,27 @@ test("each annotation retains its own caption and validates captions atomically"
   expect(parsePdfGuidance({ ...payload(), actions }, context, "turn-1").actions.map((a) => a.caption)).toEqual(["Pembilang", "Penyebut"]);
   for (const caption of ["", "x".repeat(121), 4, null]) {
     expect(() => parsePdfGuidance({ ...payload(), actions: [...actions, { ...actions[1], caption }] }, context, "turn-1")).toThrow(/Caption/);
+  }
+});
+
+
+test("AI-chosen reading times survive parsing for cursor steps and individual captions", () => {
+  const cue = parsePdfCursor({ ...payload(), blockId: "p2-b1", holdSeconds: 7.5 }, context, "turn-1");
+  expect(cue.holdSeconds).toBe(7.5);
+  const guidance = parsePdfGuidance({ ...payload(), holdSeconds: 4, actions: [
+    { kind: "highlight", blockId: "p2-b1", caption: "Domain", holdSeconds: 3 },
+    { kind: "point", x: 0.5, y: 0.3, caption: "Contoh kodomain", holdSeconds: 9 },
+    { kind: "point", x: 0.6, y: 0.3, caption: "Rangkuman" },
+  ] }, context, "turn-1");
+  expect(guidance.actions.map((_, index) => pdfActionHoldSeconds(guidance, index))).toEqual([3, 9, 4]);
+});
+
+test("malformed model durations reject the whole visual batch", () => {
+  for (const holdSeconds of [-1, 0, 0.5, 21, Infinity, NaN, "5", null]) {
+    expect(() => parsePdfCursor({ ...payload(), blockId: "p2-b1", holdSeconds }, context, "turn-1")).toThrow(/holdSeconds/);
+    expect(() => parsePdfGuidance({ ...payload(), actions: [
+      { kind: "highlight", blockId: "p2-b1" },
+      { kind: "point", x: 0.5, y: 0.3, holdSeconds },
+    ] }, context, "turn-1")).toThrow(/holdSeconds/);
   }
 });

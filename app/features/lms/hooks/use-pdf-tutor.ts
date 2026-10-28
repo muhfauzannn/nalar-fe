@@ -108,6 +108,7 @@ export function usePdfTutor(
   const cancelledCalls = useRef(new Set<string>());
   const committedGuidance = useRef<PdfGuidance | null>(null);
   const committedCursor = useRef<PdfCursorCue | null>(null);
+  const visualReadyAt = useRef(0);
   const pendingGuidanceCall = useRef<string | null>(null);
   const events = useRef<PdfTutorEvent[]>([]);
   const statusRef = useRef<Status>("idle");
@@ -153,6 +154,7 @@ export function usePdfTutor(
     transcriptRef.current = "";
     outputRef.current = "";
     audioRef.current?.stop();
+    visualReadyAt.current = 0;
     pendingGuidanceCall.current = null;
     if (clearGuidance) {
       committedGuidance.current = null;
@@ -254,6 +256,7 @@ export function usePdfTutor(
     speakingInput.current = true;
     setInputTranscript("");
     setOutputTranscript("");
+    visualReadyAt.current = 0;
     committedGuidance.current = null;
     committedCursor.current = null;
     setCursorCue(null);
@@ -404,9 +407,9 @@ export function usePdfTutor(
             const current = () => generation.current === sessionGeneration &&
               turn.current?.id === active.id && !cancelledCalls.current.has(callId);
             const quiet = await waitUntil(
-              () => !voiceRef.current || !playing.current,
-              Date.now() + 20_000,
-              { pollMs: 40, cancelled: () => !current() },
+              () => Date.now() >= visualReadyAt.current && (!voiceRef.current || !playing.current),
+              Math.max(Date.now(), visualReadyAt.current) + 20_000,
+              { pollMs: 40, cancelled: () => !current() || contextRef.current?.revision !== view.revision },
             );
             if (!quiet || !current()) throw new Error("Langkah dibatalkan atau audio sebelumnya belum selesai.");
             if (contextRef.current?.revision !== view.revision)
@@ -1004,6 +1007,7 @@ export function usePdfTutor(
     // anchored to its own page (the reader shows it only there); drawing on the new
     // view requires get_pdf_context again (see present_pdf_guidance).
     trace("context-changed");
+    visualReadyAt.current = 0;
     // Invalidate locally immediately; coalesce rapid scroll/resize updates on the wire.
     const timer = setTimeout(() => {
       if (
@@ -1021,6 +1025,13 @@ export function usePdfTutor(
     }, 200);
     return () => clearTimeout(timer);
   }, [context, sendView, trace]);
+
+  const onPresentationTiming = useCallback((turnId: string, remainingMs: number) => {
+    if (turn.current?.id !== turnId) return;
+    visualReadyAt.current = Date.now() + Math.max(0, remainingMs);
+    // A deliberate reading pause is progress, not a stalled provider response.
+    if (responding.current) markProgress();
+  }, [markProgress]);
 
   // Typed questions only and nothing happening: give the Live session back. The thread stays
   // and is handed to the next session, opened by the next question.
@@ -1043,6 +1054,7 @@ export function usePdfTutor(
     notice: retry.notice ?? recoveryNotice,
     guidance,
     cursorCue,
+    onPresentationTiming,
     inputTranscript,
     outputTranscript,
     listening,

@@ -74,6 +74,10 @@ function Fixture() {
           Draw lesson
         </button>
         <button onClick={() => draw([
+          { kind: "point", x: 0.2, y: 0.2, width: 0, height: 0, caption: "Baca konsep pertama", holdSeconds: 6 },
+          { kind: "point", x: 0.7, y: 0.4, width: 0, height: 0, caption: "Baca contoh kedua", holdSeconds: 8 },
+        ])}>Read two parts</button>
+        <button onClick={() => draw([
           { kind: "rectangle", x: 0.1, y: 0.15, width: 0.3, height: 0.15, caption: "Bagian pertama" },
           { kind: "rectangle", x: 0.6, y: 0.4, width: 0.25, height: 0.15, caption: "Lalu bagian kedua" },
         ])}>Guide two parts</button>

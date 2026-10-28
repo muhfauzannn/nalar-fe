@@ -219,3 +219,31 @@ test("reduced motion updates cursor cues immediately without a travel animation"
   await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Perhatikan penyebut");
   expect(await page.getByTestId("tutor-cursor").evaluate((element) => element.getAnimations().length)).toBe(0);
 });
+
+
+test("AI reading holds are not shortened by the ten-second drawing cap", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/tests/fixtures/ink-playback.html");
+  await page.getByRole("button", { name: "Read two parts", exact: true }).click();
+  await page.clock.pauseAt(new Date(Date.now() + 100));
+  await page.clock.runFor(5_800);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Baca konsep pertama");
+  await page.clock.runFor(1_000);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Baca contoh kedua");
+  await page.clock.runFor(6_000);
+  await expect(page.getByTestId("pdf-annotation-layer")).toHaveAttribute("data-ink-state", "drawing");
+  await page.clock.runFor(3_000);
+  await expect(page.getByTestId("pdf-annotation-layer")).toHaveAttribute("data-ink-state", "complete");
+});
+
+test("reduced motion retains the AI reading time while omitting drawing motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  await page.goto("/tests/fixtures/ink-playback.html");
+  await page.getByRole("button", { name: "Read two parts", exact: true }).click();
+  await page.clock.pauseAt(new Date(Date.now() + 100));
+  await page.clock.runFor(5_000);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Baca konsep pertama");
+  await page.clock.runFor(1_100);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Baca contoh kedua");
+});

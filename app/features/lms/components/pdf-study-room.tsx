@@ -101,6 +101,7 @@ function PdfTutorDocument({ resource }: { resource: Resource }) {
           title={resource.title}
           guidance={tutor.guidance}
           cursorCue={tutor.cursorCue}
+          onPresentationTiming={tutor.onPresentationTiming}
           onContext={setContext}
         />
       </div>

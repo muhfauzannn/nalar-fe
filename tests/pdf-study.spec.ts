@@ -847,3 +847,27 @@ test("automatic recovery stops after one retry when the provider stays silent", 
   await expect(page.getByText(/Tutor belum menyelesaikan respons/)).toBeVisible();
   expect(mock.texts).toHaveLength(2);
 });
+
+
+test("the next AI cursor tool waits for the duration chosen by the previous step", async ({ page }) => {
+  await page.clock.install();
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan domain dan kodomain");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  const context = await mock.call("timed-context", "get_pdf_context") as Context;
+  const { actions: _actions, ...identity } = mock.guidance(context);
+  await mock.call("timed-first", "move_pdf_cursor", {
+    ...identity, blockId: context.blocks[0].id, caption: "Baca domain", holdSeconds: 5,
+  });
+  mock.send({ toolCall: { functionCalls: [{ id: "timed-next", name: "move_pdf_cursor", args: {
+    ...identity, blockId: context.blocks[1].id, caption: "Lalu kodomain", holdSeconds: 8,
+  } }] } });
+  await page.clock.runFor(3_000);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Baca domain");
+  expect(mock.responses.has("timed-next")).toBe(false);
+  await page.clock.runFor(3_000);
+  await expect.poll(() => mock.responses.get("timed-next")?.ok).toBe(true);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Lalu kodomain");
+});

@@ -4,6 +4,7 @@ import { MousePointer2 } from "lucide-react";
 import { Bubble, BubbleContent } from "~/components/ui/bubble";
 import {
   rotatePoint,
+  pdfActionHoldSeconds,
   rotateRect,
   type PdfGuidance,
   type PdfCursorCue,
@@ -20,11 +21,13 @@ export function PdfTutorOverlay({
   rotation,
   size,
   showCursor = true,
+  onPresentationTiming,
 }: {
   guidance: PdfGuidance | null;
   cursorCue?: PdfCursorCue | null;
   selection: PdfSelection | null;
   showCursor?: boolean;
+  onPresentationTiming?: (turnId: string, remainingMs: number) => void;
   rotation: number;
   size: { width: number; height: number };
 }) {
@@ -36,6 +39,8 @@ export function PdfTutorOverlay({
   const caption = useRef<HTMLSpanElement>(null);
   const cursorPosition = useRef<PdfPoint | null>(null);
   const previousCue = useRef<PdfCursorCue | null>(null);
+  const timingRef = useRef(onPresentationTiming);
+  timingRef.current = onPresentationTiming;
   const cueRef = useRef(cursorCue);
   cueRef.current = cursorCue;
   const playback = useRef<{
@@ -43,7 +48,8 @@ export function PdfTutorOverlay({
     progress: number[];
     finished: boolean;
     action: number;
-  }>({ guidance: null, progress: [], finished: false, action: 0 });
+    holds: number[];
+  }>({ guidance: null, progress: [], finished: false, action: 0, holds: [] });
   const angle = ((rotation % 360) + 360) % 360;
   const originalWidth = angle % 180 === 0 ? size.width : size.height;
   const originalHeight = angle % 180 === 0 ? size.height : size.width;
@@ -107,6 +113,7 @@ export function PdfTutorOverlay({
         progress: paths.map(() => 0),
         finished: false,
         action: 0,
+        holds: guidance?.actions.map((_, index) => pdfActionHoldSeconds(guidance, index)) ?? [],
       };
     }
     const state = playback.current;
@@ -139,6 +146,36 @@ export function PdfTutorOverlay({
 
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     let timeline: gsap.core.Timeline | null = null;
+    const notifyTiming = () => {
+      if (!cueRef.current) timingRef.current?.(guidance.turnId,
+        Math.max(0, (timeline?.duration() ?? 0) - (timeline?.time() ?? 0)) * 1000);
+    };
+    const actionCaption = (index: number) => {
+      state.action = index;
+      if (cueRef.current) return;
+      if (caption.current) caption.current.textContent = guidance.actions[index].caption ?? guidance.caption;
+      if (cursor.current) cursor.current.dataset.action = String(index);
+    };
+    const appendHold = (index: number) => {
+      if (index < 0 || !(state.holds[index] > 0)) return;
+      const hold = { remaining: state.holds[index] };
+      timeline!.to(hold, {
+        remaining: 0, duration: hold.remaining, ease: "none",
+        onStart: () => {
+          actionCaption(index);
+          pen.style.visibility = "hidden";
+          host.dataset.pointerMode = "cursor";
+          fallback.forEach((text) => { text.style.visibility = "visible"; });
+          if (!cueRef.current && !plan.strokes.some((stroke) => stroke.action === index)) {
+            const action = guidance.actions[index];
+            placeCursor(action.points?.[0] ?? { x: action.x + action.width / 2, y: action.y + action.height / 2 });
+          }
+          notifyTiming();
+        },
+        onUpdate: () => { state.holds[index] = hold.remaining; },
+        onComplete: () => { state.holds[index] = 0; },
+      });
+    };
     const finish = () => {
       state.finished = true;
       host.dataset.inkState = "complete";
@@ -152,6 +189,7 @@ export function PdfTutorOverlay({
       fallback.forEach((text) => {
         text.style.visibility = "visible";
       });
+      notifyTiming();
       if (!cueRef.current) {
         state.action = guidance.actions.length - 1;
         if (caption.current) caption.current.textContent = guidance.actions[state.action].caption ?? guidance.caption;
@@ -181,12 +219,41 @@ export function PdfTutorOverlay({
     };
     if (media.matches) {
       finish();
-      return;
+      // Removing travel/drawing motion must not remove the model's reading time.
+      timeline = gsap.timeline();
+      guidance.actions.forEach((action, index) => {
+        if (!(state.holds[index] > 0)) return;
+        timeline!.call(() => {
+          actionCaption(index);
+          if (!cueRef.current) placeCursor(action.points?.[0] ?? {
+            x: action.x + action.width / 2, y: action.y + action.height / 2,
+          });
+        });
+        appendHold(index);
+      });
+      notifyTiming();
+      return () => { timeline?.kill(); };
     }
     host.dataset.inkState = "drawing";
     timeline = gsap.timeline({ onComplete: finish });
+    // Cap pen motion independently: the model's holds must never be compressed
+    // by the old ten-second cap for the entire batch.
+    const durationFor = (index: number) => {
+      const writing = plan.strokes[index].writing;
+      return Math.max(writing ? 0.035 : 0.12,
+        Math.min(writing ? 0.7 : 1.8, lengths[index] / (writing ? 300 : 550))) *
+        (1 - (state.progress[index] ?? 0));
+    };
+    const inkScale = Math.max(1,
+      (paths.reduce((total, _, index) => total + durationFor(index), 0) + paths.length * (0.16 + 0.025)) / 10);
     let previousTip: { x: number; y: number } | null = null;
+    let previousAction = -1;
     paths.forEach((path, index) => {
+      const action = plan.strokes[index].action;
+      if (action !== previousAction) {
+        appendHold(previousAction);
+        previousAction = action;
+      }
       const initial = state.progress[index] ?? 0;
       if (initial >= 1) return;
       const length = lengths[index];
@@ -204,7 +271,7 @@ export function PdfTutorOverlay({
           timeline!.to(travel, {
             x: start.x,
             y: start.y,
-            duration: Math.max(0.035, Math.min(0.16, distance / 1400)),
+            duration: Math.max(0.035, Math.min(0.16, distance / 1400)) / inkScale,
             ease: "power1.inOut",
             onStart: () => {
               host.dataset.pointerMode = selecting ? "selecting" : "ink";
@@ -220,19 +287,12 @@ export function PdfTutorOverlay({
         motion,
         {
           progress: 1,
-          duration:
-            Math.max(
-              writing ? 0.035 : 0.12,
-              Math.min(writing ? 0.7 : 1.8, length / (writing ? 300 : 550)),
-            ) *
-            (1 - initial),
+          duration: durationFor(index) / inkScale,
           ease: writing ? "sine.inOut" : "none",
           onStart: () => {
-            state.action = plan.strokes[index].action;
-            if (!cueRef.current && caption.current) {
-              caption.current.textContent = guidance.actions[state.action].caption ?? guidance.caption;
-              if (cursor.current) cursor.current.dataset.action = String(state.action);
-            }
+            const changed = state.action !== plan.strokes[index].action;
+            actionCaption(plan.strokes[index].action);
+            if (changed) notifyTiming();
             path.style.visibility = "visible";
             host.dataset.pointerMode = selecting ? "selecting" : "ink";
             pen.style.visibility = selecting ? "hidden" : "visible";
@@ -251,12 +311,12 @@ export function PdfTutorOverlay({
             pen.dataset.penDown = "false";
           },
         },
-        index ? "+=0.025" : 0,
+        index ? `+=${0.025 / inkScale}` : 0,
       );
     });
-    // Keep a long note from holding a teaching step open for too long.
-    timeline.timeScale(Math.max(1, timeline.duration() / 10));
-    if (!paths.length) finish();
+    appendHold(previousAction < 0 ? guidance.actions.length - 1 : previousAction);
+    notifyTiming();
+    if (!timeline.duration()) finish();
     media.addEventListener("change", reduceMotion);
     return () => {
       timeline?.kill();
@@ -283,6 +343,8 @@ export function PdfTutorOverlay({
     placeCursor(target);
     if (caption.current) caption.current.textContent = cursorCue?.caption ?? action?.caption ?? guidance?.caption ?? "";
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (cursorCue && cueChanged) timingRef.current?.(cursorCue.turnId,
+      (cursorCue.holdSeconds ?? 0) * 1000 + (hasPosition && !media.matches ? 200 : 0));
     // Independent cursor updates never restart the ink timeline. WAAPI retargets
     // from the current visual transform if another cue arrives during the move.
     if (!cursorCue || !cueChanged || !hasPosition || media.matches) return;
