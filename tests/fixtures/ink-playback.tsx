@@ -3,16 +3,19 @@ import { createRoot } from "react-dom/client";
 import { PdfTutorOverlay } from "../../app/features/lms/components/pdf-tutor-overlay";
 import type {
   PdfAction,
+  PdfCursorCue,
   PdfGuidance,
 } from "../../app/features/lms/lib/pdf-tutor";
 import "../../app/app.css";
 function Fixture() {
   const [guidance, setGuidance] = useState<PdfGuidance | null>(null);
+  const [cursorCue, setCursorCue] = useState<PdfCursorCue | null>(null);
   const [active, setActive] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const draw = (actions: PdfAction[]) => {
     setActive(true);
+    setCursorCue(null);
     setGuidance({
       resourceId: "fixture",
       page: 1,
@@ -70,8 +73,18 @@ function Fixture() {
         >
           Draw lesson
         </button>
+        <button onClick={() => draw([
+          { kind: "rectangle", x: 0.1, y: 0.15, width: 0.3, height: 0.15, caption: "Bagian pertama" },
+          { kind: "rectangle", x: 0.6, y: 0.4, width: 0.25, height: 0.15, caption: "Lalu bagian kedua" },
+        ])}>Guide two parts</button>
+        {[0.2, 0.7].map((x, index) => (
+          <button key={x} onClick={() => setCursorCue({
+            resourceId: "fixture", page: 1, revision: 1, turnId: "cursor-turn",
+            x, y: 0.5, caption: index ? "Perhatikan penyebut" : "Perhatikan pembilang",
+          })}>Move cursor {index + 1}</button>
+        ))}
         <button onClick={() => setActive(false)}>Pause</button>
-        <button onClick={() => setGuidance(null)}>Clear</button>
+        <button onClick={() => { setGuidance(null); setCursorCue(null); }}>Clear</button>
         <button
           onClick={() => {
             setActive(false);
@@ -101,6 +114,7 @@ function Fixture() {
       >
         <PdfTutorOverlay
           guidance={guidance}
+          cursorCue={active ? cursorCue : null}
           selection={null}
           rotation={rotation}
           size={{ width, height }}

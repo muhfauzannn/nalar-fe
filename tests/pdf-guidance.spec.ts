@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   parsePdfGuidance,
+  parsePdfCursor,
   contextForModel,
   rotatePoint,
   rotateRect,
@@ -147,5 +148,36 @@ test("invalid text ranges are rejected before any guidance is applied", () => {
     expect(() => parsePdfGuidance({ ...payload(), actions: [
       { kind: "highlight", blockId: "p2-b1", ...range },
     ] }, context, "turn-1")).toThrow(/Rentang/);
+  }
+});
+
+
+test("cursor cues can move between source blocks and coordinates with distinct captions", () => {
+  const first = parsePdfCursor({ ...payload(), blockId: "p2-b1", caption: "Bagian pertama" }, context, "turn-1");
+  expect(first.x).toBeCloseTo(0.25);
+  expect(first.y).toBeCloseTo(0.225);
+  expect(first.caption).toBe("Bagian pertama");
+  expect(first).not.toHaveProperty("actions");
+  const next = parsePdfCursor({ ...payload(), x: 0.65, y: 0.4, caption: "Lalu bagian kedua" }, context, "turn-1");
+  expect(next.x).toBe(0.65);
+  expect(next.caption).toBe("Lalu bagian kedua");
+});
+
+test("cursor cues reject stale identities, hidden targets and invalid captions", () => {
+  for (const change of [{ page: 1 }, { revision: 3 }, { turnId: "old" },
+    { resourceId: "other" }, { x: 2 }, { y: 0.9 }, { caption: "" },
+    { caption: "x".repeat(121) }, { blockId: "missing" }]) {
+    expect(() => parsePdfCursor({ ...payload(), x: 0.2, y: 0.3, ...change }, context, "turn-1")).toThrow();
+  }
+});
+
+test("each annotation retains its own caption and validates captions atomically", () => {
+  const actions = [
+    { kind: "highlight", blockId: "p2-b1", caption: "Pembilang" },
+    { kind: "point", x: 0.5, y: 0.3, caption: "Penyebut" },
+  ];
+  expect(parsePdfGuidance({ ...payload(), actions }, context, "turn-1").actions.map((a) => a.caption)).toEqual(["Pembilang", "Penyebut"]);
+  for (const caption of ["", "x".repeat(121), 4, null]) {
+    expect(() => parsePdfGuidance({ ...payload(), actions: [...actions, { ...actions[1], caption }] }, context, "turn-1")).toThrow(/Caption/);
   }
 });

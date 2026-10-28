@@ -181,3 +181,41 @@ test("reduced motion renders complete legible ink immediately without a moving h
   await expect(page.getByTestId("tutor-drawing-hand")).toBeHidden();
   await expect(page.getByTestId("tutor-note")).toContainText("Luas = p × l");
 });
+
+
+test("cursor-only steps move smoothly and change the bubble while preserving completed ink", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/tests/fixtures/ink-playback.html");
+  await page.getByRole("button", { name: "Draw rectangle", exact: true }).click();
+  await page.clock.runFor(3_000);
+  const before = await page.locator("[data-ink-stroke]").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-progress")));
+  await page.getByRole("button", { name: "Move cursor 1", exact: true }).click();
+  await page.clock.runFor(250);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Perhatikan pembilang");
+  await page.getByRole("button", { name: "Move cursor 2", exact: true }).click();
+  await page.clock.runFor(250);
+  await expect(page.getByTestId("tutor-cursor")).toHaveAttribute("data-x", "0.7");
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Perhatikan penyebut");
+  expect(await page.locator("[data-ink-stroke]").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-progress")))).toEqual(before);
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
+});
+
+test("the cursor bubble changes at each annotation action", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/tests/fixtures/ink-playback.html");
+  await page.getByRole("button", { name: "Guide two parts", exact: true }).click();
+  await page.clock.pauseAt(new Date(Date.now() + 100));
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Bagian pertama");
+  await page.clock.runFor(2_000);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Lalu bagian kedua");
+});
+
+test("reduced motion updates cursor cues immediately without a travel animation", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/tests/fixtures/ink-playback.html");
+  await page.getByRole("button", { name: "Move cursor 1", exact: true }).click();
+  await page.getByRole("button", { name: "Move cursor 2", exact: true }).click();
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Perhatikan penyebut");
+  expect(await page.getByTestId("tutor-cursor").evaluate((element) => element.getAnimations().length)).toBe(0);
+});

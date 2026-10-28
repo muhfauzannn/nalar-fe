@@ -743,3 +743,29 @@ test("an unanswered tool continuation times out visibly and the student can ask 
   await expect.poll(() => mock.texts.length).toBe(2);
   expect((await mock.call("retry-context", "get_pdf_context")).turnId).toBeTruthy();
 });
+
+
+test("the AI moves its cursor and changes captions without replacing annotations", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const mock = await setup(page);
+  await mock.start();
+  const context = await mock.ground("cursor-context");
+  await mock.call("cursor-ink", "present_pdf_guidance", mock.guidance(context));
+  const before = await page.getByTestId("tutor-highlight").getAttribute("d");
+  const { actions: _actions, ...identity } = mock.guidance(context);
+  for (const [index, caption] of ["Ini judulnya", "Sekarang perhatikan pembilang"].entries()) {
+    expect((await mock.call(`cursor-${index}`, "move_pdf_cursor", {
+      ...identity, blockId: context.blocks[index].id, caption,
+    })).ok).toBe(true);
+    await expect(page.getByTestId("tutor-cursor-caption")).toHaveText(caption);
+    await expect(page.getByTestId("tutor-highlight")).toHaveAttribute("d", before!);
+    await expect(page.getByTestId("tutor-highlight")).toHaveAttribute("data-progress", "1");
+  }
+  await page.getByRole("button", { name: "Hentikan penjelasan" }).click();
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
+  expect((await mock.call("cursor-late", "move_pdf_cursor", {
+    ...identity, blockId: context.blocks[0].id,
+  })).ok).toBe(false);
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
+  expect(mock.errors).toEqual([]);
+});

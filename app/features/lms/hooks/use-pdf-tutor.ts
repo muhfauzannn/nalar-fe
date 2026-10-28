@@ -20,6 +20,8 @@ import type { TutorThreadMessage } from "../types";
 import {
   contextForModel,
   parsePdfGuidance,
+  parsePdfCursor,
+  type PdfCursorCue,
   type PdfGuidance,
   type PdfViewContext,
 } from "../lib/pdf-tutor";
@@ -53,6 +55,7 @@ export function usePdfTutor(
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [guidance, setGuidance] = useState<PdfGuidance | null>(null);
+  const [cursorCue, setCursorCue] = useState<PdfCursorCue | null>(null);
   const [inputTranscript, setInputTranscript] = useState("");
   const [outputTranscript, setOutputTranscript] = useState("");
   const [listening, setListening] = useState(false);
@@ -95,6 +98,7 @@ export function usePdfTutor(
   const abortRef = useRef<AbortController | null>(null);
   const cancelledCalls = useRef(new Set<string>());
   const committedGuidance = useRef<PdfGuidance | null>(null);
+  const committedCursor = useRef<PdfCursorCue | null>(null);
   const pendingGuidanceCall = useRef<string | null>(null);
   const events = useRef<PdfTutorEvent[]>([]);
   const statusRef = useRef<Status>("idle");
@@ -138,7 +142,11 @@ export function usePdfTutor(
     outputRef.current = "";
     audioRef.current?.stop();
     pendingGuidanceCall.current = null;
-    if (clearGuidance) committedGuidance.current = null;
+    if (clearGuidance) {
+      committedGuidance.current = null;
+      committedCursor.current = null;
+    }
+    setCursorCue(committedCursor.current);
     setGuidance(committedGuidance.current);
     setOutputTranscript("");
     setInputTranscript("");
@@ -223,6 +231,8 @@ export function usePdfTutor(
     setInputTranscript("");
     setOutputTranscript("");
     committedGuidance.current = null;
+    committedCursor.current = null;
+    setCursorCue(null);
     pendingGuidanceCall.current = null;
     setGuidance(null);
     setStatus("thinking");
@@ -342,7 +352,7 @@ export function usePdfTutor(
             groundedTurn.current = active.id;
             response = contextForModel(view, active.id);
             trace("context-read");
-          } else if (call.name === "present_pdf_guidance") {
+          } else if (call.name === "present_pdf_guidance" || call.name === "move_pdf_cursor") {
             if (groundedTurn.current !== active.id)
               throw new Error(
                 "Panggil get_pdf_context pada giliran ini dahulu.",
@@ -351,10 +361,27 @@ export function usePdfTutor(
               throw new Error(
                 "Tampilan PDF berubah. Panggil get_pdf_context lagi sebelum menandai halaman.",
               );
-            const next = parsePdfGuidance(call.args, view, active.id);
-            // Start the ink timeline before acknowledging; speech may accompany the strokes.
+            // Model generation can run ahead of real playback. Keep the next visual
+            // step behind the audio already queued for the previous reference.
             pendingGuidanceCall.current = call.id;
-            setGuidance(next);
+            const callId = call.id;
+            const current = () => generation.current === sessionGeneration &&
+              turn.current?.id === active.id && !cancelledCalls.current.has(callId);
+            const quiet = await waitUntil(
+              () => !voiceRef.current || !playing.current,
+              Date.now() + 20_000,
+              { pollMs: 40, cancelled: () => !current() },
+            );
+            if (!quiet || !current()) throw new Error("Langkah dibatalkan atau audio sebelumnya belum selesai.");
+            if (contextRef.current?.revision !== view.revision)
+              throw new Error("Tampilan berubah saat menunggu audio. Panggil get_pdf_context lagi.");
+            const cursorOnly = call.name === "move_pdf_cursor";
+            const nextCursor = cursorOnly ? parsePdfCursor(call.args, view, active.id) : null;
+            const next = cursorOnly ? null : parsePdfGuidance(call.args, view, active.id);
+            // Cursor-only steps preserve the drawing and its playback progress.
+            pendingGuidanceCall.current = call.id;
+            setCursorCue(nextCursor);
+            if (next) setGuidance(next);
             await new Promise<void>((resolve) => {
               const timer = setTimeout(resolve, 80);
               requestAnimationFrame(() => {
@@ -370,7 +397,8 @@ export function usePdfTutor(
               pendingGuidanceCall.current !== call.id
             )
               throw new Error("Tindakan dibatalkan karena konteks berubah.");
-            committedGuidance.current = next;
+            if (next) committedGuidance.current = next;
+            committedCursor.current = nextCursor;
             pendingGuidanceCall.current = null;
             response = {
               ok: true,
@@ -378,7 +406,7 @@ export function usePdfTutor(
               revision: view.revision,
               turnId: active.id,
             };
-            trace("guidance-presented");
+            trace(cursorOnly ? "cursor-moved" : "guidance-presented");
           } else {
             throw new Error("Tool tidak dikenali.");
           }
@@ -387,6 +415,7 @@ export function usePdfTutor(
           if (pendingGuidanceCall.current === call.id) {
             pendingGuidanceCall.current = null;
             setGuidance(committedGuidance.current);
+            setCursorCue(committedCursor.current);
           }
           response = {
             ok: false,
@@ -406,7 +435,10 @@ export function usePdfTutor(
       }
       if (generation.current !== sessionGeneration) return;
       const validResponses = functionResponses.filter((response) => !cancelledCalls.current.has(response.id));
-      if (validResponses.length) session.sendToolResponse({ functionResponses: validResponses });
+      if (validResponses.length) {
+        if (turn.current && responding.current) toolContinuation.current = true;
+        session.sendToolResponse({ functionResponses: validResponses });
+      }
       const active = turn.current;
       // Not tied to the view revision: turning the page must not mute an answer in progress.
       const canRespond = active && groundedTurn.current === active.id;
@@ -449,7 +481,7 @@ export function usePdfTutor(
       }
       // A function-call boundary can arrive in its own frame while its async tool is
       // still rendering. Only the answer boundary completes the student's response.
-      if (server?.turnComplete && !message.toolCall && !toolContinuation.current) {
+      if (server?.turnComplete && !message.toolCall && !toolContinuation.current && !pendingGuidanceCall.current) {
         responding.current = false;
         if (responseTimer.current) clearTimeout(responseTimer.current);
         commitTurn();
@@ -912,6 +944,7 @@ export function usePdfTutor(
     error,
     notice: retry.notice,
     guidance,
+    cursorCue,
     inputTranscript,
     outputTranscript,
     listening,

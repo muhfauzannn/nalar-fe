@@ -6,6 +6,8 @@ import {
   rotatePoint,
   rotateRect,
   type PdfGuidance,
+  type PdfCursorCue,
+  type PdfPoint,
   type PdfSelection,
 } from "../lib/pdf-tutor";
 import { buildInkPlan } from "../lib/handwriting/ink-plan";
@@ -13,12 +15,14 @@ import { buildInkPlan } from "../lib/handwriting/ink-plan";
 /** All drawing motion runs in original page units, with one projection for the PDF view. */
 export function PdfTutorOverlay({
   guidance,
+  cursorCue = null,
   selection,
   rotation,
   size,
   showCursor = true,
 }: {
   guidance: PdfGuidance | null;
+  cursorCue?: PdfCursorCue | null;
   selection: PdfSelection | null;
   showCursor?: boolean;
   rotation: number;
@@ -29,11 +33,17 @@ export function PdfTutorOverlay({
   const hand = useRef<SVGGElement>(null);
   const cursor = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
+  const caption = useRef<HTMLSpanElement>(null);
+  const cursorPosition = useRef<PdfPoint | null>(null);
+  const previousCue = useRef<PdfCursorCue | null>(null);
+  const cueRef = useRef(cursorCue);
+  cueRef.current = cursorCue;
   const playback = useRef<{
     guidance: PdfGuidance | null;
     progress: number[];
     finished: boolean;
-  }>({ guidance: null, progress: [], finished: false });
+    action: number;
+  }>({ guidance: null, progress: [], finished: false, action: 0 });
   const angle = ((rotation % 360) + 360) % 360;
   const originalWidth = angle % 180 === 0 ? size.width : size.height;
   const originalHeight = angle % 180 === 0 ? size.height : size.width;
@@ -64,6 +74,22 @@ export function PdfTutorOverlay({
     : null;
   const selected = selection ? (selection.rects ?? [selection]).map((rect) => rotateRect(rect, angle)) : [];
 
+  const placeCursor = (point: PdfPoint) => {
+    cursorPosition.current = point;
+    const screen = rotatePoint(point, angle);
+    const element = cursor.current;
+    if (!element) return;
+    element.style.transform = `translate3d(${screen.x * size.width}px,${screen.y * size.height}px,0)`;
+    element.dataset.x = String(point.x);
+    element.dataset.y = String(point.y);
+    if (bubble.current) {
+      bubble.current.style.left = screen.x > 0.55 ? "auto" : "26px";
+      bubble.current.style.right = screen.x > 0.55 ? "10px" : "auto";
+      bubble.current.style.top = screen.y < 0.15 ? "28px" : "auto";
+      bubble.current.style.bottom = screen.y < 0.15 ? "auto" : "20px";
+    }
+  };
+
   useLayoutEffect(() => {
     const host = root.current;
     const group = drawing.current;
@@ -80,6 +106,7 @@ export function PdfTutorOverlay({
         guidance,
         progress: paths.map(() => 0),
         finished: false,
+        action: 0,
       };
     }
     const state = playback.current;
@@ -125,6 +152,15 @@ export function PdfTutorOverlay({
       fallback.forEach((text) => {
         text.style.visibility = "visible";
       });
+      if (!cueRef.current) {
+        state.action = guidance.actions.length - 1;
+        if (caption.current) caption.current.textContent = guidance.actions[state.action].caption ?? guidance.caption;
+        // Reduced motion and unsupported-only text still end at the relevant target.
+        if (media.matches || !paths.length) {
+          const last = guidance.actions[state.action];
+          placeCursor(last.points?.at(-1) ?? { x: last.x + last.width / 2, y: last.y + last.height / 2 });
+        }
+      }
     };
     const placePen = (at: { x: number; y: number }, lifted = false) => {
       pen.setAttribute(
@@ -133,19 +169,7 @@ export function PdfTutorOverlay({
       );
       pen.dataset.x = String(at.x);
       pen.dataset.y = String(at.y);
-      if (cursor.current) {
-        const screen = rotatePoint(
-          { x: at.x / 1000, y: at.y / pageHeight },
-          angle,
-        );
-        cursor.current.style.transform = `translate3d(${screen.x * size.width}px,${screen.y * size.height}px,0)`;
-        if (bubble.current) {
-          bubble.current.style.left = screen.x > 0.55 ? "auto" : "26px";
-          bubble.current.style.right = screen.x > 0.55 ? "10px" : "auto";
-          bubble.current.style.top = screen.y < 0.15 ? "28px" : "auto";
-          bubble.current.style.bottom = screen.y < 0.15 ? "auto" : "20px";
-        }
-      }
+      if (!cueRef.current) placeCursor({ x: at.x / 1000, y: at.y / pageHeight });
     };
     const movePen = (path: SVGPathElement, length: number, progress: number) =>
       placePen(path.getPointAtLength(length * progress));
@@ -204,6 +228,11 @@ export function PdfTutorOverlay({
             (1 - initial),
           ease: writing ? "sine.inOut" : "none",
           onStart: () => {
+            state.action = plan.strokes[index].action;
+            if (!cueRef.current && caption.current) {
+              caption.current.textContent = guidance.actions[state.action].caption ?? guidance.caption;
+              if (cursor.current) cursor.current.dataset.action = String(state.action);
+            }
             path.style.visibility = "visible";
             host.dataset.pointerMode = selecting ? "selecting" : "ink";
             pen.style.visibility = selecting ? "hidden" : "visible";
@@ -236,12 +265,47 @@ export function PdfTutorOverlay({
     };
   }, [guidance, plan, showCursor, angle, pageHeight, size.width, size.height]);
 
+  useLayoutEffect(() => {
+    const element = cursor.current;
+    const cueChanged = previousCue.current !== cursorCue;
+    previousCue.current = cursorCue;
+    if (!element) return;
+    const hasPosition = cursorPosition.current !== null;
+    const from = getComputedStyle(element).transform;
+    const state = playback.current;
+    const action = guidance?.actions[state.action];
+    const target = cursorCue ?? (
+      state.finished || state.progress.some((value) => value > 0)
+        ? cursorPosition.current
+        : first?.points?.[0] ?? (first ? { x: first.x + first.width / 2, y: first.y + first.height / 2 } : null)
+    );
+    if (!target) return;
+    placeCursor(target);
+    if (caption.current) caption.current.textContent = cursorCue?.caption ?? action?.caption ?? guidance?.caption ?? "";
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    // Independent cursor updates never restart the ink timeline. WAAPI retargets
+    // from the current visual transform if another cue arrives during the move.
+    if (!cursorCue || !cueChanged || !hasPosition || media.matches) return;
+    const animation = element.animate([
+      { transform: from }, { transform: element.style.transform },
+    ], { duration: 200, easing: "cubic-bezier(0.77, 0, 0.175, 1)" });
+    const reduce = () => { if (media.matches) animation.cancel(); };
+    media.addEventListener("change", reduce);
+    return () => {
+      const position = getComputedStyle(element).transform;
+      animation.cancel();
+      element.style.transform = position;
+      media.removeEventListener("change", reduce);
+    };
+  }, [cursorCue, guidance, showCursor, angle, size.width, size.height]);
+
   return (
     <div
       ref={root}
       className="pdf-tutor-overlay pointer-events-none absolute inset-0"
       data-testid="pdf-annotation-layer"
       data-ink-state="empty"
+      data-external-cursor={!!cursorCue}
     >
       <svg
         className="absolute inset-0 size-full overflow-visible text-[color:var(--pdf-tutor-ink)]"
@@ -387,14 +451,11 @@ export function PdfTutorOverlay({
           </g>
         </g>
       </svg>
-      {anchor && guidance && showCursor ? (
+      {cursorCue || (anchor && guidance && showCursor) ? (
         <div
           ref={cursor}
           data-testid="tutor-cursor"
           className="absolute top-0 left-0"
-          style={{
-            transform: `translate3d(${anchor.x * size.width}px,${anchor.y * size.height}px,0)`,
-          }}
         >
           <MousePointer2
             data-tutor-pointer=""
@@ -405,18 +466,16 @@ export function PdfTutorOverlay({
             ref={bubble}
             className="absolute w-max max-w-[min(15rem,50vw)]"
             style={{
-              left: anchor.x > 0.55 ? "auto" : 26,
-              right: anchor.x > 0.55 ? 10 : "auto",
-              top: anchor.y > 0.75 ? "auto" : 24,
-              bottom: anchor.y > 0.75 ? 20 : "auto",
+              left: 26,
+              top: 24,
             }}
           >
             <Bubble variant="secondary" className="max-w-full">
               <BubbleContent>
                 <span className="block text-[10px] font-semibold tracking-wider uppercase">
-                  NALAR · hal. {guidance.page}
+                  NALAR · hal. {cursorCue?.page ?? guidance?.page}
                 </span>
-                <span>{guidance.caption}</span>
+                <span ref={caption} data-testid="tutor-cursor-caption">{cursorCue?.caption ?? guidance?.caption}</span>
               </BubbleContent>
             </Bubble>
           </div>

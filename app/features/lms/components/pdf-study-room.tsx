@@ -100,6 +100,7 @@ function PdfTutorDocument({ resource }: { resource: Resource }) {
           resourceId={resource.id}
           title={resource.title}
           guidance={tutor.guidance}
+          cursorCue={tutor.cursorCue}
           onContext={setContext}
         />
       </div>
@@ -111,7 +112,7 @@ function PdfTutorDocument({ resource }: { resource: Resource }) {
               <Badge variant="outline">Halaman berupa gambar</Badge>
             ) : null}
             <span className="flex-1" />
-            {tutor.guidance ? (
+            {tutor.guidance || tutor.cursorCue ? (
               <Button type="button" variant="ghost" size="xs" onClick={tutor.stopExplanation}>
                 <Eraser data-icon="inline-start" /> Bersihkan
               </Button>

@@ -16,6 +16,7 @@ import {
   clampUnit,
   rotateRect,
   type PdfBlock,
+  type PdfCursorCue,
   type PdfGuidance,
   type PdfRect,
   type PdfSelection,
@@ -35,10 +36,11 @@ type Props = {
   resourceId: string;
   title: string;
   guidance: PdfGuidance | null;
+  cursorCue?: PdfCursorCue | null;
   onContext: (context: PdfViewContext | null) => void;
 };
 
-export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
+export function PdfReader({ resourceId, title, guidance, cursorCue, onContext }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -555,6 +557,7 @@ export function PdfReader({ resourceId, title, guidance, onContext }: Props) {
             <div ref={textHost} className="textLayer pdf-study-text-layer" />
             <PdfTutorOverlay
               guidance={guidance?.page === page ? guidance : null}
+              cursorCue={!loading && cursorCue?.page === page && cursorCue.revision === revision.current ? cursorCue : null}
               selection={selection}
               rotation={effectiveRotation}
               size={size}

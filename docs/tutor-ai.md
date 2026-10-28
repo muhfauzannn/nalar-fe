@@ -65,6 +65,15 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
   celah antarteks. AI dapat memakai `quote` atau `startOffset`/`endOffset` pada
   `blockId` untuk menyorot sebagian teks. Posisi karakter diukur memakai DOM Range,
   bukan perkiraan lebar huruf; resolver DOM tidak dikirim ke provider.
+- Cursor bisa berpindah berulang melalui `move_pdf_cursor`, dengan `blockId` atau
+  koordinat dan caption baru untuk tiap rujukan. Langkah ini mempertahankan anotasi
+  dan kemajuan goresannya. Perpindahan memakai transform 200 ms; reduced motion
+  langsung memindahkan posisi. Caption per action pada `present_pdf_guidance`
+  berubah saat goresan action tersebut dimulai. Model diminta menyelesaikan
+  penjelasan pendek sebelum menunjuk bagian berikutnya, bukan mengirim semua
+  perpindahan cursor sekaligus. Langkah visual berikutnya menunggu audio yang
+  sudah antre selesai (maksimal 20 detik); konteks dan pembatalan dicek kembali
+  sebelum tampil. Ini sinkronisasi per langkah, bukan penyelarasan per kata.
 - `get_pdf_context` wajib sebelum menjawab. `present_pdf_guidance` harus membawa
   `resourceId`, `page`, `revision`, dan `turnId` terbaru. Gunakan `blockId` untuk teks;
   geometri memakai koordinat 0..1 pada halaman asli tanpa rotasi. Untuk garis bebas

@@ -20,6 +20,7 @@ export type PdfViewContext = {
 export type PdfAction = PdfRect & {
   kind:
     "point" | "highlight" | "arrow" | "rectangle" | "ellipse" | "text" | "path";
+  caption?: string;
   text?: string;
   points?: PdfPoint[];
   rects?: PdfRect[];
@@ -32,6 +33,18 @@ export type PdfGuidance = {
   caption: string;
   actions: PdfAction[];
 };
+
+export type PdfCursorCue = Omit<PdfGuidance, "actions"> & PdfPoint;
+
+/** Cursor-only steps use the same grounding and viewport checks as annotations. */
+export function parsePdfCursor(raw: unknown, context: PdfViewContext, turnId: string): PdfCursorCue {
+  if (!record(raw)) throw new Error("Target cursor tidak valid.");
+  const guidance = parsePdfGuidance({ ...raw, actions: [{
+    kind: "point", blockId: raw.blockId, x: raw.x, y: raw.y,
+  }] }, context, turnId);
+  const { actions, ...identity } = guidance;
+  return { ...identity, x: actions[0].x, y: actions[0].y };
+}
 
 const unit = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1;
@@ -118,6 +131,9 @@ export function parsePdfGuidance(
     )
       throw new Error("Jenis tindakan tidak valid.");
     const kind = value.kind as PdfAction["kind"];
+    if (value.caption !== undefined && (typeof value.caption !== "string" ||
+        !value.caption.trim() || value.caption.length > 120))
+      throw new Error("Caption tindakan harus berisi 1–120 karakter.");
     const block =
       value.blockId === undefined
         ? null
@@ -222,6 +238,7 @@ export function parsePdfGuidance(
     }
     return {
       kind,
+      ...(value.caption !== undefined ? { caption: value.caption as string } : {}),
       x: box.x,
       y: box.y,
       width: box.width,
