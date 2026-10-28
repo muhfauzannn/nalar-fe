@@ -32,6 +32,8 @@ import {
   type TutorMicrophone,
 } from "../lib/tutor-audio";
 
+import { canPublishPdfContext, pdfOutputText, pdfQuestionContent, pdfResponseEnded } from "../lib/pdf-tutor-turn";
+
 type Status =
   | "idle"
   | "connecting"
@@ -53,6 +55,7 @@ export function usePdfTutor(
   context: PdfViewContext | null,
 ) {
   const [status, setStatus] = useState<Status>("idle");
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guidance, setGuidance] = useState<PdfGuidance | null>(null);
   const [cursorCue, setCursorCue] = useState<PdfCursorCue | null>(null);
@@ -88,6 +91,12 @@ export function usePdfTutor(
   const toolContinuation = useRef(false);
   const replacingTurn = useRef(false);
   const toolQueue = useRef<Promise<void>>(Promise.resolve());
+  const typedQuestion = useRef<string | null>(null);
+  const recoveryAttempts = useRef(0);
+  const recoverResponseRef = useRef<() => boolean>(() => false);
+  const hasAnswer = useRef(false);
+  const generationTailPending = useRef(false);
+  const visualFailures = useRef(0);
   const responseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const turn = useRef<{ id: string; revision: number } | null>(null);
   const groundedTurn = useRef<string | null>(null);
@@ -132,6 +141,9 @@ export function usePdfTutor(
 
   const cancelTurn = useCallback((clearGuidance = true) => {
     responding.current = false;
+    typedQuestion.current = null;
+    hasAnswer.current = false;
+    setRecoveryNotice(null);
     toolContinuation.current = false;
     replacingTurn.current = false;
     if (responseTimer.current) clearTimeout(responseTimer.current);
@@ -177,16 +189,23 @@ export function usePdfTutor(
     if (responseTimer.current) clearTimeout(responseTimer.current);
     responseTimer.current = setTimeout(() => {
       if (!mounted.current || !responding.current) return;
+      trace("response-timeout");
+      report({ event: "response_timeout", phase: "live", attempt: recoveryAttempts.current,
+        reason: events.current.slice(-8).map((event) => event.name).join(", ") });
+      if (recoverResponseRef.current()) {
+        markProgress();
+        return;
+      }
       commitTurn();
       cancelTurn(false);
       setError("Tutor belum menyelesaikan respons. Kirim ulang pertanyaan atau sambungkan ulang sesi.");
       setStatus(microphoneRef.current ? "listening" : "paused");
-      trace("response-timeout");
     }, 45_000);
-  }, [cancelTurn, commitTurn, trace]);
+  }, [cancelTurn, commitTurn, report, trace]);
 
   const disconnect = useCallback(async () => {
     generation.current++;
+    generationTailPending.current = false;
     micGeneration.current++;
     connecting.current = false;
     openingMicrophone.current = false;
@@ -219,6 +238,11 @@ export function usePdfTutor(
     commitTurn();
     audioRef.current?.stop();
     responding.current = true;
+    typedQuestion.current = null;
+    recoveryAttempts.current = 0;
+    visualFailures.current = 0;
+    hasAnswer.current = false;
+    setRecoveryNotice(null);
     toolContinuation.current = false;
     markProgress();
     // While the next page loads there is no view yet; get_pdf_context grounds the turn later.
@@ -245,7 +269,7 @@ export function usePdfTutor(
         view,
         turn.current?.id ?? "waiting-for-student",
       );
-      if (publishState) session.sendClientContent({
+      if (publishState && canPublishPdfContext(responding.current, playing.current)) session.sendClientContent({
         turns: [
           {
             role: "user",
@@ -305,6 +329,13 @@ export function usePdfTutor(
           [...cancelledCalls.current].slice(-100),
         );
       const server = message.serverContent;
+      if (server?.turnComplete && generationTailPending.current) {
+        generationTailPending.current = false;
+        // generationComplete already committed that answer. Its delayed playback
+        // tail must not finish (or retry) a newer question on the same socket.
+        if (!server.generationComplete && !server.outputTranscription?.text && !server.modelTurn?.parts?.length && !server.inputTranscription?.text)
+          return;
+      }
       if (server?.interrupted && replacingTurn.current) {
         // clientContent(turnComplete=true) interrupted the previous answer, not the
         // new typed question that already owns turn.current.
@@ -317,13 +348,16 @@ export function usePdfTutor(
         setStatus(microphoneRef.current ? "listening" : "paused");
       }
       if (server?.inputTranscription?.text) {
-        if (!turn.current || !speakingInput.current) beginTurn();
+        if (!turn.current || !responding.current) beginTurn();
         requestedTurnId = turn.current?.id ?? null;
         markProgress();
-        transcriptRef.current += server.inputTranscription.text;
-        setInputTranscript(transcriptRef.current);
+        if (!typedQuestion.current) {
+          transcriptRef.current += server.inputTranscription.text;
+          setInputTranscript(transcriptRef.current);
+        }
       }
       const calls = message.toolCall?.functionCalls ?? [];
+      if (calls.length) trace("tool-requested");
       const functionResponses = [];
       if (calls.length && turn.current && turn.current.id === requestedTurnId) {
         responding.current = true;
@@ -353,6 +387,8 @@ export function usePdfTutor(
             response = contextForModel(view, active.id);
             trace("context-read");
           } else if (call.name === "present_pdf_guidance" || call.name === "move_pdf_cursor") {
+            if (visualFailures.current >= 2 || recoveryAttempts.current > 0)
+              throw new Error("Lanjutkan penjelasan tanpa tool visual pada giliran ini.");
             if (groundedTurn.current !== active.id)
               throw new Error(
                 "Panggil get_pdf_context pada giliran ini dahulu.",
@@ -417,8 +453,11 @@ export function usePdfTutor(
             setGuidance(committedGuidance.current);
             setCursorCue(committedCursor.current);
           }
+          if (call.name === "present_pdf_guidance" || call.name === "move_pdf_cursor") visualFailures.current++;
           response = {
             ok: false,
+            continueWithExplanation: true,
+            responseInstruction: "Tindakan visual gagal. Tetap jawab pertanyaan siswa dengan penjelasan dan contoh. Jangan ulangi tool visual yang gagal; gunakan konteks yang sudah tersedia.",
             error:
               caught instanceof Error
                 ? caught.message
@@ -438,21 +477,27 @@ export function usePdfTutor(
       if (validResponses.length) {
         if (turn.current && responding.current) toolContinuation.current = true;
         session.sendToolResponse({ functionResponses: validResponses });
+        trace("tool-response-sent");
       }
       const active = turn.current;
       // Not tied to the view revision: turning the page must not mute an answer in progress.
       const canRespond = active && groundedTurn.current === active.id;
+      const outputText = pdfOutputText(server);
       if (canRespond) {
-        const hasOutput = !!server?.outputTranscription?.text ||
+        const hasOutput = !!outputText ||
           !!server?.modelTurn?.parts?.some((part) => !part.thought && (part.text || part.inlineData));
         if (hasOutput) {
           replacingTurn.current = false;
+          hasAnswer.current ||= !!outputText || (voiceRef.current &&
+            !!server?.modelTurn?.parts?.some((part) => part.inlineData?.mimeType?.startsWith("audio/")));
+          setRecoveryNotice(null);
+          trace("model-output");
           speakingInput.current = false;
           toolContinuation.current = false;
           markProgress();
         }
-        if (server?.outputTranscription?.text) {
-          outputRef.current += server.outputTranscription.text;
+        if (outputText) {
+          outputRef.current += outputText;
           setOutputTranscript(outputRef.current);
         }
         for (const part of server?.modelTurn?.parts ?? []) {
@@ -472,6 +517,10 @@ export function usePdfTutor(
       }
       const reason = server?.turnCompleteReason;
       if (server?.turnComplete && reason && reason !== "TURN_COMPLETE_REASON_UNSPECIFIED" && reason !== "NEED_MORE_INPUT") {
+        if (reason === "MALFORMED_FUNCTION_CALL" && recoverResponseRef.current()) {
+          markProgress();
+          return;
+        }
         commitTurn();
         cancelTurn(false);
         setError("Tutor belum berhasil menyelesaikan tindakan. Coba minta satu langkah singkat atau kirim ulang pertanyaan.");
@@ -481,7 +530,24 @@ export function usePdfTutor(
       }
       // A function-call boundary can arrive in its own frame while its async tool is
       // still rendering. Only the answer boundary completes the student's response.
-      if (server?.turnComplete && !message.toolCall && !toolContinuation.current && !pendingGuidanceCall.current) {
+      if (!message.toolCall && pdfResponseEnded(server, {
+        pendingTool: !!pendingGuidanceCall.current,
+        toolContinuation: toolContinuation.current,
+        hasOutput: hasAnswer.current,
+      })) {
+        trace("response-ended");
+        if (responding.current && !hasAnswer.current && recoverResponseRef.current()) {
+          markProgress();
+          return;
+        }
+        if (responding.current && !hasAnswer.current) {
+          commitTurn();
+          cancelTurn(false);
+          setError("Tutor belum mengirim jawaban setelah dicoba ulang. Sambungkan ulang sesi untuk melanjutkan.");
+          setStatus(microphoneRef.current ? "listening" : "paused");
+          return;
+        }
+        generationTailPending.current = !!server?.generationComplete && !server.turnComplete;
         responding.current = false;
         if (responseTimer.current) clearTimeout(responseTimer.current);
         commitTurn();
@@ -717,7 +783,7 @@ export function usePdfTutor(
       sessionRef.current = session;
       retry.markReady();
       renewal.arm();
-      if (contextRef.current) sendView(session, contextRef.current);
+      if (wantMicrophone.current && contextRef.current) sendView(session, contextRef.current);
       sendHistory(session);
       if (wantMicrophone.current) await startMicrophone();
       else setStatus("paused");
@@ -811,18 +877,23 @@ export function usePdfTutor(
         return true;
       }
       setError(null);
-      replacingTurn.current = responding.current;
+      replacingTurn.current = responding.current || generationTailPending.current;
       beginTurn();
       // Not speech: a sound on the microphone must start a new turn, not extend this one.
       speakingInput.current = false;
       transcriptRef.current = content;
       commitTurn();
+      typedQuestion.current = content;
+      const active = turn.current!;
       try {
-        sendView(session, view);
-        session.sendClientContent({
-          turns: [{ role: "user", parts: [{ text: content }] }],
-          turnComplete: true,
-        });
+        const imageKey = `${view.resourceId}:${view.fingerprint}:${view.page}`;
+        const includeImage = imageKey !== lastImage.current || turnCount.current - imageTurn.current >= 3;
+        session.sendClientContent(pdfQuestionContent(view, active.id, content, includeImage));
+        groundedTurn.current = active.id;
+        if (includeImage) {
+          lastImage.current = imageKey;
+          imageTurn.current = turnCount.current;
+        }
         trace("text-sent");
         return true;
       } catch {
@@ -832,9 +903,35 @@ export function usePdfTutor(
         return false;
       }
     },
-    [begin, beginTurn, cancelTurn, commitTurn, sendView, trace],
+    [begin, beginTurn, cancelTurn, commitTurn, trace],
   );
   sendRef.current = send;
+  recoverResponseRef.current = () => {
+    const session = sessionRef.current;
+    const view = contextRef.current;
+    const active = turn.current;
+    const question = typedQuestion.current;
+    if (!session || !view || !active || !question || hasAnswer.current || recoveryAttempts.current >= 1) return false;
+    recoveryAttempts.current++;
+    try {
+      active.revision = view.revision;
+      groundedTurn.current = active.id;
+      toolContinuation.current = false;
+      // Invalidate an old rendering task before retriggering the same request.
+      pendingGuidanceCall.current = null;
+      session.sendClientContent(pdfQuestionContent(view, active.id, question, true, true));
+      lastImage.current = `${view.resourceId}:${view.fingerprint}:${view.page}`;
+      imageTurn.current = turnCount.current;
+      replacingTurn.current = true;
+      setRecoveryNotice("Tutor sedang mencoba menyelesaikan penjelasanmu…");
+      setStatus("thinking");
+      trace("response-recovery");
+      report({ event: "response_recovery", phase: "live", attempt: recoveryAttempts.current });
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   // Speak instead of (or as well as) typing. Connects first when needed.
   const startVoice = useCallback(async () => {
@@ -912,7 +1009,8 @@ export function usePdfTutor(
       if (
         sessionRef.current &&
         context &&
-        contextRef.current?.revision === context.revision
+        contextRef.current?.revision === context.revision &&
+        canPublishPdfContext(responding.current, playing.current)
       ) {
         try {
           sendView(sessionRef.current, context);
@@ -942,7 +1040,7 @@ export function usePdfTutor(
   return {
     status,
     error,
-    notice: retry.notice,
+    notice: retry.notice ?? recoveryNotice,
     guidance,
     cursorCue,
     inputTranscript,

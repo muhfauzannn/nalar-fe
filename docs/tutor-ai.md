@@ -13,8 +13,9 @@ Berlaku untuk tutor PDF dan tutor kuis/tugas (`tutor-conversation.tsx`).
 
 - Kolom tulis selalu tersedia, juga saat mikrofon menyala. Pertanyaan yang diketik
   dikirim ke sesi Live yang sama; mengetik tidak menutup mikrofon. Tutor PDF memakai
-  `clientContent` dengan `turnComplete: true` agar pertanyaan ketikan memiliki batas
-  giliran eksplisit; tutor kuis/tugas memakai `realtimeInput.text`.
+  satu `clientContent` dengan `turnComplete: true`: `PDF_CONTEXT` lengkap (termasuk
+  block), gambar halaman bila perlu, lalu pertanyaan. Semuanya masuk dalam satu
+  giliran berurutan; tutor kuis/tugas memakai `realtimeInput.text`.
 - Pertanyaan pertama yang diketik membuka sesi tanpa mikrofon. Jawabannya tampil
   sebagai teks saja; audio dari model tidak diputar. Tombol suara di kolom tulis
   membuka mikrofon pada sesi yang sama, dan sejak itu jawaban juga diucapkan.
@@ -56,9 +57,16 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
 - Status respons dipisahkan dari playback audio. Jeda audio dan `turnComplete` milik
   pemanggilan tool tidak menyelesaikan respons siswa. Tool diproses berurutan dan
   hasil dalam satu pesan dibalas sebagai satu batch; pembatalan tetap diproses segera.
-  Tidak ada kemajuan selama 45 detik memunculkan pesan pemulihan dan membatalkan
-  giliran lokal agar respons terlambat tidak menimpa halaman. Kegagalan pembuatan
-  function call dari provider juga ditampilkan, bukan kembali diam tanpa jawaban.
+  `generationComplete` menyelesaikan jawaban yang sudah diterima tanpa menunggu
+  ekor playback; `interactionStatus=IN_PROGRESS` tetap ditunggu dan `IDLE` menandai
+  selesai. Jawaban dari `modelTurn.parts[].text` juga ditampilkan jika tidak ada
+  output transcription. Tidak ada kemajuan selama 45 detik, atau provider kembali
+  IDLE tanpa jawaban, memicu satu pemulihan otomatis untuk pertanyaan ketikan yang
+  sama dengan `explainWithoutVisuals=true`. Pertanyaan tidak diduplikasi di thread.
+  Jika tetap gagal, giliran dibatalkan dan pesan pemulihan ditampilkan. Event
+  `response_timeout`/`response_recovery` masuk ke log backend dengan urutan tahap
+  teknis terakhir, tanpa isi percakapan. Kegagalan pembuatan function call dari
+  provider juga ditampilkan, bukan kembali diam tanpa jawaban.
 - Seleksi teks mengikuti `selectionchange` dengan satu pembaruan per frame; drag,
   pemilihan mundur, seleksi kata, dan keyboard tetap memakai perilaku native browser.
   Sorotan disimpan per rect baris sehingga pilihan beberapa baris tidak menutup
@@ -74,7 +82,12 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
   perpindahan cursor sekaligus. Langkah visual berikutnya menunggu audio yang
   sudah antre selesai (maksimal 20 detik); konteks dan pembatalan dicek kembali
   sebelum tampil. Ini sinkronisasi per langkah, bukan penyelarasan per kata.
-- `get_pdf_context` wajib sebelum menjawab. `present_pdf_guidance` harus membawa
+- Pertanyaan ketikan sudah membawa konteks terbaru, sehingga penjelasan langsung
+  diterima tanpa round trip `get_pdf_context`. Untuk suara atau perubahan halaman,
+  `get_pdf_context` membaca ulang konteks. Kegagalan visual tidak menghalangi
+  penjelasan: tool mengembalikan instruksi untuk melanjutkan dengan kata-kata;
+  setelah dua penolakan, tool visual dibatasi untuk giliran itu.
+  `present_pdf_guidance` harus membawa
   `resourceId`, `page`, `revision`, dan `turnId` terbaru. Gunakan `blockId` untuk teks;
   geometri memakai koordinat 0..1 pada halaman asli tanpa rotasi. Untuk garis bebas
   gunakan `points`; panah juga mendukung dua titik untuk arah mana pun.
@@ -103,8 +116,12 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
   Anotasi yang sudah selesai tetap mengikuti sumber saat zoom/rotasi/scroll; cursor
   lama disembunyikan. Pindah halaman/dokumen membersihkan lapisan. Siswa dapat
   menyela melalui suara, menghentikan penjelasan, menjeda mikrofon, atau mengakhiri.
-- Metadata view dikirim setelah scroll tenang selama 200 ms. Gambar tidak dikirim
-  ulang pada setiap scroll. Pembacaan konteks oleh tutor menyegarkan bukti visual.
+- Metadata view dikirim setelah scroll tenang selama 200 ms hanya ketika sesi
+  tidak memproses atau memutar jawaban. Selama respons aktif, perubahan view tetap
+  lokal dan dibaca lewat `get_pdf_context` berikutnya; aplikasi tidak menyisipkan
+  user turn yang belum selesai di tengah respons. Gambar tidak dikirim ulang pada
+  setiap scroll. Pembacaan konteks oleh tutor menyegarkan bukti visual.
+  Kontrak input dan akhir giliran mengikuti [referensi Live API](https://ai.google.dev/api/live).
 - Percakapan dan anotasi sesi ini hanya ada di memori browser. Reconnect memulai
   percakapan baru. AudioContext, track mikrofon, request, timer, dan socket dilepas
   saat sesi ditutup atau komponen dilepas. Tidak ada rekaman suara yang disimpan

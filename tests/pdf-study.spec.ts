@@ -62,6 +62,7 @@ async function setup(page: Page) {
   const responses = new Map<string, Record<string, any>>();
   let view: Context | undefined;
   let images = 0;
+  const clientMessages: any[] = [];
   const appendedBytes: number[] = [];
   const texts: string[] = [];
   // What reached the tutor, in order: "history:…" or "text:…", and how many sockets opened/closed.
@@ -75,14 +76,18 @@ async function setup(page: Page) {
     ws.onMessage((raw) => {
       const data = JSON.parse(raw.toString());
       if (data.setup) ws.send(JSON.stringify({ setupComplete: {} }));
+      if (data.clientContent) clientMessages.push(data.clientContent);
       for (const item of data.clientContent?.turns ?? []) {
-        const text = item.parts?.[0]?.text;
-        if (text?.startsWith("PDF_VIEW_STATE "))
-          view = JSON.parse(text.slice(15));
-        if (text?.startsWith("CONVERSATION_HISTORY")) order.push(`history:${text}`);
-        if (data.clientContent.turnComplete && text) {
-          texts.push(text);
-          order.push(`text:${text}`);
+        for (const part of item.parts ?? []) {
+          const text = part.text;
+          if (text?.startsWith("PDF_VIEW_STATE ")) view = JSON.parse(text.slice(15));
+          if (text?.startsWith("PDF_CONTEXT ")) view = JSON.parse(text.slice(12));
+          if (text?.startsWith("CONVERSATION_HISTORY")) order.push(`history:${text}`);
+          if (part.inlineData?.mimeType === "image/jpeg") images++;
+        }
+        if (data.clientContent.turnComplete) {
+          const question = item.parts?.filter((part: any) => part.text && !part.text.startsWith("PDF_CONTEXT ")).at(-1)?.text;
+          if (question) { texts.push(question); order.push(`text:${question}`); }
         }
       }
       if (data.realtimeInput?.text) {
@@ -98,8 +103,10 @@ async function setup(page: Page) {
         )
       )
         images++;
-      for (const response of data.toolResponse?.functionResponses ?? [])
+      for (const response of data.toolResponse?.functionResponses ?? []) {
         responses.set(response.id, response.response);
+        if (response.name === "get_pdf_context" && response.response.blocks) view = response.response;
+      }
     });
   });
   await page.goto("/tests/fixtures/pdf-study.html");
@@ -143,6 +150,7 @@ async function setup(page: Page) {
   });
   return {
     errors,
+    clientMessages,
     start,
     ground,
     call,
@@ -367,7 +375,7 @@ test("the microphone streams 16 kHz PCM and the same page image is not resent ev
   expect(mock.getImages()).toBe(2);
   // A different page is always sent.
   await page.getByRole("button", { name: "Halaman berikutnya" }).click();
-  await expect.poll(() => mock.getView()?.page).toBe(2);
+  await expect(page.getByRole("button", { name: "Putar PDF" })).toBeEnabled();
   mock.send({ serverContent: { interrupted: true } });
   await mock.ground("read-4");
   expect(mock.getImages()).toBe(3);
@@ -402,8 +410,9 @@ test("turning the page while the tutor speaks keeps the answer going", async ({
 
   await page.getByRole("button", { name: "Halaman berikutnya" }).click();
   await expect(page.getByTestId("pdf-page-number")).toHaveText("2 / 2");
-  // The new page reaches the tutor, and the answer keeps playing.
-  await expect.poll(() => mock.getView()?.page).toBe(2);
+  await expect(page.getByRole("button", { name: "Putar PDF" })).toBeEnabled();
+  // Page changes stay local while responding; the next context tool reads the new page.
+  expect(mock.getView()?.page).toBe(1);
 
   speak("sedangkan penyebut menunjukkan banyak bagian seluruhnya.");
   await expect(transcript).toContainText("Pembilang menunjukkan bagian yang dipilih");
@@ -727,21 +736,56 @@ test("drag selects part of a line before release, and AI can highlight the exact
   expect(mock.errors).toEqual([]);
 });
 
-test("an unanswered tool continuation times out visibly and the student can ask again", async ({ page }) => {
+test("a stalled typed response gets one automatic explanation retry", async ({ page }) => {
   await page.clock.install();
   const mock = await setup(page);
   const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
-  await composer.fill("Tulis rumus");
+  await composer.fill("Jelaskan domain kodomain dan contohnya");
   await composer.press("Enter");
   await expect.poll(() => mock.texts.length).toBe(1);
-  await mock.call("timeout-context", "get_pdf_context");
-  mock.send({ serverContent: { turnComplete: true } });
   await page.clock.fastForward(46_000);
-  await expect(page.getByText(/Tutor belum menyelesaikan respons/)).toBeVisible();
-  await composer.fill("Coba lagi");
-  await composer.press("Enter");
   await expect.poll(() => mock.texts.length).toBe(2);
-  expect((await mock.call("retry-context", "get_pdf_context")).turnId).toBeTruthy();
+  expect(mock.texts[1]).toBe(mock.texts[0]);
+  await expect(page.getByText(/Tutor sedang mencoba menyelesaikan/)).toBeVisible();
+  mock.send({ serverContent: { outputTranscription: { text: "Domain adalah daerah asal, kodomain daerah kawan." }, generationComplete: true } });
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="tutor"]')).toHaveText("Domain adalah daerah asal, kodomain daerah kawan.");
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="student"]')).toHaveCount(1);
+  await page.clock.fastForward(46_000);
+  await expect(page.getByText(/Tutor belum menyelesaikan respons/)).toHaveCount(0);
+});
+
+test("a direct answer to the domain question needs no extra grounding round trip", async ({ page }) => {
+  await page.clock.install();
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan domain kodomain dan contohnya");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  const question = mock.clientMessages.find((message) => message.turnComplete);
+  expect(question.turns[0].parts[0].text).toContain("PDF_CONTEXT ");
+  expect(question.turns[0].parts.some((part: any) => part.inlineData?.mimeType === "image/jpeg")).toBe(true);
+  await page.getByTestId("pdf-scroll-host").evaluate((host) => { host.scrollTop += 100; host.dispatchEvent(new Event("scroll")); });
+  await page.clock.runFor(400);
+  // A scroll may update React state, but cannot append an unfinished user turn.
+  expect(mock.clientMessages.filter((message) => !message.turnComplete)).toHaveLength(0);
+  mock.send({ serverContent: { modelTurn: { parts: [{ text: "Contoh f: A → B, A = {1,2} adalah domain dan B = {a,b,c} adalah kodomain." }] }, generationComplete: true } });
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="tutor"]')).toContainText("adalah kodomain");
+  await page.clock.fastForward(46_000);
+  await expect(page.getByText(/Tutor belum menyelesaikan respons/)).toHaveCount(0);
+  expect(mock.errors).toEqual([]);
+});
+
+test("an idle tool-only response retries immediately instead of waiting for the watchdog", async ({ page }) => {
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan domain kodomain dan contohnya");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  await mock.call("idle-context", "get_pdf_context");
+  mock.send({ serverContent: { turnComplete: true, interactionStatus: "IDLE" } });
+  await expect.poll(() => mock.texts.length).toBe(2);
+  mock.send({ serverContent: { outputTranscription: { text: "Domain adalah himpunan masukan." }, turnComplete: true, interactionStatus: "IDLE" } });
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="tutor"]')).toHaveText("Domain adalah himpunan masukan.");
 });
 
 
@@ -768,4 +812,38 @@ test("the AI moves its cursor and changes captions without replacing annotations
   })).ok).toBe(false);
   await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
   expect(mock.errors).toEqual([]);
+});
+
+
+test("the delayed tail of an answered question cannot finish the next typed question", async ({ page }) => {
+  await page.clock.install();
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan domain");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  mock.send({ serverContent: { outputTranscription: { text: "Domain adalah daerah asal." }, generationComplete: true } });
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="tutor"]')).toHaveCount(1);
+  await composer.fill("Lalu kodomain?");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(2);
+  mock.send({ serverContent: { turnComplete: true, interactionStatus: "IDLE" } });
+  await page.clock.runFor(300);
+  expect(mock.texts).toEqual(["Jelaskan domain", "Lalu kodomain?"]);
+  mock.send({ serverContent: { outputTranscription: { text: "Kodomain adalah daerah kawan." }, generationComplete: true } });
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="tutor"]')).toHaveCount(2);
+});
+
+test("automatic recovery stops after one retry when the provider stays silent", async ({ page }) => {
+  await page.clock.install();
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan domain kodomain dan contohnya");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  await page.clock.fastForward(46_000);
+  await expect.poll(() => mock.texts.length).toBe(2);
+  await page.clock.fastForward(46_000);
+  await expect(page.getByText(/Tutor belum menyelesaikan respons/)).toBeVisible();
+  expect(mock.texts).toHaveLength(2);
 });
