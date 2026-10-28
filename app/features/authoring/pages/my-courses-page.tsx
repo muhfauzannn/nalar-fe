@@ -23,7 +23,6 @@ export function MyCoursesPage({ data }: { data: { courses: ManagedCourseSummary[
     <div className="flex flex-col gap-10">
       <PageHeader
         title="Kelola course"
-        description="Course yang kamu buat. Tambahkan materi, kuis, dan assignment, lalu bagikan kode kelas agar orang lain bisa bergabung."
         actions={
           <>
             <Button variant="outline" render={<Link to="/courses/join" />}>

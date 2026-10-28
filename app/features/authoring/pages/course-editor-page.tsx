@@ -89,7 +89,6 @@ export function CourseEditorPage({
           <JoinCodeCard
             joinCode={course.joinCode}
             courseStatus={course.status}
-            studentCount={data.studentCount}
           />
           <CourseDetailsCard course={course} subjects={subjects} />
         </TabsContent>
@@ -157,7 +156,6 @@ function CourseDetailsCard({
     <Card>
       <CardHeader>
         <CardTitle>Detail course</CardTitle>
-        <CardDescription>Nama dan deskripsi tampil di kartu course milik siswa.</CardDescription>
       </CardHeader>
       <CardContent>
         <fetcher.Form

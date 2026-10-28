@@ -36,7 +36,6 @@ export function RegisterPage({
   return (
     <AuthFormPanel
       title="Buat akun"
-      subtitle="Mulai perjalanan belajarmu."
       footer={
         <>
           Sudah punya akun? <AuthLink to="/login">Masuk</AuthLink>

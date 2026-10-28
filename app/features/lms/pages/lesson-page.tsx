@@ -23,7 +23,6 @@ import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -111,7 +110,6 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
               </Badge>
             }
             title={loaderData.title}
-            description="Baca dengan tenang, gunakan resource bila diperlukan, lalu tandai materi saat selesai."
             meta={
               completed && (
                 <span className="flex items-center gap-1.5 text-brand-mint-foreground">
@@ -145,9 +143,6 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                 <CardTitle id="lesson-content-title" className="text-xl">
                   Materi pembelajaran
                 </CardTitle>
-                <CardDescription>
-                  Fokus pada satu gagasan di setiap paragraf.
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 {contentBlocks && contentBlocks.length > 0 ? (
@@ -184,9 +179,6 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
             <Card>
               <CardHeader>
                 <CardTitle>Progres materi</CardTitle>
-                <CardDescription>
-                  Status ini masuk ke progres course.
-                </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-5">
                 <div className="flex items-center gap-4">
@@ -200,9 +192,6 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                   <div>
                     <p className="font-heading text-xl font-semibold">
                       {completed ? "Selesai" : "Sedang dipelajari"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {completed ? "Tercatat pada progres course" : "Belum ditandai selesai"}
                     </p>
                   </div>
                 </div>
@@ -254,9 +243,6 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
               >
                 Resource pendukung
               </h2>
-              <p className="text-sm text-muted-foreground">
-                Buka bahan tambahan tanpa meninggalkan alur materi.
-              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

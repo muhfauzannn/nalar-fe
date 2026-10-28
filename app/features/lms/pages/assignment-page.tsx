@@ -8,7 +8,6 @@ import {
   Lightbulb,
   ListChecks,
   LockKeyhole,
-  MessageCircleQuestion,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -54,7 +53,6 @@ const stageCopy: Record<
     number: string;
     title: string;
     shortTitle: string;
-    description: string;
     prompt: string;
     guidance: string;
   }
@@ -63,7 +61,6 @@ const stageCopy: Record<
     number: "01",
     title: "Upaya mandiri",
     shortTitle: "Mandiri",
-    description: "Mulai dari pemahamanmu sendiri sebelum meminta bantuan apa pun.",
     prompt: "Tuliskan jawaban atau pemahaman awalmu",
     guidance: "Fokus pada cara berpikirmu saat ini. Jawaban belum harus sempurna.",
   },
@@ -71,7 +68,6 @@ const stageCopy: Record<
     number: "02",
     title: "Pertanyaan terbimbing",
     shortTitle: "Bertanya",
-    description: "Gunakan bantuan untuk memperluas cara berpikir, bukan mengambil jawaban jadi.",
     prompt: "Diskusikan pertanyaanmu bersama AI Tutor",
     guidance: "Minta petunjuk atau umpan balik. Tutor akan menjaga agar pekerjaan tetap milikmu.",
   },
@@ -79,7 +75,6 @@ const stageCopy: Record<
     number: "03",
     title: "Evaluasi jawaban AI",
     shortTitle: "Evaluasi",
-    description: "Periksa kualitas, asumsi, dan batasan bantuan AI secara kritis.",
     prompt: "Apa yang kuat, lemah, atau perlu diverifikasi dari bantuan AI?",
     guidance: "Jika tidak menggunakan AI, jelaskan alasan dan caramu memeriksa jawaban sendiri.",
   },
@@ -87,7 +82,6 @@ const stageCopy: Record<
     number: "04",
     title: "Revisi dan finalisasi",
     shortTitle: "Finalisasi",
-    description: "Susun jawaban final berdasarkan evaluasi dan keputusanmu sendiri.",
     prompt: "Tuliskan jawaban final assignment",
     guidance: "Pastikan jawaban final menjawab instruksi dan rubrik yang tersedia.",
   },
@@ -95,9 +89,8 @@ const stageCopy: Record<
     number: "05",
     title: "Refleksi",
     shortTitle: "Refleksi",
-    description: "Tutup proses dengan melihat perubahan pemahaman dan cara belajarmu.",
     prompt: "Apa yang berubah dalam pemahaman dan proses belajarmu?",
-    guidance: "Setelah tahap ini dikumpulkan, jawaban tidak dapat diubah lagi.",
+    guidance: "Bandingkan dengan upaya mandirimu di tahap 1.",
   },
 };
 
@@ -235,13 +228,10 @@ function AssignmentHeader({
 
 function AssignmentStartPanel({ data, working }: { data: AssignmentData; working: boolean }) {
   return (
-    <section className="grid grid-flow-dense items-stretch gap-5 lg:grid-cols-12">
+    <section className="grid grid-flow-dense items-start gap-5 lg:grid-cols-12">
       <Card className="lg:col-span-8">
         <CardHeader>
-          <CardTitle>Yang akan kamu kerjakan</CardTitle>
-          <CardDescription>
-            Assignment diselesaikan melalui lima tahap berurutan agar proses berpikirmu terlihat.
-          </CardDescription>
+          <CardTitle>Lima tahap</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-x-5 sm:grid-cols-2">
@@ -257,10 +247,7 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
                 <span className="font-heading text-sm font-semibold text-muted-foreground tabular-nums">
                   {stage.number}
                 </span>
-                <div>
-                  <p className="font-medium">{stage.title}</p>
-                  <p className="mt-1 text-xs/relaxed text-muted-foreground">{stage.description}</p>
-                </div>
+                <p className="font-medium">{stage.title}</p>
               </div>
             ))}
           </div>
@@ -269,22 +256,14 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
 
       <Card className="lg:col-span-4">
         <CardHeader>
-          <CardTitle>Siap mulai?</CardTitle>
-          <CardDescription>
-            Progres tersimpan setiap kali satu tahap berhasil diselesaikan.
-          </CardDescription>
+          <CardTitle>Rubrik</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="rounded-xl bg-brand-mint-soft p-4 text-brand-mint-foreground">
-            <div className="flex items-center gap-2 font-medium">
-              <ShieldCheck className="size-4" aria-hidden="true" />
-              Satu submission
-            </div>
-            <p className="mt-1 text-xs/relaxed">
-              Periksa tenggat dan rubrik sebelum memulai.
-            </p>
-          </div>
           <RubricAccordion criteria={data.criteria} compact />
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5 shrink-0" aria-hidden="true" />
+            Hanya satu submission. Progres tersimpan per tahap.
+          </p>
         </CardContent>
         <CardFooter>
           <Form method="post" className="w-full">
@@ -435,39 +414,19 @@ function ActiveStage({
   return (
     <Card>
       <CardHeader className="border-b">
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <span className="font-heading">TAHAP {copy.number}</span>
-          <span aria-hidden="true">/</span>
-          <span>5 tahap</span>
-        </div>
+        <p className="mb-1 text-xs font-medium text-muted-foreground tabular-nums">
+          Tahap {Number(copy.number)} dari 5
+        </p>
         <CardTitle className="text-xl sm:text-2xl">{copy.title}</CardTitle>
-        <CardDescription className="max-w-2xl text-sm/relaxed">
-          {copy.description}
-        </CardDescription>
-        <CardAction>
-          <Badge variant="mint">Sedang dikerjakan</Badge>
-        </CardAction>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-6">
-        <div className="rounded-2xl bg-muted/70 p-5 sm:p-6">
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-card text-foreground shadow-sm ring-1 ring-border/60">
-              {stage === "2_guided_questioning" ? (
-                <MessageCircleQuestion className="size-4" aria-hidden="true" />
-              ) : (
-                <Sparkles className="size-4" aria-hidden="true" />
-              )}
-            </span>
-            <div>
-              <p className="font-heading text-base font-semibold sm:text-lg">{copy.prompt}</p>
-              <p className="mt-1 text-sm/relaxed text-muted-foreground">{copy.guidance}</p>
-            </div>
-          </div>
-        </div>
-
         {stage === "2_guided_questioning" ? (
           <div className="flex flex-col gap-5">
+            <div>
+              <p className="font-medium">{copy.prompt}</p>
+              <p className="mt-1 text-sm/relaxed text-muted-foreground">{copy.guidance}</p>
+            </div>
             <Form method="post">
               <input type="hidden" name="intent" value="complete-stage" />
               <input type="hidden" name="submissionId" value={submission.id} />
@@ -495,20 +454,18 @@ function ActiveStage({
                   minLength={10}
                   rows={stage === "4_revision_finalization" ? 15 : 10}
                   defaultValue={actionDraft}
-                  placeholder="Tulis jawabanmu dengan jelas dan spesifik di sini..."
+                  placeholder="Tulis jawabanmu…"
                   className="min-h-56 resize-y bg-background text-base leading-relaxed sm:min-h-64"
                 />
-                <FieldDescription>
-                  Minimal 10 karakter. Isi baru disimpan setelah tombol di bawah berhasil diproses.
-                </FieldDescription>
+                <FieldDescription>{copy.guidance}</FieldDescription>
               </Field>
 
               {finalStage && (
                 <Alert className="border-brand-lavender bg-brand-lavender-soft/50">
                   <ShieldCheck />
-                  <AlertTitle>Periksa sebelum mengumpulkan</AlertTitle>
+                  <AlertTitle>Tahap terakhir</AlertTitle>
                   <AlertDescription>
-                    Ini adalah tahap terakhir. Setelah dikumpulkan, seluruh jawaban menjadi hanya-baca.
+                    Setelah dikumpulkan, semua jawaban tidak bisa diubah.
                   </AlertDescription>
                 </Alert>
               )}
@@ -833,7 +790,6 @@ function SubmissionResult({ assignment }: { assignment: AssignmentData }) {
         <Card>
           <CardHeader>
             <CardTitle>Arsip jawaban</CardTitle>
-            <CardDescription>Lihat kembali hasil dari setiap tahap yang menghasilkan jawaban.</CardDescription>
           </CardHeader>
           <CardContent>
             <Accordion multiple defaultValue={submission.artifacts.map((artifact) => artifact.stage)}>

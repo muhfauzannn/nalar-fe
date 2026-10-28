@@ -3,7 +3,7 @@ import { Form, Link, useNavigation } from "react-router";
 import { PageHeader } from "~/components/layout/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
@@ -25,7 +25,7 @@ export function NewCoursePage({
       <PageHeader
         crumbs={[{ label: "Kelola course", to: "/manage" }]}
         title="Buat course"
-        description="Course dimulai sebagai draf. Isi materinya dulu; siswa baru bisa bergabung setelah course kamu terbitkan."
+        description="Course dimulai sebagai draf."
       />
 
       <Card>
@@ -52,7 +52,6 @@ export function NewCoursePage({
             <Field>
               <FieldLabel htmlFor="description">Deskripsi (opsional)</FieldLabel>
               <Textarea id="description" name="description" rows={4} maxLength={2000} />
-              <FieldDescription>Tampil di kartu course milik siswa.</FieldDescription>
             </Field>
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" render={<Link to="/manage" />}>

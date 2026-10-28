@@ -12,7 +12,6 @@ import { buttonVariants } from "~/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
@@ -56,17 +55,12 @@ export function CourseActivityPanel({
     <Card size="sm" aria-labelledby="course-activities-title">
       <CardHeader>
         <div className="flex items-center justify-between gap-3 rounded-xl bg-brand-lavender-soft p-4">
-          <div className="flex min-w-0 flex-col gap-2">
-            <CardTitle
-              id="course-activities-title"
-              className="group-data-[size=sm]/card:text-xl"
-            >
-              Aktivitas
-            </CardTitle>
-            <CardDescription>
-              Latih pemahamanmu, satu aktivitas setiap kali.
-            </CardDescription>
-          </div>
+          <CardTitle
+            id="course-activities-title"
+            className="group-data-[size=sm]/card:text-xl"
+          >
+            Aktivitas
+          </CardTitle>
           <img
             src="/illustration/chalkboard.svg"
             width={1254}
@@ -256,7 +250,6 @@ function ActivityNote({
           ) : (
             <>
               <CalendarDays className="my-1 size-5" aria-hidden="true" />
-              <span className="text-[10px]">Fleksibel</span>
             </>
           )}
         </div>

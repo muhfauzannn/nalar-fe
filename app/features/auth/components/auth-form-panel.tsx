@@ -4,7 +4,7 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 
 /**
- * The changing half of the auth screen: heading + subtitle + form + footer.
+ * The changing half of the auth screen: heading (+ optional subtitle) + form + footer.
  * Rendered inside the persistent `AuthShell` chrome via the `_auth` layout's
  * `<Outlet/>`, so it remounts on every `/login` ↔ `/register` navigation. A
  * short, reduced-motion-aware stagger runs on each mount, keyed on the path,
@@ -17,7 +17,7 @@ export function AuthFormPanel({
   footer,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   children: ReactNode;
   footer: ReactNode;
 }) {
@@ -47,7 +47,7 @@ export function AuthFormPanel({
         <h1 className="font-heading text-2xl font-bold tracking-tight text-balance">
           {title}
         </h1>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+        {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
 
       <div data-auth-reveal className="mt-8">

@@ -11,11 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/components/ui/progress";
+import { Progress, ProgressValue } from "~/components/ui/progress";
 import type { CourseSummary } from "../types";
 
 /** The one course card, used on the dashboard and on "Course saya". */
@@ -43,29 +39,34 @@ export function CourseCard({ course }: { course: CourseSummary }) {
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col gap-5">
-        <p className="line-clamp-2 text-sm/relaxed text-muted-foreground">
-          {course.description ?? "Materi dan aktivitas pembelajaran course."}
-        </p>
+        {course.description ? (
+          <p className="line-clamp-2 text-sm/relaxed text-muted-foreground">
+            {course.description}
+          </p>
+        ) : null}
 
         <div className="mt-auto flex flex-col gap-3">
           <Progress
             value={course.progress.percentage}
             aria-label={`Progres ${course.name} ${course.progress.percentage}%`}
           >
-            <ProgressLabel>Progres</ProgressLabel>
-            <ProgressValue>
+            <ProgressValue className="ml-0">
               {() => `${course.progress.completed}/${course.progress.total} · ${course.progress.percentage}%`}
             </ProgressValue>
           </Progress>
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <BookOpen className="size-4" aria-hidden="true" />
-              {course.progress.lessons.total} materi
-            </span>
-            <span className="flex items-center gap-1.5">
-              <ClipboardCheck className="size-4" aria-hidden="true" />
-              {assessmentTotal} tugas & kuis
-            </span>
+            {course.progress.lessons.total > 0 && (
+              <span className="flex items-center gap-1.5">
+                <BookOpen className="size-4" aria-hidden="true" />
+                {course.progress.lessons.total} materi
+              </span>
+            )}
+            {assessmentTotal > 0 && (
+              <span className="flex items-center gap-1.5">
+                <ClipboardCheck className="size-4" aria-hidden="true" />
+                {assessmentTotal} tugas & kuis
+              </span>
+            )}
           </p>
         </div>
       </CardContent>

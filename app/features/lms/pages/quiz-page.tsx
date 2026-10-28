@@ -37,7 +37,6 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
-import { Separator } from "~/components/ui/separator";
 import { Spinner } from "~/components/ui/spinner";
 import { QuizAttempt, QuizAttemptExpired } from "../components/quiz-attempt";
 import { formatDateTime } from "../lib/format";
@@ -159,66 +158,50 @@ export function QuizPage({
 }
 
 function QuizStartPanel({ data, working }: { data: QuizData; working: boolean }) {
-  const preparation = [
-    "Jawaban tersimpan otomatis per soal.",
-    "Quiz hanya dapat dikerjakan satu kali.",
+  // Only what changes how the student should start; counts and length are in the header.
+  const rules = [
+    "Hanya bisa dikerjakan sekali",
     data.quiz.timeLimitMinutes
-      ? `Timer ${data.quiz.timeLimitMinutes} menit dimulai setelah quiz dibuka.`
-      : "Quiz tidak memiliki batas durasi khusus.",
-  ];
+      ? `Timer ${data.quiz.timeLimitMinutes} menit berjalan setelah kamu mulai`
+      : null,
+    "Jawaban tersimpan otomatis",
+  ].filter((rule): rule is string => rule !== null);
 
   return (
-    <section className="grid grid-flow-dense items-stretch gap-5 lg:grid-cols-12">
-      <Card className="lg:col-span-8">
-        <CardHeader>
-          <CardTitle>Sebelum mulai</CardTitle>
-          <CardDescription>
-            Pastikan koneksi stabil dan selesaikan dalam satu attempt.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col">
-          {preparation.map((item, index) => (
-            <div key={item}>
-              {index > 0 && <Separator />}
-              <div className="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-brand-mint-soft text-brand-mint-foreground">
-                  <Check className="size-4" aria-hidden="true" />
-                </span>
-                <p className="pt-1 text-sm/relaxed">{item}</p>
-              </div>
-            </div>
+    <Card className="max-w-xl">
+      <CardContent className="flex flex-col gap-4">
+        <ul className="flex flex-col gap-2.5 text-sm">
+          {rules.map((rule) => (
+            <li key={rule} className="flex items-center gap-2.5">
+              <Check className="size-4 shrink-0 text-brand-mint-foreground" aria-hidden="true" />
+              {rule}
+            </li>
           ))}
-        </CardContent>
-      </Card>
-
-      <Card className="lg:col-span-4">
-        <CardHeader>
-          <CardTitle>Siap mengerjakan?</CardTitle>
-          <CardDescription>
-            {data.questions.length} soal
-            {data.quiz.dueAt ? `, tenggat ${formatDateTime(data.quiz.dueAt)}` : ""}. Jawaban
-            tersimpan setiap kamu menjawab.
-          </CardDescription>
-        </CardHeader>
-        <CardFooter className="mt-auto">
-          {data.canStart ? (
-            <Form method="post" className="w-full">
-              <input type="hidden" name="intent" value="start" />
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={working || data.questions.length === 0}
-              >
-                {working && <Spinner data-icon="inline-start" />}
-                Mulai quiz
-              </Button>
-            </Form>
-          ) : (
-            <QuizStartUnavailable data={data} />
-          )}
-        </CardFooter>
-      </Card>
-    </section>
+        </ul>
+        {data.quiz.dueAt ? (
+          <p className="text-sm text-muted-foreground tabular-nums">
+            Tenggat {formatDateTime(data.quiz.dueAt)}
+          </p>
+        ) : null}
+      </CardContent>
+      <CardFooter>
+        {data.canStart ? (
+          <Form method="post" className="w-full">
+            <input type="hidden" name="intent" value="start" />
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={working || data.questions.length === 0}
+            >
+              {working && <Spinner data-icon="inline-start" />}
+              Mulai quiz
+            </Button>
+          </Form>
+        ) : (
+          <QuizStartUnavailable data={data} />
+        )}
+      </CardFooter>
+    </Card>
   );
 }
 

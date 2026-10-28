@@ -31,7 +31,6 @@ import {
 } from "~/components/ui/card";
 import {
   Empty,
-  EmptyDescription,
   EmptyHeader,
   EmptyIllustration,
   EmptyMedia,
@@ -91,10 +90,7 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
         <Alert>
           <Archive />
           <AlertTitle>Course ini telah diarsipkan</AlertTitle>
-          <AlertDescription>
-            Kamu masih dapat membaca materi, tetapi aktivitas baru tidak lagi
-            ditambahkan.
-          </AlertDescription>
+          <AlertDescription>Materi masih bisa dibaca.</AlertDescription>
         </Alert>
       )}
 
@@ -141,7 +137,7 @@ function CourseProgress({
     { label: "Materi", progress: data.progress.lessons, icon: BookOpen },
     { label: "Assignment", progress: data.progress.assignments, icon: ClipboardList },
     { label: "Quiz", progress: data.progress.quizzes, icon: FileQuestion },
-  ];
+  ].filter((metric) => metric.progress.total > 0);
 
   return (
     <Card>
@@ -151,17 +147,14 @@ function CourseProgress({
             value={data.progress.percentage}
             aria-label={`Progres course ${data.progress.percentage}%`}
           >
-            <ProgressLabel className="flex items-baseline gap-2">
-              <span className="font-heading text-3xl font-semibold tracking-tight tabular-nums">
-                {data.progress.percentage}%
-              </span>
-              <span className="text-sm font-normal text-muted-foreground">progres course</span>
+            <ProgressLabel className="font-heading text-3xl font-semibold tracking-tight tabular-nums">
+              {data.progress.percentage}%
             </ProgressLabel>
             <ProgressValue className="text-sm">
               {() => `${data.progress.completed}/${data.progress.total} aktivitas`}
             </ProgressValue>
           </Progress>
-          <dl className="grid grid-cols-3 gap-3">
+          <dl className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] gap-3">
             {metrics.map(({ label, progress, icon: Icon }) => (
               <div key={label} className="flex min-w-0 flex-col gap-1">
                 <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -190,8 +183,8 @@ function CourseProgress({
             <p className="flex items-start gap-2 text-sm text-muted-foreground">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-brand-mint-foreground" aria-hidden="true" />
               {data.progress.total > 0
-                ? "Semua aktivitas yang tersedia sudah kamu selesaikan."
-                : "Aktivitas course akan muncul di sini setelah dipublikasikan."}
+                ? "Semua aktivitas selesai."
+                : "Belum ada aktivitas."}
             </p>
           )}
         </div>
@@ -206,23 +199,12 @@ function CourseModules({ data }: { data: CourseData }) {
       className="flex min-w-0 flex-col gap-5"
       aria-labelledby="course-materials-title"
     >
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-brand-lavender-foreground">
-            Learning path
-          </p>
-          <h2
-            id="course-materials-title"
-            className="font-heading text-2xl font-semibold tracking-tight"
-          >
-            Materi course
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Selesaikan lesson secara bertahap sesuai urutan modul.
-          </p>
-        </div>
-        <Badge variant="outline">{data.modules.length} modul</Badge>
-      </div>
+      <h2
+        id="course-materials-title"
+        className="font-heading text-2xl font-semibold tracking-tight"
+      >
+        Materi course
+      </h2>
 
       {data.modules.length === 0 ? (
         <Card>
@@ -231,9 +213,6 @@ function CourseModules({ data }: { data: CourseData }) {
               <EmptyIllustration alt="Kucing Bernalar mencari materi di dalam kotak" />
               <EmptyHeader>
                 <EmptyTitle>Materi belum tersedia</EmptyTitle>
-                <EmptyDescription>
-                  Pengajar belum mempublikasikan modul untuk course ini.
-                </EmptyDescription>
               </EmptyHeader>
             </Empty>
           </CardContent>
@@ -258,10 +237,11 @@ function CourseModules({ data }: { data: CourseData }) {
                           <span className="block text-base leading-snug font-semibold text-foreground">
                             {module.title}
                           </span>
-                          <span className="mt-1 block font-normal text-muted-foreground">
-                            {module.description ??
-                              `${module.lessons.length} lesson tersedia`}
-                          </span>
+                          {module.description ? (
+                            <span className="mt-1 block font-normal text-muted-foreground">
+                              {module.description}
+                            </span>
+                          ) : null}
                         </span>
                         <Badge
                           variant={
@@ -283,14 +263,11 @@ function CourseModules({ data }: { data: CourseData }) {
                           </EmptyMedia>
                           <EmptyHeader>
                             <EmptyTitle>Lesson belum tersedia</EmptyTitle>
-                            <EmptyDescription>
-                              Konten untuk modul ini belum dipublikasikan.
-                            </EmptyDescription>
                           </EmptyHeader>
                         </Empty>
                       ) : (
                         <div className="flex flex-col gap-2 border-t pt-3">
-                          {module.lessons.map((lesson, lessonIndex) => (
+                          {module.lessons.map((lesson) => (
                             <Link
                               key={lesson.id}
                               to={`/lessons/${lesson.id}`}
@@ -298,13 +275,8 @@ function CourseModules({ data }: { data: CourseData }) {
                             >
                               <span className="flex min-w-0 items-center gap-3">
                                 <LessonStatusIcon status={lesson.status} />
-                                <span className="min-w-0">
-                                  <span className="block truncate font-medium">
-                                    {lesson.title}
-                                  </span>
-                                  <span className="block text-xs text-muted-foreground">
-                                    Lesson {lessonIndex + 1}
-                                  </span>
+                                <span className="min-w-0 truncate font-medium">
+                                  {lesson.title}
                                 </span>
                               </span>
                               <span className="flex shrink-0 items-center gap-2">

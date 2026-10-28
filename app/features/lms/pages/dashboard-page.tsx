@@ -1,12 +1,4 @@
-import {
-  ArrowRight,
-  BookOpen,
-  CheckCircle2,
-  Clock3,
-  KeyRound,
-  Plus,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight, Clock3, KeyRound, Plus } from "lucide-react";
 import { Link } from "react-router";
 
 import { PageHeader } from "~/components/layout/page-header";
@@ -16,14 +8,12 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
 import {
   Empty,
   EmptyContent,
-  EmptyDescription,
   EmptyHeader,
   EmptyIllustration,
   EmptyMedia,
@@ -44,7 +34,6 @@ export function DashboardPage({ data }: { data: DashboardData }) {
     <div className="flex flex-col gap-10 lg:gap-12">
       <PageHeader
         title={`${getGreeting()}, ${firstName}.`}
-        description="Lihat perkembangan belajarmu dan lanjutkan aktivitas yang paling perlu diselesaikan."
         actions={
           continueCourse && (
             <Button size="lg" render={<Link to={`/courses/${continueCourse.id}`} />}>
@@ -68,15 +57,13 @@ export function DashboardPage({ data }: { data: DashboardData }) {
             aria-hidden="true"
             className="pointer-events-none absolute -right-16 -bottom-24 hidden w-[26rem] select-none object-contain opacity-20 xl:block"
           />
-          <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end lg:gap-12 lg:p-10">
+          <div className="relative p-6 sm:p-8 lg:p-10">
             <div className="flex flex-col gap-5">
               <h2
                 id="learning-progress-title"
                 className="font-heading text-xl font-semibold tracking-tight text-balance sm:text-2xl"
               >
-                {data.summary.progress > 0
-                  ? "Terus melaju, progresmu sudah terlihat."
-                  : "Perjalanan belajarmu dimulai di sini."}
+                Progres belajar
               </h2>
               <div className="flex max-w-lg flex-col gap-3">
                 <p className="flex items-baseline gap-3">
@@ -103,12 +90,6 @@ export function DashboardPage({ data }: { data: DashboardData }) {
                 </div>
               </div>
             </div>
-
-            <dl className="grid grid-cols-3 gap-4 border-t border-primary-foreground/15 pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
-              <Metric value={data.summary.activeCourses} label="Course" icon={BookOpen} />
-              <Metric value={data.summary.completedItems} label="Selesai" icon={CheckCircle2} />
-              <Metric value={data.upcoming.length} label="Tertunda" icon={Clock3} />
-            </dl>
           </div>
         </section>
       )}
@@ -119,17 +100,12 @@ export function DashboardPage({ data }: { data: DashboardData }) {
           aria-labelledby="my-courses-title"
         >
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="flex flex-col gap-1.5">
-              <h2
-                id="my-courses-title"
-                className="font-heading text-2xl font-semibold tracking-tight"
-              >
-                Course saya
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Pilih course untuk melanjutkan pembelajaran terakhir.
-              </p>
-            </div>
+            <h2
+              id="my-courses-title"
+              className="font-heading text-2xl font-semibold tracking-tight"
+            >
+              Course saya
+            </h2>
             {data.courses.length > 0 && (
               <Button variant="outline" size="sm" render={<Link to="/courses" />}>
                 Lihat semua
@@ -143,10 +119,6 @@ export function DashboardPage({ data }: { data: DashboardData }) {
               <EmptyIllustration alt="" width={1254} height={1254} />
               <EmptyHeader>
                 <EmptyTitle>Belum ada course</EmptyTitle>
-                <EmptyDescription>
-                  Course yang kamu ikuti akan muncul di sini setelah kamu
-                  bergabung.
-                </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
                 <Button render={<Link to="/courses/join" />}>
@@ -172,9 +144,6 @@ export function DashboardPage({ data }: { data: DashboardData }) {
           <Card>
             <CardHeader>
               <CardTitle id="upcoming-title">Perlu diselesaikan</CardTitle>
-              <CardDescription>
-                Tenggat assignment dan quiz terdekat.
-              </CardDescription>
               <CardAction>
                 <Badge variant="lavender">{data.upcoming.length}</Badge>
               </CardAction>
@@ -186,10 +155,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
                     <EmptyMedia variant="icon">
                       <Clock3 />
                     </EmptyMedia>
-                    <EmptyTitle>Tidak ada aktivitas tertunda</EmptyTitle>
-                    <EmptyDescription>
-                      Tenggat assignment dan quiz akan muncul di sini.
-                    </EmptyDescription>
+                    <EmptyTitle>Tidak ada tenggat</EmptyTitle>
                   </EmptyHeader>
                 </Empty>
               ) : (
@@ -230,26 +196,6 @@ export function DashboardPage({ data }: { data: DashboardData }) {
           </Card>
         </aside>
       </section>
-    </div>
-  );
-}
-
-function Metric({
-  value,
-  label,
-  icon: Icon,
-}: {
-  value: number;
-  label: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <dt className="flex items-center gap-1.5 text-xs text-primary-foreground/75">
-        <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">{label}</span>
-      </dt>
-      <dd className="font-heading text-3xl font-semibold tracking-tight tabular-nums">{value}</dd>
     </div>
   );
 }

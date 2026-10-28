@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { formatJoinCode, joinLink } from "../lib/form";
 import type { PublicationStatus } from "../types";
 import { ActionError, useAction } from "./action-feedback";
@@ -13,11 +13,9 @@ import { IconSwap } from "./icon-swap";
 export function JoinCodeCard({
   joinCode,
   courseStatus,
-  studentCount,
 }: {
   joinCode: string | null;
   courseStatus: PublicationStatus;
-  studentCount: number;
 }) {
   const reset = useAction();
   const disable = useAction();
@@ -44,10 +42,6 @@ export function JoinCodeCard({
           <KeyRound className="size-4" aria-hidden="true" />
           Kode kelas
         </CardTitle>
-        <CardDescription>
-          Bagikan kode atau tautan ini. Siapa pun yang memilikinya bisa bergabung sebagai siswa.
-          {studentCount > 0 ? ` Saat ini ${studentCount} siswa terdaftar.` : ""}
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {courseStatus !== "published" ? (
@@ -87,7 +81,7 @@ export function JoinCodeCard({
                 label="Buat kode baru"
                 icon={<RefreshCw />}
                 title="Buat kode kelas baru?"
-                description="Kode lama langsung berhenti berlaku. Siswa yang sudah terdaftar tidak terpengaruh, tetapi tautan yang pernah kamu bagikan tidak bisa dipakai lagi."
+                description="Kode dan tautan lama berhenti berlaku. Siswa yang sudah bergabung tidak terpengaruh."
                 confirmLabel="Buat kode baru"
                 disabled={busy}
                 onConfirm={() => reset.submit({ intent: "join-code-reset" })}

@@ -37,7 +37,6 @@ export function LoginPage({
   return (
     <AuthFormPanel
       title="Selamat datang kembali"
-      subtitle="Masuk untuk melanjutkan."
       footer={
         <>
           Belum punya akun? <AuthLink to="/register">Daftar</AuthLink>

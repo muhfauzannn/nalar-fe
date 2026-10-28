@@ -1,10 +1,9 @@
-import { KeyRound } from "lucide-react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import { Card, CardContent } from "~/components/ui/card";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { ActionError } from "../components/action-feedback";
 import type { ActionResult } from "../types";
@@ -20,17 +19,10 @@ export function JoinCoursePage({ result }: { result?: ActionResult }) {
       <PageHeader
         crumbs={[{ label: "Course saya", to: "/courses" }]}
         title="Gabung ke course"
-        description="Masukkan kode kelas yang dibagikan pengajarmu. Kamu langsung terdaftar sebagai siswa."
+        description="Masukkan kode dari pengajarmu."
       />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <KeyRound className="size-4" aria-hidden="true" />
-            Kode kelas
-          </CardTitle>
-          <CardDescription>Huruf besar atau kecil dan tanda hubung tidak masalah.</CardDescription>
-        </CardHeader>
         <CardContent>
           <Form method="post" className="flex flex-col gap-5">
             {result && !result.ok ? <ActionError error={result.error} /> : null}
@@ -41,14 +33,13 @@ export function JoinCoursePage({ result }: { result?: ActionResult }) {
                 id="code"
                 name="code"
                 defaultValue={code}
-                placeholder="ABCD-EFGH"
+                placeholder="K7M2-QX9P"
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellCheck={false}
                 required
                 className="font-mono tracking-widest uppercase"
               />
-              <FieldDescription>Contoh: K7M2-QX9P</FieldDescription>
             </Field>
             <Button type="submit" size="lg" loading={submitting}>
               {submitting ? "Memeriksa" : "Gabung"}
