@@ -77,11 +77,16 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
   koordinat dan caption baru untuk tiap rujukan. Langkah ini mempertahankan anotasi
   dan kemajuan goresannya. Perpindahan memakai transform 200 ms; reduced motion
   langsung memindahkan posisi. Caption per action pada `present_pdf_guidance`
-  berubah saat goresan action tersebut dimulai. Model diminta menyelesaikan
-  penjelasan pendek sebelum menunjuk bagian berikutnya, bukan mengirim semua
-  perpindahan cursor sekaligus. Langkah visual berikutnya menunggu audio yang
-  sudah antre selesai (maksimal 20 detik); konteks dan pembatalan dicek kembali
-  sebelum tampil. Ini sinkronisasi per langkah, bukan penyelarasan per kata.
+  berubah saat goresan action tersebut dimulai. Setiap pemanggilan visual wajib
+  menyertakan `holdSeconds` pilihan model (1–20 detik); caption action dapat
+  menentukan durasinya sendiri, atau memakai durasi batch. Aplikasi menghormati
+  jeda baca itu setelah cursor sampai dan goresan selesai. Batas sepuluh detik
+  hanya mengatur kecepatan menggambar dan tidak memendekkan jeda baca. Model
+  diminta menyelesaikan penjelasan pendek sebelum menunjuk bagian berikutnya,
+  bukan mengirim semua perpindahan cursor sekaligus. Langkah visual berikutnya
+  menunggu jeda baca dan audio yang sudah antre selesai; konteks dan pembatalan
+  dicek kembali sebelum tampil. Ini sinkronisasi per langkah, bukan penyelarasan
+  per kata.
 - Pertanyaan ketikan sudah membawa konteks terbaru, sehingga penjelasan langsung
   diterima tanpa round trip `get_pdf_context`. Untuk suara atau perubahan halaman,
   `get_pdf_context` membaca ulang konteks. Kegagalan visual tidak menghalangi
