@@ -18,6 +18,45 @@ export function decodeTutorAudio(base64: string, mimeType: string) {
   return { samples, rate };
 }
 
+/** Stops native audio that keeps arriving after its spoken transcript has stalled. */
+export class TutorAudioProgressGuard {
+  private transcriptLength = 0;
+  private audioSeconds = 0;
+  private lastTranscriptAudioSeconds = 0;
+  private blocked = false;
+
+  get isBlocked() { return this.blocked; }
+
+  reset() {
+    this.transcriptLength = 0;
+    this.audioSeconds = 0;
+    this.lastTranscriptAudioSeconds = 0;
+    this.blocked = false;
+  }
+
+  noteTranscript(text: string) {
+    const length = text.trim().length;
+    if (!length) return;
+    this.transcriptLength += length;
+    this.lastTranscriptAudioSeconds = this.audioSeconds;
+  }
+
+  allowAudio(seconds: number) {
+    if (this.blocked) return false;
+    const next = this.audioSeconds + seconds;
+    const budget = this.transcriptLength
+      ? Math.max(6, 3 + this.transcriptLength / 3)
+      : 10;
+    if (!Number.isFinite(seconds) || seconds <= 0 ||
+      (next > budget && next - this.lastTranscriptAudioSeconds > 5)) {
+      this.blocked = true;
+      return false;
+    }
+    this.audioSeconds = next;
+    return true;
+  }
+}
+
 /** Microphone → 16 kHz PCM encoder worklet. Returns the worklet node. */
 export async function createTutorInputNode(
   context: AudioContext,
@@ -54,7 +93,16 @@ export class TutorAudioOutput {
   private sources = new Set<AudioBufferSourceNode>();
   private nextTime = 0;
   private epoch = 0;
-  constructor(private onPlaying: (playing: boolean) => void) {}
+  private queue: Promise<void> = Promise.resolve();
+  private progress = new TutorAudioProgressGuard();
+  private runawayReported = false;
+  constructor(
+    private onPlaying: (playing: boolean) => void,
+    private onRunaway?: () => void,
+  ) {}
+
+  beginTurn() { this.progress.reset(); this.runawayReported = false; }
+  noteTranscript(text: string) { this.progress.noteTranscript(text); }
 
   async prepare() {
     if (!this.context) {
@@ -65,12 +113,26 @@ export class TutorAudioOutput {
     if (this.context.state === "suspended") await this.context.resume();
   }
 
-  async play(base64: string, mimeType = "audio/pcm;rate=24000") {
+  play(base64: string, mimeType = "audio/pcm;rate=24000") {
     const epoch = this.epoch;
+    const task = this.queue.then(() => this.schedule(base64, mimeType, epoch));
+    this.queue = task.catch(() => {});
+    return task;
+  }
+
+  private async schedule(base64: string, mimeType: string, epoch: number) {
+    if (epoch !== this.epoch || this.progress.isBlocked) return;
     await this.prepare();
     if (epoch !== this.epoch || !this.context) return;
     const { samples, rate } = decodeTutorAudio(base64, mimeType);
     if (!samples.length) return;
+    if (!this.progress.allowAudio(samples.length / rate)) {
+      if (!this.runawayReported) {
+        this.runawayReported = true;
+        this.onRunaway?.();
+      }
+      return;
+    }
     const buffer = this.context.createBuffer(1, samples.length, rate);
     buffer.copyToChannel(samples, 0);
     const source = this.context.createBufferSource();
@@ -95,6 +157,7 @@ export class TutorAudioOutput {
 
   stop() {
     this.epoch++;
+    this.queue = Promise.resolve();
     for (const source of this.sources) {
       source.onended = null;
       try {

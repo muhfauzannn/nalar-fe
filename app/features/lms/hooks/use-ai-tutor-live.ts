@@ -21,6 +21,7 @@ import {
   createTutorInputNode,
   decodeTutorAudio,
   LevelMeter,
+  TutorAudioProgressGuard,
   TUTOR_INPUT_MIME_TYPE,
 } from "../lib/tutor-audio";
 import type {
@@ -90,6 +91,9 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const outputSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlaybackTimeRef = useRef(0);
   const playbackEpochRef = useRef(0);
+  const playbackQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const audioProgressRef = useRef(new TutorAudioProgressGuard());
+  const audioRunawayReportedRef = useRef(false);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -122,6 +126,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
 
   const stopPlayback = useCallback(() => {
     playbackEpochRef.current += 1;
+    playbackQueueRef.current = Promise.resolve();
     for (const source of outputSourcesRef.current) {
       try {
         source.stop();
@@ -134,9 +139,8 @@ export function useAiTutorLive(target: AiTutorTarget) {
     setIsTutorSpeaking(false);
   }, []);
 
-  const playPcm = useCallback(async (base64: string, mimeType: string) => {
-    if (channelRef.current !== "voice" || !activeStudentEventRef.current) return;
-    const playbackEpoch = playbackEpochRef.current;
+  const playPcm = useCallback(async (base64: string, mimeType: string, playbackEpoch: number) => {
+    if (channelRef.current !== "voice" || playbackEpoch !== playbackEpochRef.current || audioProgressRef.current.isBlocked) return;
     let context = outputContextRef.current;
     if (!context) {
       context = new AudioContext({ sampleRate: 24_000 });
@@ -145,10 +149,17 @@ export function useAiTutorLive(target: AiTutorTarget) {
       outputMeterRef.current.node.connect(context.destination);
     }
     if (context.state === "suspended") await context.resume();
-    if (playbackEpoch !== playbackEpochRef.current || !activeStudentEventRef.current) return;
+    if (playbackEpoch !== playbackEpochRef.current) return;
 
     const { samples, rate } = decodeTutorAudio(base64, mimeType);
     if (samples.length === 0) return;
+    if (!audioProgressRef.current.allowAudio(samples.length / rate)) {
+      if (!audioRunawayReportedRef.current) {
+        audioRunawayReportedRef.current = true;
+        setError("Suara tutor terhenti karena audio tidak sesuai dengan teks. Jawaban teks tetap tersedia.");
+      }
+      return;
+    }
     const audioBuffer = context.createBuffer(1, samples.length, rate);
     audioBuffer.copyToChannel(samples, 0);
 
@@ -239,6 +250,10 @@ export function useAiTutorLive(target: AiTutorTarget) {
             mode: modeRef.current,
           });
           activeStudentEventRef.current = studentEventId;
+          setError(null);
+          stopPlayback();
+          audioProgressRef.current.reset();
+          audioRunawayReportedRef.current = false;
           activeWasRedirectedRef.current = classification.wasRedirected;
           awaitingClassificationRef.current = false;
           lastSentTextRef.current = null;
@@ -286,7 +301,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         }
       }
     },
-    [appendMessage, target],
+    [appendMessage, stopPlayback, target],
   );
 
   const handleServerMessage = useCallback(
@@ -308,6 +323,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       const outputText = serverContent?.outputTranscription?.text;
       if (outputText && activeStudentEventRef.current) {
         outputTextRef.current += outputText;
+        audioProgressRef.current.noteTranscript(outputText);
         setOutputTranscript(outputTextRef.current);
         setIsTutorSpeaking(true);
       }
@@ -318,13 +334,21 @@ export function useAiTutorLive(target: AiTutorTarget) {
       );
       for (const part of audioParts ?? []) {
         const audioData = part.inlineData?.data;
-        if (audioData) void playPcm(audioData, part.inlineData?.mimeType ?? "");
+        if (audioData && channelRef.current === "voice" && activeStudentEventRef.current) {
+          const epoch = playbackEpochRef.current;
+          const queued = playbackQueueRef.current.then(() => playPcm(audioData, part.inlineData?.mimeType ?? "", epoch));
+          playbackQueueRef.current = queued.catch(() => {
+            setError("Audio tutor belum dapat diputar. Coba sambungkan ulang sesi.");
+          });
+        }
       }
       if (outputText || (audioParts?.length ?? 0) > 0) {
         toolTurnPendingRef.current = false;
       }
       if (serverContent?.interrupted) {
         stopPlayback();
+        audioProgressRef.current.reset();
+        audioRunawayReportedRef.current = false;
         activeStudentEventRef.current = null;
         activeWasRedirectedRef.current = false;
         replyEventRef.current = null;
@@ -373,6 +397,8 @@ export function useAiTutorLive(target: AiTutorTarget) {
     toolTurnPendingRef.current = false;
     replyEventRef.current = null;
     stopPlayback();
+    audioProgressRef.current.reset();
+    audioRunawayReportedRef.current = false;
     setStatus("idle");
   }, [stopPlayback]);
 

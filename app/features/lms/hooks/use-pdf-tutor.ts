@@ -272,7 +272,9 @@ export function usePdfTutor(
 
   const beginTurn = useCallback(() => {
     commitTurn();
+    setError(null);
     audioRef.current?.stop();
+    audioRef.current?.beginTurn();
     audioStartingFor.current = null;
     responding.current = true;
     typedQuestion.current = null;
@@ -540,6 +542,7 @@ export function usePdfTutor(
         if (outputText) {
           outputRef.current += outputText;
           setOutputTranscript(outputRef.current);
+          audioRef.current?.noteTranscript(outputText);
         }
         for (const part of server?.modelTurn?.parts ?? []) {
           if (
@@ -810,6 +813,10 @@ export function usePdfTutor(
                 : "paused",
         );
         if (isPlaying) trace("audio-playing");
+      }, () => {
+        if (!mounted.current || currentGeneration !== generation.current) return;
+        setError("Suara tutor terhenti karena audio tidak sesuai dengan teks. Jawaban teks tetap tersedia.");
+        trace("audio-runaway-stopped");
       });
       await audioRef.current.prepare();
       const abort = new AbortController();

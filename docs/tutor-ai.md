@@ -27,6 +27,9 @@ Berlaku untuk tutor PDF dan tutor kuis/tugas (`tutor-conversation.tsx`).
 - Bola suara mengikuti kenyaringan nyata: mikrofon saat siswa bicara, `AnalyserNode`
   pada output saat tutor bicara. Nilainya dibaca setiap frame dan ditulis langsung ke
   `transform`, tanpa render ulang React. Reduced motion hanya mengubah opacity.
+- Audio PCM keluaran diputar sesuai urutan potongan. Jika durasi audio terus bertambah
+  tanpa kemajuan transkrip, potongan berikutnya dihentikan untuk giliran itu dan
+  jawaban teks tetap tersedia. Pembatas direset saat giliran siswa berikutnya.
 
 ## Menjalankan
 
