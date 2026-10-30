@@ -10,4 +10,5 @@ export {
   loginWithEmail,
   registerWithEmail,
 } from "./api/auth";
+export { useRedirectIfSignedIn } from "./hooks/use-redirect-if-signed-in";
 export type { AuthActionData, AuthSubmission } from "./types";
