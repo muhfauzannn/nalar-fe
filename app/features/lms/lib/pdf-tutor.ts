@@ -23,6 +23,8 @@ export type PdfAction = PdfRect & {
   caption?: string;
   holdSeconds?: number;
   text?: string;
+  /** Written notes live beside the document so they cannot obscure its content. */
+  placement?: "side";
   points?: PdfPoint[];
   rects?: PdfRect[];
 };
@@ -204,8 +206,8 @@ export function parsePdfGuidance(
     } : null;
     const rect = rangeBox ?? pathBox ??
       block ?? {
-        x: value.x,
-        y: value.y,
+        x: kind === "text" ? 0 : value.x,
+        y: kind === "text" ? 0 : value.y,
         width: value.width ?? 0,
         height: value.height ?? 0,
       };
@@ -240,7 +242,7 @@ export function parsePdfGuidance(
       x: box.x + box.width / 2,
       y: box.y + box.height / 2,
     };
-    if (
+    if (kind !== "text" && (
       context.viewport.width <= 0 ||
       context.viewport.height <= 0 ||
       !intersects({ ...anchor, width: 0, height: 0 }, context.viewport) ||
@@ -248,7 +250,7 @@ export function parsePdfGuidance(
         !points.every((p) =>
           intersects({ ...p, width: 0, height: 0 }, context.viewport),
         ))
-    ) {
+    )) {
       throw new Error(
         "Target di luar area terlihat. Minta siswa menggulir terlebih dahulu.",
       );
@@ -262,6 +264,7 @@ export function parsePdfGuidance(
       width: box.width,
       height: box.height,
       ...(kind === "text" ? { text: value.text as string } : {}),
+      ...(kind === "text" ? { placement: "side" as const } : {}),
       ...(points ? { points } : {}),
       ...(rects ? { rects } : {}),
     };

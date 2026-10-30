@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { buildInkPlan } from "../app/features/lms/lib/handwriting/ink-plan";
 import {
   parsePdfGuidance,
   parsePdfCursor,
@@ -44,6 +45,21 @@ test("text actions resolve to the actual source block, ignoring guessed coordina
     width: 0.3,
     height: 0.05,
   });
+});
+test("written notes use the tutor panel even when the PDF has no empty space", () => {
+  const crowded: PdfViewContext = {
+    ...context,
+    viewport: { x: 0, y: 0, width: 1, height: 1 },
+    blocks: [{ id: "full", text: "Halaman padat", x: 0, y: 0, width: 1, height: 1 }],
+  };
+  const note = parsePdfGuidance({ ...payload(), actions: [
+    { kind: "text", text: "Domain adalah himpunan asal" },
+  ] }, crowded, "turn-1").actions[0];
+  expect(note.placement).toBe("side");
+  expect(note.text).toBe("Domain adalah himpunan asal");
+  expect(note.x).toBe(0);
+  expect(note.y).toBe(0);
+  expect(buildInkPlan({ ...payload(), actions: [note] }, 1300).strokes).toHaveLength(0);
 });
 test("different document, page, viewport revision and interrupted turn cannot mutate the page", () => {
   for (const change of [

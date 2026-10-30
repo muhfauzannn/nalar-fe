@@ -389,6 +389,18 @@
 /* Annotations live on the white PDF page in either app theme. */
 .pdf-tutor-overlay { --pdf-tutor-ink: var(--brand-lavender-foreground); }
 
+.pdf-tutor-side-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pdf-tutor-side-write 0.22s ease-out forwards;
+}
+
+@keyframes pdf-tutor-side-write { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-tutor-side-stroke { animation: none; stroke-dashoffset: 0; }
+}
+
 .pdf-tutor-overlay[data-ink-state="drawing"][data-pointer-mode="ink"]:not([data-external-cursor="true"]) [data-tutor-pointer] {
   visibility: hidden;
 }

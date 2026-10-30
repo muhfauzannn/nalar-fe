@@ -7,6 +7,10 @@ panah, kotak, lingkaran, garis bebas, atau catatan singkat. Bubble di cursor ber
 ringkasan langkah. Pada ponsel kolom tulis menempel di bawah layar selama ruang
 belajar terlihat, agar dapat dipakai sambil membaca.
 
+Catatan tulisan AI tampil pada bidang catatan di panel tutor, terpisah dari PDF.
+Posisinya tidak mengikuti koordinat tebakan model sehingga tetap terbaca saat
+halaman padat. Rujukan pada PDF tetap memakai cursor atau sorotan pada block terkait.
+
 ## Teks dan suara dalam satu percakapan
 
 Berlaku untuk tutor PDF dan tutor kuis/tugas (`tutor-conversation.tsx`).

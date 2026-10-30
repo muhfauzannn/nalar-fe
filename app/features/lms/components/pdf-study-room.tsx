@@ -15,6 +15,7 @@ import { usePdfTutor } from "../hooks/use-pdf-tutor";
 import type { PdfViewContext } from "../lib/pdf-tutor";
 import type { LessonData } from "../types";
 import { PdfReader } from "./pdf-reader";
+import { PdfTutorNotes } from "./pdf-tutor-notes";
 import {
   TutorComposer,
   TutorStatus,
@@ -125,6 +126,7 @@ function PdfTutorDocument({ resource }: { resource: Resource }) {
               </Button>
             ) : null}
           </div>
+          <PdfTutorNotes guidance={tutor.guidance} />
           <TutorThread
             className={cn(hasThread && "h-80", "lg:h-auto lg:flex-1")}
             label="Transkrip percakapan saat ini"

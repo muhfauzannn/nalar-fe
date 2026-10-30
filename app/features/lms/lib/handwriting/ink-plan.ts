@@ -237,7 +237,7 @@ export function buildInkPlan(
         index,
         action.kind,
       );
-    if (action.kind === "text" && action.text) {
+    if (action.kind === "text" && action.text && action.placement !== "side") {
       const available = Math.max(
         100,
         Math.min(action.width > 0 ? w : 540, 970 - Math.min(x, 860)),

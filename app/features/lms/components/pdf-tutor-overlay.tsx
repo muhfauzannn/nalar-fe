@@ -70,7 +70,7 @@ export function PdfTutorOverlay({
         : angle === 270
           ? `matrix(0 ${-scale} ${scale} 0 0 ${size.height})`
           : `matrix(${scale} 0 0 ${scale} 0 0)`;
-  const first = guidance?.actions[0];
+  const first = guidance?.actions.find((action) => action.kind !== "text");
   const anchor = first
     ? rotatePoint(
         first.points?.[0] ?? {
@@ -168,7 +168,7 @@ export function PdfTutorOverlay({
           pen.style.visibility = "hidden";
           host.dataset.pointerMode = "cursor";
           fallback.forEach((text) => { text.style.visibility = "visible"; });
-          if (!cueRef.current && !plan.strokes.some((stroke) => stroke.action === index)) {
+          if (!cueRef.current && guidance.actions[index].kind !== "text" && !plan.strokes.some((stroke) => stroke.action === index)) {
             const action = guidance.actions[index];
             placeCursor(action.points?.[0] ?? { x: action.x + action.width / 2, y: action.y + action.height / 2 });
           }
@@ -197,8 +197,8 @@ export function PdfTutorOverlay({
         if (caption.current) caption.current.textContent = guidance.actions[state.action].caption ?? guidance.caption;
         // Reduced motion and unsupported-only text still end at the relevant target.
         if (media.matches || !paths.length) {
-          const last = guidance.actions[state.action];
-          placeCursor(last.points?.at(-1) ?? { x: last.x + last.width / 2, y: last.y + last.height / 2 });
+          const last = [...guidance.actions].reverse().find((action) => action.kind !== "text");
+          if (last) placeCursor(last.points?.at(-1) ?? { x: last.x + last.width / 2, y: last.y + last.height / 2 });
         }
       }
     };
@@ -227,7 +227,7 @@ export function PdfTutorOverlay({
         if (!(state.holds[index] > 0)) return;
         timeline!.call(() => {
           actionCaption(index);
-          if (!cueRef.current) placeCursor(action.points?.[0] ?? {
+          if (!cueRef.current && action.kind !== "text") placeCursor(action.points?.[0] ?? {
             x: action.x + action.width / 2, y: action.y + action.height / 2,
           });
         });
@@ -253,7 +253,7 @@ export function PdfTutorOverlay({
     paths.forEach((path, index) => {
       const action = plan.strokes[index].action;
       if (action !== previousAction) {
-        appendHold(previousAction);
+        for (let skipped = previousAction; skipped < action; skipped++) appendHold(skipped);
         previousAction = action;
       }
       const initial = state.progress[index] ?? 0;
@@ -316,7 +316,7 @@ export function PdfTutorOverlay({
         index ? `+=${0.025 / inkScale}` : 0,
       );
     });
-    appendHold(previousAction < 0 ? guidance.actions.length - 1 : previousAction);
+    for (let remaining = previousAction; remaining < guidance.actions.length; remaining++) appendHold(remaining);
     notifyTiming();
     if (!timeline.duration()) finish();
     media.addEventListener("change", reduceMotion);
@@ -401,7 +401,7 @@ export function PdfTutorOverlay({
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            {guidance?.actions.map((action, actionIndex) => (
+            {guidance?.actions.map((action, actionIndex) => action.placement === "side" ? null : (
               <g
                 key={actionIndex}
                 data-testid={action.kind === "text" ? "tutor-note" : undefined}
