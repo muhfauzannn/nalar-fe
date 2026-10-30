@@ -85,8 +85,9 @@ CDN. Gunakan Node 24 sesuai Dockerfile proyek.
   diminta menyelesaikan penjelasan pendek sebelum menunjuk bagian berikutnya,
   bukan mengirim semua perpindahan cursor sekaligus. Langkah visual berikutnya
   menunggu jeda baca dan audio yang sudah antre selesai; konteks dan pembatalan
-  dicek kembali sebelum tampil. Ini sinkronisasi per langkah, bukan penyelarasan
-  per kata.
+  dicek kembali sebelum tampil. Setelah jawaban, audio, dan jeda baca selesai,
+  pointer beserta bubble menghilang; anotasi yang sudah dibuat tetap terlihat.
+  Ini sinkronisasi per langkah, bukan penyelarasan per kata.
 - Pertanyaan ketikan sudah membawa konteks terbaru, sehingga penjelasan langsung
   diterima tanpa round trip `get_pdf_context`. Untuk suara atau perubahan halaman,
   `get_pdf_context` membaca ulang konteks. Kegagalan visual tidak menghalangi

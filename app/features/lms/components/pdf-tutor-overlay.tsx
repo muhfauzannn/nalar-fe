@@ -21,12 +21,14 @@ export function PdfTutorOverlay({
   rotation,
   size,
   showCursor = true,
+  pointerVisible = true,
   onPresentationTiming,
 }: {
   guidance: PdfGuidance | null;
   cursorCue?: PdfCursorCue | null;
   selection: PdfSelection | null;
   showCursor?: boolean;
+  pointerVisible?: boolean;
   onPresentationTiming?: (turnId: string, remainingMs: number) => void;
   rotation: number;
   size: { width: number; height: number };
@@ -513,7 +515,7 @@ export function PdfTutorOverlay({
           </g>
         </g>
       </svg>
-      {cursorCue || (anchor && guidance && showCursor) ? (
+      {pointerVisible && (cursorCue || (anchor && guidance && showCursor)) ? (
         <div
           ref={cursor}
           data-testid="tutor-cursor"

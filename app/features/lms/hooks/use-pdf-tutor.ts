@@ -59,6 +59,7 @@ export function usePdfTutor(
   const [error, setError] = useState<string | null>(null);
   const [guidance, setGuidance] = useState<PdfGuidance | null>(null);
   const [cursorCue, setCursorCue] = useState<PdfCursorCue | null>(null);
+  const [pointerVisible, setPointerVisible] = useState(false);
   const [inputTranscript, setInputTranscript] = useState("");
   const [outputTranscript, setOutputTranscript] = useState("");
   const [listening, setListening] = useState(false);
@@ -109,6 +110,9 @@ export function usePdfTutor(
   const committedGuidance = useRef<PdfGuidance | null>(null);
   const committedCursor = useRef<PdfCursorCue | null>(null);
   const visualReadyAt = useRef(0);
+  const pointerTurn = useRef<string | null>(null);
+  const pointerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioStartingFor = useRef<{ turnId: string; pending: number } | null>(null);
   const pendingGuidanceCall = useRef<string | null>(null);
   const events = useRef<PdfTutorEvent[]>([]);
   const statusRef = useRef<Status>("idle");
@@ -140,6 +144,34 @@ export function usePdfTutor(
     ];
   }, []);
 
+  const hidePointer = useCallback(() => {
+    if (pointerTimer.current) clearTimeout(pointerTimer.current);
+    pointerTimer.current = null;
+    pointerTurn.current = null;
+    setPointerVisible(false);
+  }, []);
+
+  const settlePointer = useCallback(() => {
+    if (pointerTimer.current) clearTimeout(pointerTimer.current);
+    pointerTimer.current = null;
+    const owner = pointerTurn.current;
+    if (!owner || responding.current || playing.current ||
+      (audioStartingFor.current?.turnId === owner && audioStartingFor.current.pending > 0)) return;
+    const closeWhenReady = () => {
+      if (pointerTurn.current !== owner || responding.current || playing.current ||
+        (audioStartingFor.current?.turnId === owner && audioStartingFor.current.pending > 0)) return;
+      const remaining = visualReadyAt.current - Date.now();
+      if (remaining > 0) {
+        pointerTimer.current = setTimeout(closeWhenReady, remaining);
+        return;
+      }
+      pointerTimer.current = null;
+      pointerTurn.current = null;
+      setPointerVisible(false);
+    };
+    closeWhenReady();
+  }, []);
+
   const cancelTurn = useCallback((clearGuidance = true) => {
     responding.current = false;
     typedQuestion.current = null;
@@ -154,6 +186,8 @@ export function usePdfTutor(
     transcriptRef.current = "";
     outputRef.current = "";
     audioRef.current?.stop();
+    audioStartingFor.current = null;
+    hidePointer();
     visualReadyAt.current = 0;
     pendingGuidanceCall.current = null;
     if (clearGuidance) {
@@ -164,7 +198,7 @@ export function usePdfTutor(
     setGuidance(committedGuidance.current);
     setOutputTranscript("");
     setInputTranscript("");
-  }, []);
+  }, [hidePointer]);
 
   // Moves what was said in the current turn into the thread. Called again later in the same
   // turn only adds what is new: the question once, then each piece of the answer.
@@ -239,6 +273,7 @@ export function usePdfTutor(
   const beginTurn = useCallback(() => {
     commitTurn();
     audioRef.current?.stop();
+    audioStartingFor.current = null;
     responding.current = true;
     typedQuestion.current = null;
     recoveryAttempts.current = 0;
@@ -257,6 +292,7 @@ export function usePdfTutor(
     setInputTranscript("");
     setOutputTranscript("");
     visualReadyAt.current = 0;
+    hidePointer();
     committedGuidance.current = null;
     committedCursor.current = null;
     setCursorCue(null);
@@ -264,7 +300,7 @@ export function usePdfTutor(
     setGuidance(null);
     setStatus("thinking");
     trace("student-turn");
-  }, [commitTurn, markProgress, trace]);
+  }, [commitTurn, hidePointer, markProgress, trace]);
 
   const sendView = useCallback(
     (session: Session, view: PdfViewContext, forceImage = false, publishState = true) => {
@@ -419,6 +455,8 @@ export function usePdfTutor(
             const next = cursorOnly ? null : parsePdfGuidance(call.args, view, active.id);
             // Cursor-only steps preserve the drawing and its playback progress.
             pendingGuidanceCall.current = call.id;
+            pointerTurn.current = active.id;
+            setPointerVisible(true);
             setCursorCue(nextCursor);
             if (next) setGuidance(next);
             await new Promise<void>((resolve) => {
@@ -510,11 +548,20 @@ export function usePdfTutor(
             part.inlineData.mimeType?.startsWith("audio/")
           ) {
             trace("audio-received");
-            void audioRef.current?.play(part.inlineData.data, part.inlineData.mimeType).catch(() => {
-              setError(
-                "Audio belum dapat diputar. Coba jeda dan lanjutkan mikrofon.",
-              );
-            });
+            const audio = audioRef.current;
+            if (audio) {
+              const starting = audioStartingFor.current?.turnId === active.id
+                ? audioStartingFor.current
+                : { turnId: active.id, pending: 0 };
+              audioStartingFor.current = starting;
+              starting.pending++;
+              void audio.play(part.inlineData.data, part.inlineData.mimeType).catch(() => {
+                setError("Audio belum dapat diputar. Coba jeda dan lanjutkan mikrofon.");
+              }).finally(() => {
+                starting.pending--;
+                if (audioStartingFor.current === starting) settlePointer();
+              });
+            }
           }
         }
       }
@@ -554,10 +601,11 @@ export function usePdfTutor(
         responding.current = false;
         if (responseTimer.current) clearTimeout(responseTimer.current);
         commitTurn();
+        settlePointer();
         if (!playing.current) setStatus(microphoneRef.current ? "listening" : "paused");
       }
     },
-    [beginTurn, cancelTurn, commitTurn, markProgress, sendView, trace],
+    [beginTurn, cancelTurn, commitTurn, markProgress, sendView, settlePointer, trace],
   );
 
   const startMicrophone = useCallback(async () => {
@@ -751,6 +799,7 @@ export function usePdfTutor(
         playing.current = isPlaying;
         // Closing the output (disconnect) reports "stopped" too: that must not undo "idle".
         if (!mounted.current || currentGeneration !== generation.current) return;
+        if (!isPlaying) settlePointer();
         setStatus(
           isPlaying
             ? "speaking"
@@ -852,6 +901,7 @@ export function usePdfTutor(
     runRetry,
     sendHistory,
     sendView,
+    settlePointer,
     startMicrophone,
     trace,
   ]);
@@ -1007,6 +1057,7 @@ export function usePdfTutor(
     // anchored to its own page (the reader shows it only there); drawing on the new
     // view requires get_pdf_context again (see present_pdf_guidance).
     trace("context-changed");
+    hidePointer();
     visualReadyAt.current = 0;
     // Invalidate locally immediately; coalesce rapid scroll/resize updates on the wire.
     const timer = setTimeout(() => {
@@ -1024,14 +1075,15 @@ export function usePdfTutor(
       }
     }, 200);
     return () => clearTimeout(timer);
-  }, [context, sendView, trace]);
+  }, [context, hidePointer, sendView, trace]);
 
   const onPresentationTiming = useCallback((turnId: string, remainingMs: number) => {
     if (turn.current?.id !== turnId) return;
     visualReadyAt.current = Date.now() + Math.max(0, remainingMs);
+    settlePointer();
     // A deliberate reading pause is progress, not a stalled provider response.
     if (responding.current) markProgress();
-  }, [markProgress]);
+  }, [markProgress, settlePointer]);
 
   // Typed questions only and nothing happening: give the Live session back. The thread stays
   // and is handed to the next session, opened by the next question.
@@ -1054,6 +1106,7 @@ export function usePdfTutor(
     notice: retry.notice ?? recoveryNotice,
     guidance,
     cursorCue,
+    pointerVisible,
     onPresentationTiming,
     inputTranscript,
     outputTranscript,

@@ -871,3 +871,31 @@ test("the next AI cursor tool waits for the duration chosen by the previous step
   await expect.poll(() => mock.responses.get("timed-next")?.ok).toBe(true);
   await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Lalu kodomain");
 });
+
+test("the pointer closes after the answer and AI reading hold while ink remains", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan pembilang");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  const context = await mock.call("close-context", "get_pdf_context") as Context;
+  await mock.call("close-ink", "present_pdf_guidance", mock.guidance(context));
+  const { actions: _actions, ...identity } = mock.guidance(context);
+  await mock.call("close-cursor", "move_pdf_cursor", {
+    ...identity, blockId: context.blocks[1].id, caption: "Baca pembilang", holdSeconds: 5,
+  });
+  mock.send({ serverContent: {
+    outputTranscription: { text: "Pembilang menyatakan bagian yang dipilih." },
+    generationComplete: true,
+  } });
+  await expect(page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="tutor"]'))
+    .toContainText("Pembilang menyatakan bagian");
+  await page.clock.runFor(4_000);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Baca pembilang");
+  await page.clock.runFor(1_500);
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
+  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
+  expect(mock.errors).toEqual([]);
+});
