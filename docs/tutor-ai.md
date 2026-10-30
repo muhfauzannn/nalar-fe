@@ -24,6 +24,9 @@ Berlaku untuk tutor PDF dan tutor kuis/tugas (`tutor-conversation.tsx`).
 - Giliran suara dan teks masuk ke satu thread. Tutor PDF menyimpan thread hanya di
   memori browser selama halaman terbuka (tetap terlihat setelah sesi diakhiri); tutor
   kuis/tugas tetap menyimpan transkrip di backend seperti sebelumnya.
+- Saat siswa berbicara, `interimInputTranscription` ditampilkan sebagai teks sementara
+  yang diperbarui di bubble pertanyaan. `inputTranscription` menggantikannya sebagai
+  teks final; hanya teks final yang masuk ke riwayat dan proses klasifikasi.
 - Bola suara mengikuti kenyaringan nyata: mikrofon saat siswa bicara, `AnalyserNode`
   pada output saat tutor bicara. Nilainya dibaca setiap frame dan ditulis langsung ke
   `transform`, tanpa render ulang React. Reduced motion hanya mengubah opacity.

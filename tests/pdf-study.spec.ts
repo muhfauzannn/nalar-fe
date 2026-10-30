@@ -899,3 +899,21 @@ test("the pointer closes after the answer and AI reading hold while ink remains"
   await expect(page.getByTestId("tutor-highlight")).toBeVisible();
   expect(mock.errors).toEqual([]);
 });
+
+test("speech hypotheses update the live question before the final transcript", async ({ page }) => {
+  const mock = await setup(page);
+  await mock.start();
+  const student = page.getByLabel("Transkrip percakapan saat ini").locator('[data-author="student"]');
+  mock.send({ serverContent: { interimInputTranscription: { text: "Jelas" } } });
+  await expect(student).toHaveText("Jelas");
+  mock.send({ serverContent: { interimInputTranscription: { text: "Jelaskan domain" } } });
+  await expect(student).toHaveText("Jelaskan domain");
+  await expect(student).toHaveCount(1);
+  mock.send({ serverContent: { inputTranscription: { text: "Jelaskan domain" } } });
+  await expect(student).toHaveText("Jelaskan domain");
+  await mock.call("interim-context", "get_pdf_context");
+  mock.send({ serverContent: { outputTranscription: { text: "Domain adalah daerah asal." }, generationComplete: true } });
+  await expect(student).toHaveText("Jelaskan domain");
+  await expect(student).toHaveCount(1);
+  expect(mock.errors).toEqual([]);
+});

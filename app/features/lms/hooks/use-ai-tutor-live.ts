@@ -30,6 +30,7 @@ import type {
   AiTutorMode,
   AiTutorTarget,
 } from "../types";
+import { liveInputPreview } from "../lib/live-transcript";
 
 type ConnectionStatus = "idle" | "connecting" | "ready" | "responding" | "error";
 
@@ -315,10 +316,14 @@ export function useAiTutorLive(target: AiTutorTarget) {
       }
       const serverContent = message.serverContent;
       const inputText = serverContent?.inputTranscription?.text;
+      const interimText = serverContent?.interimInputTranscription?.text;
       if (inputText) {
         if (!activeStudentEventRef.current) awaitingClassificationRef.current = true;
         inputTextRef.current += inputText;
         setInputTranscript(inputTextRef.current);
+      } else if (interimText && channelRef.current === "voice" && microphoneRef.current) {
+        // Interim hypotheses replace one another; only inputTranscription is committed.
+        setInputTranscript(liveInputPreview(inputTextRef.current, interimText));
       }
       const outputText = serverContent?.outputTranscription?.text;
       if (outputText && activeStudentEventRef.current) {
@@ -629,6 +634,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
         microphoneRef.current = null;
         setIsListening(false);
         inputLevelRef.current = 0;
+        setInputTranscript(inputTextRef.current);
         stopPlayback();
       }
     },

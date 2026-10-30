@@ -33,6 +33,7 @@ import {
 } from "../lib/tutor-audio";
 
 import { canPublishPdfContext, pdfOutputText, pdfQuestionContent, pdfResponseEnded } from "../lib/pdf-tutor-turn";
+import { liveInputPreview } from "../lib/live-transcript";
 
 type Status =
   | "idle"
@@ -396,6 +397,16 @@ export function usePdfTutor(
           transcriptRef.current += server.inputTranscription.text;
           setInputTranscript(transcriptRef.current);
         }
+        if (!playing.current) setStatus("thinking");
+      } else if (server?.interimInputTranscription?.text && voiceRef.current && microphoneRef.current) {
+        if (!turn.current || !responding.current) beginTurn();
+        requestedTurnId = turn.current?.id ?? null;
+        markProgress();
+        if (!typedQuestion.current) {
+          // Interim text is a changing hypothesis, never part of the committed question.
+          setInputTranscript(liveInputPreview(transcriptRef.current, server.interimInputTranscription.text));
+        }
+        setStatus("listening");
       }
       const calls = message.toolCall?.functionCalls ?? [];
       if (calls.length) trace("tool-requested");
@@ -639,6 +650,7 @@ export function usePdfTutor(
           (!turn.current || !speakingInput.current)
         ) {
           beginTurn();
+          setStatus("listening");
           if (contextRef.current) sendView(session, contextRef.current);
         }
         session.sendRealtimeInput({
@@ -1021,6 +1033,7 @@ export function usePdfTutor(
       sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true });
       setListening(false);
       inputLevel.current = 0;
+      if (!typedQuestion.current) setInputTranscript(transcriptRef.current);
       setStatus(playing.current ? "speaking" : responding.current ? "thinking" : "paused");
       await mic.stop();
     } else {

@@ -112,6 +112,13 @@ test("assessment tutor: typing while talking keeps the microphone open, ending v
   await expect(page.getByTestId("listening")).toHaveText("true");
   await expect.poll(() => events.some((event) => event.realtimeInput?.audio)).toBe(true);
 
+  sockets[0].send(JSON.stringify({ serverContent: { interimInputTranscription: { text: "Jelas" } } }));
+  await expect(page.getByTestId("input-preview")).toHaveText("Jelas");
+  sockets[0].send(JSON.stringify({ serverContent: { interimInputTranscription: { text: "Jelaskan domain" } } }));
+  await expect(page.getByTestId("input-preview")).toHaveText("Jelaskan domain");
+  sockets[0].send(JSON.stringify({ serverContent: { inputTranscription: { text: "Jelaskan domain" } } }));
+  await expect(page.getByTestId("input-preview")).toHaveText("Jelaskan domain");
+
   await page.getByRole("button", { name: "Send question" }).click();
   await expect.poll(() => events.some((event) => event.realtimeInput?.text === "Berikan jawaban soal ini")).toBe(true);
   await expect(page.getByTestId("listening")).toHaveText("true");
