@@ -377,9 +377,11 @@ test("the microphone streams 16 kHz PCM and the same page image is not resent ev
   // A different page is always sent.
   await page.getByRole("button", { name: "Halaman berikutnya" }).click();
   await expect(page.getByRole("button", { name: "Putar PDF" })).toBeEnabled();
+  // The tutor can only be sent page 2 once the reader has measured it.
+  await expect(page.getByText("Halaman 2", { exact: true })).toBeVisible();
   mock.send({ serverContent: { interrupted: true } });
   await mock.ground("read-4");
-  expect(mock.getImages()).toBe(3);
+  await expect.poll(() => mock.getImages()).toBe(3);
   expect(mock.errors).toEqual([]);
 });
 
