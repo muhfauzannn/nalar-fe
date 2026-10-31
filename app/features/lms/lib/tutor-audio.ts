@@ -96,13 +96,39 @@ export class TutorAudioOutput {
   private queue: Promise<void> = Promise.resolve();
   private progress = new TutorAudioProgressGuard();
   private runawayReported = false;
+  // The turn's audio as one stream: how much has arrived, and when each piece plays. Lets
+  // the tutor's pointing follow what is being heard rather than what has been generated.
+  private received = 0;
+  private played: Array<{ offset: number; start: number; duration: number }> = [];
   constructor(
     private onPlaying: (playing: boolean) => void,
     private onRunaway?: () => void,
   ) {}
 
-  beginTurn() { this.progress.reset(); this.runawayReported = false; }
+  beginTurn() {
+    this.progress.reset();
+    this.runawayReported = false;
+    this.received = 0;
+    this.played = [];
+  }
   noteTranscript(text: string) { this.progress.noteTranscript(text); }
+
+  /** Seconds of this turn's audio received so far, including what has not played yet. */
+  receivedSeconds() {
+    return this.received;
+  }
+
+  /** How far into this turn's audio the listener is right now, in seconds. */
+  heardSeconds() {
+    const now = this.context?.currentTime;
+    if (now === undefined) return 0;
+    let heard = 0;
+    for (const piece of this.played) {
+      if (piece.start > now) break;
+      heard = Math.max(heard, piece.offset + Math.min(now - piece.start, piece.duration));
+    }
+    return heard;
+  }
 
   async prepare() {
     if (!this.context) {
@@ -115,12 +141,17 @@ export class TutorAudioOutput {
 
   play(base64: string, mimeType = "audio/pcm;rate=24000") {
     const epoch = this.epoch;
-    const task = this.queue.then(() => this.schedule(base64, mimeType, epoch));
+    // Counted on arrival, before decoding, so a transcript arriving with it can be placed.
+    const offset = this.received;
+    const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+    const rate = Number(/rate=(\d+)/.exec(mimeType)?.[1]) || 24_000;
+    this.received += Math.floor((base64.length * 3 / 4 - padding) / 2) / rate;
+    const task = this.queue.then(() => this.schedule(base64, mimeType, epoch, offset));
     this.queue = task.catch(() => {});
     return task;
   }
 
-  private async schedule(base64: string, mimeType: string, epoch: number) {
+  private async schedule(base64: string, mimeType: string, epoch: number, offset: number) {
     if (epoch !== this.epoch || this.progress.isBlocked) return;
     await this.prepare();
     if (epoch !== this.epoch || !this.context) return;
@@ -140,6 +171,7 @@ export class TutorAudioOutput {
     source.connect(this.meter?.node ?? this.context.destination);
     const start = Math.max(this.context.currentTime, this.nextTime);
     this.nextTime = start + buffer.duration;
+    this.played.push({ offset, start, duration: buffer.duration });
     this.sources.add(source);
     this.onPlaying(true);
     source.onended = () => {
@@ -169,6 +201,7 @@ export class TutorAudioOutput {
     }
     this.sources.clear();
     this.nextTime = 0;
+    this.played = [];
     this.onPlaying(false);
   }
 

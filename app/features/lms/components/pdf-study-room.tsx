@@ -101,6 +101,7 @@ function PdfTutorDocument({ resource }: { resource: Resource }) {
           resourceId={resource.id}
           title={resource.title}
           guidance={tutor.guidance}
+          revealedSteps={tutor.revealedSteps}
           cursorCue={tutor.cursorCue}
           pointerVisible={tutor.pointerVisible}
           onPresentationTiming={tutor.onPresentationTiming}
@@ -126,7 +127,7 @@ function PdfTutorDocument({ resource }: { resource: Resource }) {
               </Button>
             ) : null}
           </div>
-          <PdfTutorNotes guidance={tutor.guidance} />
+          <PdfTutorNotes guidance={tutor.guidance} revealedSteps={tutor.revealedSteps} />
           <TutorThread
             className={cn(hasThread && "h-80", "lg:h-auto lg:flex-1")}
             label="Transkrip percakapan saat ini"

@@ -303,7 +303,8 @@ test("voice tools ground the response, show cursor, draw and reject an outdated 
   );
   expect(result.ok).toBe(true);
   await expect(page.getByTestId("tutor-cursor")).toContainText("Pembilang");
-  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
+  // A highlight is one horizontal stroke: its box is 0px high, which toBeVisible calls hidden.
+  await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
   await expect(page.getByTestId("tutor-note")).toContainText("Contoh");
   mock.send({
     serverContent: {
@@ -428,7 +429,7 @@ test("turning the page while the tutor speaks keeps the answer going", async ({
   expect(
     (await mock.call("draw-2", "present_pdf_guidance", mock.guidance(fresh))).ok,
   ).toBe(true);
-  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
+  await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
   expect(mock.errors).toEqual([]);
 });
 
@@ -536,7 +537,7 @@ test("committed ink remains anchored on zoom and rotation while stale commands a
   const paper = await page.getByTestId("pdf-page").boundingBox();
   await page.getByRole("button", { name: "Perbesar PDF" }).click();
   await expect(page.getByRole("button", { name: "Putar PDF" })).toBeEnabled();
-  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
+  await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
   await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
   const scaled = await page.getByTestId("tutor-highlight").boundingBox();
   const scaledPaper = await page.getByTestId("pdf-page").boundingBox();
@@ -555,7 +556,7 @@ test("committed ink remains anchored on zoom and rotation while stale commands a
   ).toBe(false);
   await page.getByRole("button", { name: "Putar PDF" }).click();
   await expect(page.getByRole("button", { name: "Putar PDF" })).toBeEnabled();
-  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
+  await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
   await page.getByRole("button", { name: "Bersihkan", exact: true }).click();
   await expect(page.getByTestId("tutor-highlight")).toHaveCount(0);
   expect(mock.errors).toEqual([]);
@@ -896,7 +897,7 @@ test("the pointer closes after the answer and AI reading hold while ink remains"
   await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Baca pembilang");
   await page.clock.runFor(1_500);
   await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
-  await expect(page.getByTestId("tutor-highlight")).toBeVisible();
+  await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
   expect(mock.errors).toEqual([]);
 });
 
@@ -915,5 +916,90 @@ test("speech hypotheses update the live question before the final transcript", a
   mock.send({ serverContent: { outputTranscription: { text: "Domain adalah daerah asal." }, generationComplete: true } });
   await expect(student).toHaveText("Jelaskan domain");
   await expect(student).toHaveCount(1);
+  expect(mock.errors).toEqual([]);
+});
+
+test("planned steps appear as the tutor's words reach them, then the hand drops", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan judul dan pembilang");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  const context = await mock.call("say-context", "get_pdf_context") as Context;
+  expect((await mock.call("say-ink", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "highlight", blockId: context.blocks[0].id, say: "lihat judulnya", caption: "Ini judulnya" },
+    { kind: "highlight", blockId: context.blocks[1].id, say: "nah pembilang", caption: "Ini pembilang" },
+  ]))).ok).toBe(true);
+  const [title, numerator] = [page.getByTestId("tutor-highlight").nth(0), page.getByTestId("tutor-highlight").nth(1)];
+  // Planned, not yet said: nothing is pointed at.
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
+  await expect(title).toHaveCSS("visibility", "hidden");
+  mock.send({ serverContent: { outputTranscription: { text: "Coba lihat judulnya dulu. " } } });
+  await expect(title).toHaveCSS("visibility", "visible");
+  await expect(numerator).toHaveCSS("visibility", "hidden");
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Ini judulnya");
+  mock.send({ serverContent: { outputTranscription: { text: "Nah pembilang adalah bagian yang dipilih." } } });
+  await expect(numerator).toHaveCSS("visibility", "visible");
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Ini pembilang");
+  mock.send({ serverContent: { generationComplete: true, turnComplete: true } });
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0, { timeout: 5_000 });
+  await expect(numerator).toHaveCSS("visibility", "visible");
+  expect(mock.errors).toEqual([]);
+});
+
+test("a spoken step waits until its words are actually heard, not just received", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const mock = await setup(page);
+  await mock.start();
+  const context = await mock.ground("heard-context");
+  await mock.call("heard-ink", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "highlight", blockId: context.blocks[0].id, say: "lihat judulnya", caption: "Ini judulnya" },
+    { kind: "highlight", blockId: context.blocks[1].id, say: "nah pembilang", caption: "Ini pembilang" },
+  ]));
+  const audio = (seconds: number) => ({
+    inlineData: { data: Buffer.alloc(48_000 * seconds).toString("base64"), mimeType: "audio/pcm;rate=24000" },
+  });
+  const numerator = page.getByTestId("tutor-highlight").nth(1);
+  // Both pieces arrive at once; the second one's words are about two seconds into the audio.
+  mock.send({ serverContent: { modelTurn: { parts: [audio(1)] }, outputTranscription: { text: "Coba lihat judulnya dulu." } } });
+  mock.send({ serverContent: { modelTurn: { parts: [audio(3)] }, outputTranscription: { text: " Sekarang perhatikan, nah pembilang itu bagian yang dipilih." } } });
+  await expect(page.getByTestId("tutor-highlight").nth(0)).toHaveCSS("visibility", "visible");
+  const sent = Date.now();
+  await expect(numerator).toHaveCSS("visibility", "hidden");
+  await expect(numerator).toHaveCSS("visibility", "visible", { timeout: 6_000 });
+  const waited = Date.now() - sent;
+  expect(waited).toBeGreaterThan(1_000);
+  expect(waited).toBeLessThan(4_000);
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Ini pembilang");
+  expect(mock.errors).toEqual([]);
+});
+
+test("with motion the pen rests between spoken steps and finishes once the answer ends", async ({ page }) => {
+  const mock = await setup(page);
+  const composer = page.getByRole("textbox", { name: "Pesan untuk tutor" });
+  await composer.fill("Jelaskan judul dan pembilang");
+  await composer.press("Enter");
+  await expect.poll(() => mock.texts.length).toBe(1);
+  const context = await mock.call("pen-context", "get_pdf_context") as Context;
+  await mock.call("pen-ink", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "highlight", blockId: context.blocks[0].id, say: "lihat judulnya", caption: "Ini judulnya" },
+    { kind: "ellipse", blockId: context.blocks[1].id, say: "nah pembilang", caption: "Ini pembilang" },
+  ]));
+  const layer = page.getByTestId("pdf-annotation-layer");
+  const title = page.getByTestId("tutor-highlight");
+  const circle = page.locator('[data-stroke-kind="ellipse"]');
+  mock.send({ serverContent: { outputTranscription: { text: "Coba lihat judulnya dulu. " } } });
+  await expect(title).toHaveAttribute("data-progress", "1");
+  await expect(layer).toHaveAttribute("data-ink-state", "waiting");
+  await expect(circle).toHaveCSS("visibility", "hidden");
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Ini judulnya");
+  mock.send({ serverContent: { outputTranscription: { text: "Nah pembilang adalah bagian yang dipilih." } } });
+  await expect(circle).toHaveAttribute("data-progress", "1");
+  await expect(page.getByTestId("tutor-cursor-caption")).toHaveText("Ini pembilang");
+  await expect(title).toHaveAttribute("data-progress", "1");
+  mock.send({ serverContent: { generationComplete: true, turnComplete: true } });
+  await expect(layer).toHaveAttribute("data-ink-state", "complete", { timeout: 5_000 });
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0, { timeout: 5_000 });
   expect(mock.errors).toEqual([]);
 });

@@ -21,6 +21,7 @@ import {
   contextForModel,
   parsePdfGuidance,
   parsePdfCursor,
+  pdfGuidanceFollowsSpeech,
   type PdfCursorCue,
   type PdfGuidance,
   type PdfViewContext,
@@ -34,6 +35,10 @@ import {
 
 import { canPublishPdfContext, pdfOutputText, pdfQuestionContent, pdfResponseEnded } from "../lib/pdf-tutor-turn";
 import { liveInputPreview } from "../lib/live-transcript";
+import { SpokenCues, type CueRelease } from "../lib/spoken-cues";
+
+// A teacher's hand reaches the spot just before the word lands, not after it.
+const CUE_LEAD_SECONDS = 0.25;
 
 type Status =
   | "idle"
@@ -59,6 +64,8 @@ export function usePdfTutor(
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guidance, setGuidance] = useState<PdfGuidance | null>(null);
+  // How many steps of a speech-led guidance may show so far; null when it has no spoken cues.
+  const [revealedSteps, setRevealedSteps] = useState<number | null>(null);
   const [cursorCue, setCursorCue] = useState<PdfCursorCue | null>(null);
   const [pointerVisible, setPointerVisible] = useState(false);
   const [inputTranscript, setInputTranscript] = useState("");
@@ -115,6 +122,11 @@ export function usePdfTutor(
   const pointerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioStartingFor = useRef<{ turnId: string; pending: number } | null>(null);
   const pendingGuidanceCall = useRef<string | null>(null);
+  // Speech-led steps: the matcher, steps heard but not yet played, and the audio already placed.
+  const cues = useRef<SpokenCues | null>(null);
+  const pendingCues = useRef<CueRelease[]>([]);
+  const cueAudioFrom = useRef(0);
+  const cueTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const events = useRef<PdfTutorEvent[]>([]);
   const statusRef = useRef<Status>("idle");
   const maxSessionMs = useRef(DEFAULT_MAX_SESSION_MS);
@@ -156,10 +168,11 @@ export function usePdfTutor(
     if (pointerTimer.current) clearTimeout(pointerTimer.current);
     pointerTimer.current = null;
     const owner = pointerTurn.current;
-    if (!owner || responding.current || playing.current ||
+    // Steps still waiting for their words keep the hand up.
+    if (!owner || responding.current || playing.current || cues.current ||
       (audioStartingFor.current?.turnId === owner && audioStartingFor.current.pending > 0)) return;
     const closeWhenReady = () => {
-      if (pointerTurn.current !== owner || responding.current || playing.current ||
+      if (pointerTurn.current !== owner || responding.current || playing.current || cues.current ||
         (audioStartingFor.current?.turnId === owner && audioStartingFor.current.pending > 0)) return;
       const remaining = visualReadyAt.current - Date.now();
       if (remaining > 0) {
@@ -173,7 +186,62 @@ export function usePdfTutor(
     closeWhenReady();
   }, []);
 
+  const stopCues = useCallback(() => {
+    if (cueTimer.current) clearInterval(cueTimer.current);
+    cueTimer.current = null;
+    cues.current = null;
+    pendingCues.current = [];
+  }, []);
+
+  // Shows the steps whose words are being heard now. Once the answer has finished playing,
+  // steps whose words never came (the tutor said it differently) still appear, in order.
+  const tickCues = useCallback(() => {
+    const matcher = cues.current;
+    if (!matcher) return;
+    const audio = audioRef.current;
+    const heard = voiceRef.current && audio ? audio.heardSeconds() : Infinity;
+    let revealed = 0;
+    while (pendingCues.current.length) {
+      const next = pendingCues.current[0];
+      if (next.at !== null && next.at - CUE_LEAD_SECONDS > heard) break;
+      revealed = Math.max(revealed, next.revealed);
+      pendingCues.current.shift();
+    }
+    const starting = audioStartingFor.current?.pending ?? 0;
+    const finished = !responding.current && !playing.current && starting === 0;
+    if (finished) revealed = matcher.total;
+    if (revealed) setRevealedSteps((current) => Math.max(current ?? 0, revealed));
+    if (finished || (matcher.done && !pendingCues.current.length)) {
+      stopCues();
+      // Give the page a moment to start drawing what was just released; it then reports
+      // how long its drawing and linger take (onPresentationTiming).
+      visualReadyAt.current = Math.max(visualReadyAt.current, Date.now() + 300);
+      settlePointer();
+    }
+  }, [settlePointer, stopCues]);
+
+  const startCues = useCallback((next: PdfGuidance) => {
+    stopCues();
+    const matcher = new SpokenCues(next.actions.map((action) => action.say));
+    cues.current = matcher;
+    cueAudioFrom.current = audioRef.current?.receivedSeconds() ?? 0;
+    cueTimer.current = setInterval(tickCues, 50);
+    return matcher.revealed;
+  }, [stopCues, tickCues]);
+
+  // The transcript of what the tutor says, placed on the audio it arrived with.
+  const hearCues = useCallback((text: string) => {
+    const matcher = cues.current;
+    if (!matcher) return;
+    const audio = voiceRef.current ? audioRef.current : null;
+    const to = audio ? audio.receivedSeconds() : null;
+    pendingCues.current.push(...matcher.hear(text, audio ? cueAudioFrom.current : null, to));
+    if (to !== null) cueAudioFrom.current = to;
+    tickCues();
+  }, [tickCues]);
+
   const cancelTurn = useCallback((clearGuidance = true) => {
+    stopCues();
     responding.current = false;
     typedQuestion.current = null;
     hasAnswer.current = false;
@@ -194,12 +262,13 @@ export function usePdfTutor(
     if (clearGuidance) {
       committedGuidance.current = null;
       committedCursor.current = null;
+      setRevealedSteps(null);
     }
     setCursorCue(committedCursor.current);
     setGuidance(committedGuidance.current);
     setOutputTranscript("");
     setInputTranscript("");
-  }, [hidePointer]);
+  }, [hidePointer, stopCues]);
 
   // Moves what was said in the current turn into the thread. Called again later in the same
   // turn only adds what is new: the question once, then each piece of the answer.
@@ -301,6 +370,7 @@ export function usePdfTutor(
     setCursorCue(null);
     pendingGuidanceCall.current = null;
     setGuidance(null);
+    setRevealedSteps(null);
     setStatus("thinking");
     trace("student-turn");
   }, [commitTurn, hidePointer, markProgress, trace]);
@@ -471,7 +541,15 @@ export function usePdfTutor(
             pointerTurn.current = active.id;
             setPointerVisible(true);
             setCursorCue(nextCursor);
-            if (next) setGuidance(next);
+            if (next) {
+              // Planned steps wait for their words; older guidance shows all at once.
+              if (pdfGuidanceFollowsSpeech(next)) setRevealedSteps(startCues(next));
+              else {
+                stopCues();
+                setRevealedSteps(null);
+              }
+              setGuidance(next);
+            }
             await new Promise<void>((resolve) => {
               const timer = setTimeout(resolve, 80);
               requestAnimationFrame(() => {
@@ -504,6 +582,8 @@ export function usePdfTutor(
           // A drawing that lost its view (the page turned meanwhile) is taken back.
           if (pendingGuidanceCall.current === call.id) {
             pendingGuidanceCall.current = null;
+            stopCues();
+            setRevealedSteps(null);
             setGuidance(committedGuidance.current);
             setCursorCue(committedCursor.current);
           }
@@ -580,6 +660,7 @@ export function usePdfTutor(
             }
           }
         }
+        if (outputText) hearCues(outputText);
       }
       const reason = server?.turnCompleteReason;
       if (server?.turnComplete && reason && reason !== "TURN_COMPLETE_REASON_UNSPECIFIED" && reason !== "NEED_MORE_INPUT") {
@@ -626,7 +707,7 @@ export function usePdfTutor(
         if (!playing.current) setStatus(microphoneRef.current ? "listening" : "paused");
       }
     },
-    [beginTurn, cancelTurn, commitTurn, markProgress, sendView, settlePointer, trace],
+    [beginTurn, cancelTurn, commitTurn, hearCues, markProgress, sendView, settlePointer, startCues, stopCues, trace],
   );
 
   const startMicrophone = useCallback(async () => {
@@ -1132,6 +1213,7 @@ export function usePdfTutor(
     error,
     notice: retry.notice ?? recoveryNotice,
     guidance,
+    revealedSteps,
     cursorCue,
     pointerVisible,
     onPresentationTiming,

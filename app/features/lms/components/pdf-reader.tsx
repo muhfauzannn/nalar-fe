@@ -36,13 +36,14 @@ type Props = {
   resourceId: string;
   title: string;
   guidance: PdfGuidance | null;
+  revealedSteps?: number | null;
   cursorCue?: PdfCursorCue | null;
   pointerVisible?: boolean;
   onPresentationTiming?: (turnId: string, remainingMs: number) => void;
   onContext: (context: PdfViewContext | null) => void;
 };
 
-export function PdfReader({ resourceId, title, guidance, cursorCue, pointerVisible = true, onContext, onPresentationTiming }: Props) {
+export function PdfReader({ resourceId, title, guidance, revealedSteps = null, cursorCue, pointerVisible = true, onContext, onPresentationTiming }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -559,6 +560,7 @@ export function PdfReader({ resourceId, title, guidance, cursorCue, pointerVisib
             <div ref={textHost} className="textLayer pdf-study-text-layer" />
             <PdfTutorOverlay
               guidance={guidance?.page === page ? guidance : null}
+              revealedSteps={revealedSteps}
               cursorCue={!loading && cursorCue?.page === page && cursorCue.revision === revision.current ? cursorCue : null}
               pointerVisible={pointerVisible}
               onPresentationTiming={onPresentationTiming}

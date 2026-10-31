@@ -5,6 +5,7 @@ import { Bubble, BubbleContent } from "~/components/ui/bubble";
 import {
   rotatePoint,
   pdfActionHoldSeconds,
+  pdfGuidanceFollowsSpeech,
   rotateRect,
   type PdfGuidance,
   type PdfCursorCue,
@@ -13,9 +14,13 @@ import {
 } from "../lib/pdf-tutor";
 import { buildInkPlan } from "../lib/handwriting/ink-plan";
 
+// After the last spoken step the hand stays up a moment, as a teacher's does, before it drops.
+const SPEECH_LINGER_SECONDS = 1.5;
+
 /** All drawing motion runs in original page units, with one projection for the PDF view. */
 export function PdfTutorOverlay({
   guidance,
+  revealedSteps = null,
   cursorCue = null,
   selection,
   rotation,
@@ -25,6 +30,8 @@ export function PdfTutorOverlay({
   onPresentationTiming,
 }: {
   guidance: PdfGuidance | null;
+  /** Speech-led guidance: how many steps the tutor's words have reached so far. */
+  revealedSteps?: number | null;
   cursorCue?: PdfCursorCue | null;
   selection: PdfSelection | null;
   showCursor?: boolean;
@@ -62,6 +69,8 @@ export function PdfTutorOverlay({
     () => buildInkPlan(guidance, pageHeight),
     [guidance, pageHeight],
   );
+  const followsSpeech = pdfGuidanceFollowsSpeech(guidance) && revealedSteps !== null;
+  const revealed = followsSpeech ? Math.min(revealedSteps, guidance!.actions.length) : guidance?.actions.length ?? 0;
   const matrix =
     angle === 90
       ? `matrix(0 ${scale} ${-scale} 0 ${size.width} 0)`
@@ -219,6 +228,29 @@ export function PdfTutorOverlay({
         finish();
       }
     };
+    if (media.matches && followsSpeech) {
+      // Without motion each step simply appears when its words are heard.
+      if (revealed >= guidance.actions.length) finish();
+      else {
+        host.dataset.inkState = "waiting";
+        paths.forEach((path, index) => {
+          if (plan.strokes[index].action >= revealed) return;
+          state.progress[index] = 1;
+          path.style.visibility = "visible";
+          path.style.strokeDashoffset = "0";
+          path.dataset.progress = "1";
+        });
+        const newest = revealed - 1;
+        if (newest >= 0) {
+          actionCaption(newest);
+          const action = guidance.actions[newest];
+          if (!cueRef.current && action.kind !== "text")
+            placeCursor(action.points?.at(-1) ?? { x: action.x + action.width / 2, y: action.y + action.height / 2 });
+        }
+      }
+      timingRef.current?.(guidance.turnId, revealed >= guidance.actions.length ? SPEECH_LINGER_SECONDS * 1000 : 0);
+      return;
+    }
     if (media.matches) {
       finish();
       // Removing travel/drawing motion must not remove the model's reading time.
@@ -237,7 +269,16 @@ export function PdfTutorOverlay({
       return () => { timeline?.kill(); };
     }
     host.dataset.inkState = "drawing";
-    timeline = gsap.timeline({ onComplete: finish });
+    // Speech-led steps that are all out end after a short linger; earlier, the pen rests
+    // where it is until the tutor's words release the next step.
+    const allRevealed = revealed >= guidance.actions.length;
+    timeline = gsap.timeline({
+      onComplete: followsSpeech && !allRevealed ? () => {
+        host.dataset.inkState = "waiting";
+        pen.style.visibility = "hidden";
+        notifyTiming();
+      } : finish,
+    });
     // Cap pen motion independently: the model's holds must never be compressed
     // by the old ten-second cap for the entire batch.
     const durationFor = (index: number) => {
@@ -246,13 +287,19 @@ export function PdfTutorOverlay({
         Math.min(writing ? 0.7 : 1.8, lengths[index] / (writing ? 300 : 550))) *
         (1 - (state.progress[index] ?? 0));
     };
-    const inkScale = Math.max(1,
+    const inkScale = followsSpeech ? 1 : Math.max(1,
       (paths.reduce((total, _, index) => total + durationFor(index), 0) + paths.length * (0.16 + 0.025)) / 10);
-    let previousTip: { x: number; y: number } | null = null;
+    // A released step starts from wherever the hand already is, like a teacher moving to the next spot.
+    const resting = followsSpeech ? cursorPosition.current : null;
+    let previousTip: { x: number; y: number } | null = resting
+      ? { x: resting.x * 1000, y: resting.y * pageHeight }
+      : null;
     let previousAction = -1;
     paths.forEach((path, index) => {
       const action = plan.strokes[index].action;
-      if (action !== previousAction) {
+      if (followsSpeech) {
+        if (action >= revealed) return;
+      } else if (action !== previousAction) {
         for (let skipped = previousAction; skipped < action; skipped++) appendHold(skipped);
         previousAction = action;
       }
@@ -269,13 +316,18 @@ export function PdfTutorOverlay({
       if (previousTip) {
         const travel = { x: previousTip.x, y: previousTip.y };
         const distance = Math.hypot(start.x - travel.x, start.y - travel.y);
+        const step = plan.strokes[index].action;
         if (distance > 1)
           timeline!.to(travel, {
             x: start.x,
             y: start.y,
-            duration: Math.max(0.035, Math.min(0.16, distance / 1400)) / inkScale,
-            ease: "power1.inOut",
+            // Moving to a new step is a visible reach across the page; within a step, a flick.
+            duration: followsSpeech && step !== plan.strokes[index - 1]?.action
+              ? Math.max(0.18, Math.min(0.45, distance / 1200))
+              : Math.max(0.035, Math.min(0.16, distance / 1400)) / inkScale,
+            ease: followsSpeech ? "power2.inOut" : "power1.inOut",
             onStart: () => {
+              if (followsSpeech) actionCaption(step);
               host.dataset.pointerMode = selecting ? "selecting" : "ink";
               pen.style.visibility = selecting ? "hidden" : "visible";
               pen.dataset.penDown = "false";
@@ -316,16 +368,27 @@ export function PdfTutorOverlay({
         index ? `+=${0.025 / inkScale}` : 0,
       );
     });
-    for (let remaining = previousAction; remaining < guidance.actions.length; remaining++) appendHold(remaining);
+    if (followsSpeech) {
+      // The newest step may have no strokes (a note beside the page): it still takes the caption.
+      const newest = revealed - 1;
+      if (newest >= 0 && !plan.strokes.some((stroke) => stroke.action === newest))
+        timeline.call(() => actionCaption(newest));
+      if (allRevealed) timeline.to({}, { duration: SPEECH_LINGER_SECONDS });
+    } else {
+      for (let remaining = previousAction; remaining < guidance.actions.length; remaining++) appendHold(remaining);
+    }
     notifyTiming();
-    if (!timeline.duration()) finish();
+    if (!timeline.duration()) {
+      if (followsSpeech && !allRevealed) timeline.eventCallback("onComplete")?.();
+      else finish();
+    }
     media.addEventListener("change", reduceMotion);
     return () => {
       timeline?.kill();
       media.removeEventListener("change", reduceMotion);
       pen.style.visibility = "hidden";
     };
-  }, [guidance, plan, showCursor, angle, pageHeight, size.width, size.height]);
+  }, [guidance, plan, showCursor, followsSpeech, revealed, angle, pageHeight, size.width, size.height]);
 
   useLayoutEffect(() => {
     const element = cursor.current;
@@ -515,7 +578,7 @@ export function PdfTutorOverlay({
           </g>
         </g>
       </svg>
-      {pointerVisible && (cursorCue || (anchor && guidance && showCursor)) ? (
+      {pointerVisible && (cursorCue || (anchor && guidance && showCursor && revealed > 0)) ? (
         <div
           ref={cursor}
           data-testid="tutor-cursor"

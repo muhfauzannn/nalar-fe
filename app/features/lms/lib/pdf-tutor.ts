@@ -22,6 +22,8 @@ export type PdfAction = PdfRect & {
     "point" | "highlight" | "arrow" | "rectangle" | "ellipse" | "text" | "path";
   caption?: string;
   holdSeconds?: number;
+  /** The first words the tutor says about this step; the step appears when they are heard. */
+  say?: string;
   text?: string;
   /** Written notes live beside the document so they cannot obscure its content. */
   placement?: "side";
@@ -56,6 +58,11 @@ export function parsePdfHoldSeconds(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 1 || value > 20)
     throw new Error("holdSeconds harus berupa angka antara 1 dan 20 detik.");
   return value;
+}
+
+/** Steps follow the tutor's words instead of fixed reading times. */
+export function pdfGuidanceFollowsSpeech(guidance: PdfGuidance | null) {
+  return !!guidance?.actions.some((action) => action.say);
 }
 
 export function pdfActionHoldSeconds(guidance: PdfGuidance, index: number) {
@@ -153,6 +160,9 @@ export function parsePdfGuidance(
     if (value.caption !== undefined && (typeof value.caption !== "string" ||
         !value.caption.trim() || value.caption.length > 120))
       throw new Error("Caption tindakan harus berisi 1–120 karakter.");
+    if (value.say !== undefined && (typeof value.say !== "string" ||
+        !value.say.trim() || value.say.length > 80))
+      throw new Error("say harus berisi 1–80 karakter: kata pertama yang akan diucapkan.");
     const block =
       value.blockId === undefined
         ? null
@@ -259,6 +269,7 @@ export function parsePdfGuidance(
       kind,
       ...(value.caption !== undefined ? { caption: value.caption as string } : {}),
       ...(actionHoldSeconds !== undefined ? { holdSeconds: actionHoldSeconds } : {}),
+      ...(value.say !== undefined ? { say: (value.say as string).trim() } : {}),
       x: box.x,
       y: box.y,
       width: box.width,
