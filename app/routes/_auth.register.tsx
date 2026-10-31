@@ -6,7 +6,7 @@ import {
   RegisterPage,
   registerWithEmail,
 } from "~/features/auth";
-import { postAuthPath, siteConfig } from "~/config";
+import { postAuthPath, safeNextPath, siteConfig } from "~/config";
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: `Daftar · ${siteConfig.name}` }];
@@ -18,12 +18,13 @@ export function loader({ request }: Route.LoaderArgs) {
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
+  const next = safeNextPath(new URL(request.url).searchParams.get("next"));
   const result =
     formData.get("intent") === "google"
-      ? await continueWithGoogle("/register")
+      ? await continueWithGoogle("/register", next)
       : await registerWithEmail(formData);
 
-  return result.ok ? redirect(result.redirectTo ?? postAuthPath) : result;
+  return result.ok ? redirect(result.redirectTo ?? next ?? postAuthPath) : result;
 }
 
 // Nested under the `_auth` layout → renders only the form column; the shared

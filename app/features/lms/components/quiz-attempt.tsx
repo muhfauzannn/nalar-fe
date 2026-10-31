@@ -16,10 +16,8 @@ import {
   CloudCheck,
   ClipboardCheck,
   Clock3,
-  RefreshCw,
-  TimerOff,
 } from "lucide-react";
-import { Form, Link, useFetcher, useRevalidator } from "react-router";
+import { Form, useFetcher, useRevalidator } from "react-router";
 
 import { MathText } from "~/components/math-text";
 import {
@@ -58,6 +56,7 @@ import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Spinner } from "~/components/ui/spinner";
 import { AiTutorPanel } from "./ai-tutor-panel";
+import { QuizAttemptBlocked, QuizAttemptExpired } from "./quiz-unavailable";
 import type { QuizData } from "../types";
 
 gsap.registerPlugin(useGSAP);
@@ -217,26 +216,7 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
     );
   }
   if (blockingError) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Attempt tidak lagi aktif</CardTitle>
-          <CardDescription>{blockingError.message}</CardDescription>
-          <CardAction>
-            <Badge variant="destructive">Ditutup</Badge>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <RefreshCw />
-            <AlertTitle>Memperbarui status quiz</AlertTitle>
-            <AlertDescription>
-              Halaman sedang menyinkronkan status terbaru dari server.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
+    return <QuizAttemptBlocked data={data} message={blockingError.message} />;
   }
 
   const questionCount = data.questions.length;
@@ -392,52 +372,6 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
         )}
       </div>
     </Form>
-  );
-}
-
-export function QuizAttemptExpired({
-  data,
-  message,
-  savedAnswerCount: savedAnswerCountProp,
-}: {
-  data: QuizData;
-  message?: string;
-  savedAnswerCount?: number;
-}) {
-  const savedAnswerCount =
-    savedAnswerCountProp ?? data.attempt?.answers.length ?? 0;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Waktu pengerjaan berakhir</CardTitle>
-        <CardDescription>
-          Attempt ditutup otomatis saat mencapai batas waktu.
-        </CardDescription>
-        <CardAction>
-          <Badge variant="destructive">
-            <TimerOff data-icon="inline-start" />
-            Waktu habis
-          </Badge>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <Alert variant="destructive">
-          <TimerOff />
-          <AlertTitle>Quiz tidak dapat dilanjutkan</AlertTitle>
-          <AlertDescription>
-            {message ??
-              `${savedAnswerCount} jawaban sempat tersimpan, tetapi attempt tidak dapat dikumpulkan setelah batas waktu.`}
-          </AlertDescription>
-        </Alert>
-      </CardContent>
-      <CardFooter>
-        <Button render={<Link to={`/courses/${data.quiz.courseId}`} />}>
-          <ArrowLeft data-icon="inline-start" />
-          Kembali ke course
-        </Button>
-      </CardFooter>
-    </Card>
   );
 }
 

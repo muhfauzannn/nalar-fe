@@ -1,7 +1,10 @@
+import { redirect } from "react-router";
+
 import type { Route } from "./+types/_site._index";
 import { useRedirectIfSignedIn } from "~/features/auth";
 import { getHomeContent, HomePage } from "~/features/home";
 import { postAuthPath, siteConfig } from "~/config";
+import { hasSignedInHint } from "~/lib/session-hint";
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -10,7 +13,9 @@ export function meta(_: Route.MetaArgs) {
   ];
 }
 
-export async function loader(_: Route.LoaderArgs) {
+export async function loader({ request }: Route.LoaderArgs) {
+  // A signed-in student never sees the landing page: redirect before sending it.
+  if (hasSignedInHint(request)) throw redirect(postAuthPath);
   return { content: await getHomeContent() };
 }
 

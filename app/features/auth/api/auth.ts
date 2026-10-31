@@ -38,12 +38,21 @@ function hasErrors(fieldErrors: AuthFieldErrors): boolean {
   return Object.values(fieldErrors).some(Boolean);
 }
 
+/**
+ * `next` is the already-validated path the student was trying to open (see
+ * `safeNextPath`). The OAuth round trip returns there, and an error returns to
+ * the same screen with it still in the URL.
+ */
 export async function continueWithGoogle(
   errorPath: "/login" | "/register",
+  next: string | null = null,
 ): Promise<AuthActionResult> {
   try {
-    const callbackURL = new URL(postAuthPath, env.appUrl).toString();
-    const errorCallbackURL = new URL(errorPath, env.appUrl).toString();
+    const callbackURL = new URL(next ?? postAuthPath, env.appUrl).toString();
+    const errorCallbackURL = new URL(
+      next ? `${errorPath}?next=${encodeURIComponent(next)}` : errorPath,
+      env.appUrl,
+    ).toString();
     const { data, error } = await authClient.signIn.social({
       provider: "google",
       callbackURL,

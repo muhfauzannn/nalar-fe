@@ -1,9 +1,10 @@
 import { useRef, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 
 import { Brand } from "~/components/layout/brand";
+import { safeNextPath } from "~/config";
 
 /**
  * Persistent split-screen chrome for the `auth` feature. Mounted by the
@@ -57,7 +58,10 @@ export function AuthShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Inline link used in the auth footer switch line. */
+/**
+ * Inline link used in the auth footer switch line. It keeps `?next`, so a
+ * student who switches between Masuk and Daftar still ends up where they were going.
+ */
 export function AuthLink({
   to,
   children,
@@ -65,9 +69,11 @@ export function AuthLink({
   to: string;
   children: ReactNode;
 }) {
+  const [params] = useSearchParams();
+  const next = safeNextPath(params.get("next"));
   return (
     <Link
-      to={to}
+      to={next ? { pathname: to, search: `?next=${encodeURIComponent(next)}` } : to}
       className="font-medium text-foreground underline-offset-4 hover:underline"
     >
       {children}

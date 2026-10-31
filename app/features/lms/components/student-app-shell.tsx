@@ -40,6 +40,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { studentNav } from "~/config";
 import { authClient } from "~/lib/auth-client";
+import { forgetSignedIn } from "~/lib/session-hint";
 import { prefetchStudentPage } from "../api/student";
 import { StudentRouteSkeleton } from "./loading-skeletons";
 import type { StudentShellData } from "../types";
@@ -147,7 +148,10 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
   async function signOut() {
     setSigningOut(true);
     const { error } = await authClient.signOut();
-    if (!error) navigate("/", { replace: true });
+    if (!error) {
+      forgetSignedIn();
+      navigate("/", { replace: true });
+    }
     setSigningOut(false);
   }
 
@@ -164,7 +168,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
         <SidebarHeader>
           <div className="flex h-12 items-center px-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
             <div className="shrink-0 group-data-[collapsible=icon]:hidden">
-              <Brand className="h-7" />
+              <Brand className="h-7" to="/dashboard" />
             </div>
             <Link
               to="/dashboard"

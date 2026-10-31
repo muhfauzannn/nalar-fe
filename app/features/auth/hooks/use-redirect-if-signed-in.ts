@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router";
 
 import { authClient } from "~/lib/auth-client";
+import { rememberSignedIn } from "~/lib/session-hint";
 
 /**
  * Sends a signed-in visitor of a public page (the landing page) on to `to`.
@@ -23,7 +24,10 @@ export function useRedirectIfSignedIn(to: string) {
     authClient
       .getSession()
       .then(({ data }) => {
-        if (!cancelled && data) navigate(to, { replace: true });
+        if (!data) return;
+        // Next visit the server redirects before sending the page (see session-hint).
+        rememberSignedIn();
+        if (!cancelled) navigate(to, { replace: true });
       })
       // An unreachable API just leaves the visitor on the public page.
       .catch(() => {});

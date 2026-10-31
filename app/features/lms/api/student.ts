@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 
 import { forwardedRequestInit, http, HttpError } from "~/lib/http";
+import { forgetSignedIn } from "~/lib/session-hint";
 import type {
   AssignmentData,
   CourseData,
@@ -19,6 +20,7 @@ async function studentRequest<T>(request: Request, operation: () => Promise<T>) 
     return await operation();
   } catch (error) {
     if (error instanceof HttpError && error.status === 401) {
+      forgetSignedIn();
       const target = new URL(request.url);
       throw redirect(`/login?next=${encodeURIComponent(target.pathname + target.search)}`);
     }

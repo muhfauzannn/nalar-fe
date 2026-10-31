@@ -9,9 +9,7 @@ import {
   FileQuestion,
   Lightbulb,
   RefreshCw,
-  ShieldCheck,
   Sparkles,
-  TimerOff,
   X,
 } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
@@ -38,7 +36,12 @@ import {
 } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
-import { QuizAttempt, QuizAttemptExpired } from "../components/quiz-attempt";
+import { QuizAttempt } from "../components/quiz-attempt";
+import {
+  QuizAttemptExpired,
+  QuizAttemptLocked,
+  QuizUnavailable,
+} from "../components/quiz-unavailable";
 import { formatDateTime } from "../lib/format";
 import type { AiRelianceLevel, QuizData, QuizUsageReflection } from "../types";
 
@@ -158,6 +161,9 @@ export function QuizPage({
 }
 
 function QuizStartPanel({ data, working }: { data: QuizData; working: boolean }) {
+  // A quiz that cannot be started gets its own notice, not a "rules" card with a warning in the footer.
+  if (!data.canStart) return <QuizUnavailable data={data} />;
+
   // Only what changes how the student should start; counts and length are in the header.
   const rules = [
     "Hanya bisa dikerjakan sekali",
@@ -185,118 +191,19 @@ function QuizStartPanel({ data, working }: { data: QuizData; working: boolean })
         ) : null}
       </CardContent>
       <CardFooter>
-        {data.canStart ? (
-          <Form method="post" className="w-full">
-            <input type="hidden" name="intent" value="start" />
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={working || data.questions.length === 0}
-            >
-              {working && <Spinner data-icon="inline-start" />}
-              Mulai quiz
-            </Button>
-          </Form>
-        ) : (
-          <QuizStartUnavailable data={data} />
-        )}
+        <Form method="post" className="w-full">
+          <input type="hidden" name="intent" value="start" />
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={working || data.questions.length === 0}
+          >
+            {working && <Spinner data-icon="inline-start" />}
+            Mulai quiz
+          </Button>
+        </Form>
       </CardFooter>
     </Card>
-  );
-}
-
-function QuizAttemptLocked({
-  data,
-  message,
-}: {
-  data: QuizData;
-  message?: string;
-}) {
-  const readOnly = data.availability === "read_only";
-  const notReady = data.availability === "not_ready";
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          {readOnly
-            ? "Quiz hanya dapat dilihat"
-            : notReady
-              ? "Quiz belum siap"
-              : "Quiz sudah ditutup"}
-        </CardTitle>
-        <CardDescription>
-          Attempt tidak dapat diubah atau dikumpulkan.
-        </CardDescription>
-        <CardAction>
-          <Badge variant="outline">Read-only</Badge>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <Alert>
-          <ShieldCheck />
-          <AlertTitle>Progres dikunci</AlertTitle>
-          <AlertDescription>
-            {message ??
-              `${data.attempt?.answers.length ?? 0} jawaban tersimpan. Hubungi pengajar jika status ini tidak sesuai.`}
-          </AlertDescription>
-        </Alert>
-      </CardContent>
-      <CardFooter>
-        <Button render={<Link to={`/courses/${data.quiz.courseId}`} />}>
-          <ArrowLeft data-icon="inline-start" />
-          Kembali ke course
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function QuizStartUnavailable({ data }: { data: QuizData }) {
-  if (data.availability === "upcoming") {
-    return (
-      <Alert>
-        <Clock3 />
-        <AlertTitle>Quiz belum tersedia</AlertTitle>
-        <AlertDescription>
-          Dapat dimulai pada {formatDateTime(data.quiz.availableAt)}.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-  if (data.availability === "closed") {
-    return (
-      <Alert variant="destructive">
-        <TimerOff />
-        <AlertTitle>Quiz sudah ditutup</AlertTitle>
-        <AlertDescription>Attempt baru tidak dapat dimulai.</AlertDescription>
-      </Alert>
-    );
-  }
-  if (data.availability === "read_only") {
-    return (
-      <Alert>
-        <AlertTitle>Course hanya dapat dilihat</AlertTitle>
-        <AlertDescription>
-          Enrollment tidak aktif sehingga quiz tidak dapat dimulai.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-  if (data.availability === "not_ready") {
-    return (
-      <Alert>
-        <AlertTitle>Quiz belum siap</AlertTitle>
-        <AlertDescription>
-          Konfigurasi soal belum lengkap. Coba lagi setelah diperbarui pengajar.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-  return (
-    <Alert>
-      <AlertTitle>Quiz belum siap</AlertTitle>
-      <AlertDescription>Belum ada soal yang dapat dikerjakan.</AlertDescription>
-    </Alert>
   );
 }
 

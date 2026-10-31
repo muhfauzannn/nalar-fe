@@ -1,9 +1,12 @@
 import {
   ArrowRight,
   Brain,
+  CalendarClock,
+  CalendarX2,
   Check,
   CheckCircle2,
   Clock3,
+  Eye,
   FileCheck2,
   Lightbulb,
   ListChecks,
@@ -12,6 +15,7 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  TimerOff,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -45,6 +49,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { formatDateTime } from "../lib/format";
 import type { AssignmentData, OffloadingLevel, OffloadingResult, WorkflowStage } from "../types";
+import { AccessNotice, contactTeacher, datedFact, noticeFacts, type Notice } from "../components/access-notice";
 import { AiTutorPanel } from "../components/ai-tutor-panel";
 
 const stageCopy: Record<
@@ -706,6 +711,12 @@ function OffloadingReport({
   );
 }
 
+/**
+ * Out of reach: not open yet, closed, the course went read-only, or the time to
+ * finish an in-progress submission ran out. The header already shows the
+ * tenggat, the close time and how many stages are done, so the notice only adds
+ * what it does not (the opening time).
+ */
 function AssignmentUnavailable({
   data,
   message,
@@ -714,36 +725,47 @@ function AssignmentUnavailable({
   message?: string;
 }) {
   const inProgress = data.submission?.status === "in_progress";
-  const upcoming = data.availability === "upcoming";
-  const title = inProgress
-    ? "Waktu pengerjaan telah berakhir"
-    : upcoming
-      ? "Assignment belum dibuka"
-      : data.availability === "read_only"
-        ? "Course hanya dapat dilihat"
-        : "Assignment sudah ditutup";
-  const description = message
-    ? message
-    : inProgress
-      ? "Tahap yang sudah selesai tetap tersimpan, tetapi submission tidak dapat dilanjutkan setelah batas penutupan."
-      : upcoming
-        ? `Assignment dapat mulai dikerjakan pada ${formatDateTime(data.availableAt)}.`
-        : "Assignment ini tidak lagi menerima submission baru.";
+  const readOnly = data.availability === "read_only";
+  let notice: Notice;
 
-  return (
-    <Card className="mx-auto w-full max-w-3xl">
-      <CardContent className="flex flex-col items-center px-6 py-10 text-center sm:px-10">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-          <LockKeyhole className="size-5" aria-hidden="true" />
-        </span>
-        <h2 className="mt-5 font-heading text-xl font-semibold">{title}</h2>
-        <p className="mt-2 max-w-xl text-sm/relaxed text-muted-foreground">{description}</p>
-        <Button type="button" variant="outline" className="mt-6" render={<Link to={`/courses/${data.courseId}`} />}>
-          Kembali ke course
-        </Button>
-      </CardContent>
-    </Card>
-  );
+  if (inProgress && !readOnly) {
+    notice = {
+      tone: "danger",
+      icon: TimerOff,
+      title: "Waktu pengerjaan telah berakhir",
+      description:
+        message ??
+        "Tahap yang sudah selesai tetap tersimpan, tetapi submission tidak dapat dilanjutkan setelah batas penutupan.",
+    };
+  } else if (readOnly) {
+    notice = {
+      tone: "neutral",
+      icon: inProgress ? LockKeyhole : Eye,
+      title: inProgress ? "Assignment hanya dapat dilihat" : "Course hanya dapat dilihat",
+      description:
+        message ??
+        `Enrollment atau course sedang tidak aktif, jadi ${inProgress ? "submission tidak bisa dilanjutkan" : "assignment ini tidak bisa dimulai"}.`,
+      hint: contactTeacher,
+    };
+  } else if (data.availability === "upcoming") {
+    notice = {
+      tone: "upcoming",
+      icon: CalendarClock,
+      title: "Assignment belum dibuka",
+      description: message ?? "Kamu bisa mulai mengerjakan begitu assignment dibuka.",
+      facts: noticeFacts(datedFact("Dibuka", data.availableAt)),
+    };
+  } else {
+    notice = {
+      tone: "neutral",
+      icon: CalendarX2,
+      title: "Assignment sudah ditutup",
+      description: message ?? "Assignment ini tidak lagi menerima submission baru.",
+      hint: contactTeacher,
+    };
+  }
+
+  return <AccessNotice notice={notice} courseId={data.courseId} />;
 }
 
 function SubmissionResult({ assignment }: { assignment: AssignmentData }) {

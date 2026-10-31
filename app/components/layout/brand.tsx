@@ -16,14 +16,17 @@ import { cn } from "~/lib/utils";
 export function Brand({
   className,
   isDark = false,
+  to = "/",
 }: {
   className?: string;
   isDark?: boolean;
+  /** Where the logo goes. Inside the signed-in app it is the dashboard, not the landing page. */
+  to?: string;
 }) {
   const size = cn("h-8 w-auto select-none", className);
   return (
     <Link
-      to="/"
+      to={to}
       aria-label={`${siteConfig.name} — beranda`}
       className="inline-flex items-center rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >

@@ -4,5 +4,6 @@ export {
   mainNav,
   studentNav,
   postAuthPath,
+  safeNextPath,
   type NavItem,
 } from "./navigation";

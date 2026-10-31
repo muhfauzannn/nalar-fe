@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import { authClient } from "~/lib/auth-client";
+import { forgetSignedIn } from "~/lib/session-hint";
 
 // One sign-out flow for the account menu (desktop) and the account card (mobile).
 export function useSignOut() {
@@ -18,6 +19,7 @@ export function useSignOut() {
         setFailed(true);
         return;
       }
+      forgetSignedIn();
       navigate("/", { replace: true });
     } catch {
       setFailed(true);
