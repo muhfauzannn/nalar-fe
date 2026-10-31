@@ -534,10 +534,12 @@ export function usePdfTutor(
         trace("tool-response-sent");
       }
       const active = turn.current;
-      // Not tied to the view revision: turning the page must not mute an answer in progress.
-      const canRespond = active && groundedTurn.current === active.id;
+      // Any answer of the current turn is shown, grounded or not: a spoken "halo" or "makasih"
+      // is answered without get_pdf_context, and dropping it left the student with silence and
+      // an error. Grounding gates the visual tools only (see present_pdf_guidance). Not tied to
+      // the view revision either: turning the page must not mute an answer in progress.
       const outputText = pdfOutputText(server);
-      if (canRespond) {
+      if (active) {
         const hasOutput = !!outputText ||
           !!server?.modelTurn?.parts?.some((part) => !part.thought && (part.text || part.inlineData));
         if (hasOutput) {
@@ -605,9 +607,14 @@ export function usePdfTutor(
           return;
         }
         if (responding.current && !hasAnswer.current) {
+          const retried = recoveryAttempts.current > 0;
+          report({ event: "empty_response", phase: "live", attempt: recoveryAttempts.current,
+            reason: events.current.slice(-8).map((event) => event.name).join(", ") });
           commitTurn();
           cancelTurn(false);
-          setError("Tutor belum mengirim jawaban setelah dicoba ulang. Sambungkan ulang sesi untuk melanjutkan.");
+          setError(retried
+            ? "Tutor belum mengirim jawaban setelah dicoba ulang. Sambungkan ulang sesi untuk melanjutkan."
+            : "Tutor belum menjawab. Ulangi pertanyaanmu, atau sambungkan ulang sesi bila tetap diam.");
           setStatus(microphoneRef.current ? "listening" : "paused");
           return;
         }

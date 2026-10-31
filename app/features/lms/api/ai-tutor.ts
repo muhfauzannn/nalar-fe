@@ -9,7 +9,7 @@ import type {
 
 export type LiveSessionEvent = {
   surface: "pdf" | "quiz" | "assignment";
-  event: "connect_failed" | "closed" | "retry_scheduled" | "renewed" | "renew_failed" | "idle_closed" | "response_timeout" | "response_recovery";
+  event: "connect_failed" | "closed" | "retry_scheduled" | "renewed" | "renew_failed" | "idle_closed" | "response_timeout" | "response_recovery" | "empty_response";
   kind?: LiveFailureKind;
   phase?: "connect" | "live";
   code?: number;
