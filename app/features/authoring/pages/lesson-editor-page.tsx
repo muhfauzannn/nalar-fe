@@ -1,5 +1,6 @@
 import { ExternalLink, File, FileText, FlaskConical, Link2, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
@@ -117,6 +118,8 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
         </CardContent>
       </Card>
 
+      <LabsSection data={data} />
+
       <section aria-labelledby="resources-title" className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -176,8 +179,6 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
           </ul>
         )}
       </section>
-
-      <LabsSection data={data} />
     </div>
   );
 }
@@ -192,9 +193,15 @@ function LabsSection({ data }: { data: LessonEditorData }) {
   // Falls back to the first lab still available once the picked one is attached.
   const choice = available.some((lab) => lab.key === picked) ? picked : (available[0]?.key ?? "");
   const titleOf = (key: string) => data.labCatalog.find((lab) => lab.key === key)?.title ?? key;
+  // Opened from "Pasang lab" on the course page: bring this section into view.
+  const anchor = useRef<HTMLElement>(null);
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === "#lab") anchor.current?.scrollIntoView({ block: "start" });
+  }, [hash]);
 
   return (
-    <section aria-labelledby="labs-title" className="flex flex-col gap-4">
+    <section ref={anchor} id="lab" aria-labelledby="labs-title" className="flex scroll-mt-24 flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 id="labs-title" className="font-heading text-2xl font-semibold tracking-tight">
           Lab interaktif

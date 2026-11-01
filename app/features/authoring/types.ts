@@ -45,6 +45,7 @@ export type ManagedLessonSummary = {
   position: number;
   status: PublicationStatus;
   resources: ManagedResource[];
+  labs: Array<{ id: string; labKey: string }>;
 };
 
 export type ManagedModule = {

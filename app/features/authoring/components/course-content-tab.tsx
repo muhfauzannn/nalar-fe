@@ -1,8 +1,9 @@
-import { Archive, ArchiveRestore, Eye, EyeOff, FilePenLine, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, Eye, EyeOff, FilePenLine, FlaskConical, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { Button } from "~/components/ui/button";
+import { LABS } from "~/features/labs";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldLabel } from "~/components/ui/field";
@@ -269,11 +270,21 @@ function LessonRow({
         >
           {lesson.title}
         </Link>
-        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <StatusBadge status={lesson.status} />
           {lesson.resources.length} resource
+          {lesson.labs.length > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-mint-soft px-2 py-0.5 font-medium text-brand-mint-foreground">
+              <FlaskConical className="size-3" aria-hidden="true" />
+              {lesson.labs.map((lab) => LABS[lab.labKey]?.title ?? lab.labKey).join(", ")}
+            </span>
+          )}
         </span>
       </div>
+      <Button variant="outline" size="sm" render={<Link to={`/manage/lessons/${lesson.id}#lab`} />}>
+        <FlaskConical data-icon="inline-start" />
+        {lesson.labs.length > 0 ? "Atur lab" : "Pasang lab"}
+      </Button>
       <StatusActions
         status={lesson.status}
         pending={status.pending}
