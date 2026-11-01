@@ -69,7 +69,8 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
       window.setTimeout(() => gameToast({ title: "Misi selesai", sub: missionCopy[item.id], points: `${item.target}/${item.target}`, sound: "ding" }), 600 + index * 900),
     );
   }, [studentId, data.missions]);
-  const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? null;
+  // With every hall finished there is no current post, but the island is still there to visit.
+  const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? data.islands[0] ?? null;
   const current = active?.current ?? null;
   const href = active ? (current ? `/courses/${active.course.id}/balai/${current.assignmentId}` : `/courses/${active.course.id}`) : "/courses/join";
   return (
@@ -98,7 +99,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
         <div className={cn(card, "flex w-full max-w-[26rem] items-center gap-3 p-3")}>
           <img src="/game/cat-avatar.webp" alt="" className="size-12 shrink-0 rounded-2xl bg-[#dff7ee] object-cover" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-[#5e5e72]">{active ? "Lanjutkan perjalanan" : "Belum ada pulau"}</p>
+            <p className="text-xs text-[#5e5e72]">{!active ? "Belum ada pulau" : current ? "Lanjutkan perjalanan" : "Semua balai tuntas"}</p>
             <p className="truncate text-[15px] font-bold">
               {current?.post ? `Pos ${current.post.index} · ${postNames[current.post.stage]}` : current ? current.title : active ? `Pulau ${active.course.subjectName}` : "Gabung course dari gurumu"}
             </p>
