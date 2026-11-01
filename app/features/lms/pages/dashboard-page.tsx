@@ -22,9 +22,10 @@ import {
 import { Separator } from "~/components/ui/separator";
 import { CourseCard } from "../components/course-card";
 import { formatDateTime, getGreeting, sentenceStatus } from "../lib/format";
-import type { DashboardData } from "../types";
+import { badgeCopy } from "../lib/game";
+import type { DashboardData, PointsData } from "../types";
 
-export function DashboardPage({ data }: { data: DashboardData }) {
+export function DashboardPage({ data, points }: { data: DashboardData; points: PointsData | null }) {
   const firstName = data.user.name.split(/\s+/)[0] || "Siswa";
   const continueCourse =
     data.courses.find((course) => course.status === "published") ??
@@ -57,8 +58,8 @@ export function DashboardPage({ data }: { data: DashboardData }) {
             aria-hidden="true"
             className="pointer-events-none absolute -right-16 -bottom-24 hidden w-[26rem] select-none object-contain opacity-20 xl:block"
           />
-          <div className="relative p-6 sm:p-8 lg:p-10">
-            <div className="flex flex-col gap-5">
+          <div className="relative flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
+            <div className="flex min-w-0 flex-1 flex-col gap-5">
               <h2
                 id="learning-progress-title"
                 className="font-heading text-xl font-semibold tracking-tight text-balance sm:text-2xl"
@@ -90,6 +91,7 @@ export function DashboardPage({ data }: { data: DashboardData }) {
                 </div>
               </div>
             </div>
+            {points && <PointsSummary points={points} />}
           </div>
         </section>
       )}
@@ -196,6 +198,37 @@ export function DashboardPage({ data }: { data: DashboardData }) {
           </Card>
         </aside>
       </section>
+    </div>
+  );
+}
+
+// Poin Nalar across all courses, with the badges earned so far. Process only:
+// the AI Offloading Index never appears here.
+function PointsSummary({ points }: { points: PointsData }) {
+  const earned = points.badges.filter((badge) => badge.earned);
+  return (
+    <div className="flex items-center gap-4 rounded-xl bg-primary-foreground/10 px-4 py-3 lg:shrink-0">
+      <img src="/game/coin.webp" alt="" width={125} height={128} className="size-12 shrink-0" />
+      <div className="min-w-0">
+        <p className="font-heading text-2xl font-semibold tabular-nums">{points.total}</p>
+        <p className="text-sm text-primary-foreground/75">Poin Nalar</p>
+      </div>
+      {earned.length > 0 && (
+        <ul className="ml-2 flex -space-x-2" aria-label="Lencana yang sudah didapat">
+          {earned.map((badge) => (
+            <li key={badge.id}>
+              <img
+                src={badgeCopy[badge.id].image}
+                alt={badgeCopy[badge.id].title}
+                title={badgeCopy[badge.id].title}
+                width={192}
+                height={200}
+                className="size-10"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

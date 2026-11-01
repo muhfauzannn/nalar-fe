@@ -6,7 +6,12 @@ import {
 } from "~/features/lms";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  return studentApi.dashboard(request);
+  // Poin Nalar is extra: the dashboard still opens when it cannot be read.
+  const [data, points] = await Promise.all([
+    studentApi.dashboard(request),
+    studentApi.points(request).catch(() => null),
+  ]);
+  return { data, points };
 }
 
 export function HydrateFallback() {
@@ -18,5 +23,5 @@ export function meta() {
 }
 
 export default function DashboardRoute({ loaderData }: Route.ComponentProps) {
-  return <DashboardPage data={loaderData} />;
+  return <DashboardPage data={loaderData.data} points={loaderData.points} />;
 }

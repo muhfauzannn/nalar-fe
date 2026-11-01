@@ -50,7 +50,8 @@ import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { formatDateTime } from "../lib/format";
-import type { AssignmentData, OffloadingLevel, OffloadingResult, WorkflowStage } from "../types";
+import { pointCopy } from "../lib/game";
+import type { AssignmentData, EarnedPoint, OffloadingLevel, OffloadingResult, WorkflowStage } from "../types";
 import { AccessNotice, contactTeacher, datedFact, noticeFacts, type Notice } from "../components/access-notice";
 import { AiTutorPanel } from "../components/ai-tutor-panel";
 import { useWritingSignals, writingSignalsKey } from "../hooks/use-writing-signals";
@@ -115,8 +116,10 @@ export function AssignmentPage({
   actionCode,
   actionDraft,
   actionStage,
+  earned = [],
 }: {
   data: AssignmentData;
+  earned?: EarnedPoint[];
   actionError?: string;
   actionCode?: string;
   actionDraft?: string;
@@ -145,6 +148,8 @@ export function AssignmentPage({
           completedStages={completedStages}
         />
 
+        {earned.length > 0 && <EarnedPoints earned={earned} courseId={loaderData.courseId} />}
+
         {actionError && !terminalActionError && (
           <Alert variant="destructive">
             <AlertTitle>Perubahan belum tersimpan</AlertTitle>
@@ -171,6 +176,26 @@ export function AssignmentPage({
         )}
       </div>
     </div>
+  );
+}
+
+// What the stage just completed earned, shown once after the redirect.
+function EarnedPoints({ earned, courseId }: { earned: EarnedPoint[]; courseId: string }) {
+  const total = earned.reduce((sum, item) => sum + item.points, 0);
+  return (
+    <section
+      aria-live="polite"
+      className="flex animate-in items-center gap-4 rounded-2xl bg-brand-mint-soft p-4 text-brand-mint-foreground shadow-card duration-300 fade-in-0 slide-in-from-top-2 sm:p-5"
+    >
+      <img src="/game/coin.webp" alt="" width={125} height={128} className="size-12 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="font-heading font-semibold tabular-nums">+{total} Poin Nalar</p>
+        <p className="text-sm opacity-85">{earned.map((item) => pointCopy[item.kind].title).join(" · ")}</p>
+      </div>
+      <Button variant="outline" size="sm" render={<Link to={`/courses/${courseId}/island`} />}>
+        Lihat pulau
+      </Button>
+    </section>
   );
 }
 

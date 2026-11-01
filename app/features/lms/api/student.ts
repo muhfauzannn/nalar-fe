@@ -7,7 +7,10 @@ import type {
   CourseData,
   CourseSummary,
   DashboardData,
+  EarnedPoint,
+  IslandData,
   LessonData,
+  PointsData,
   QuizAnswerSubmission,
   QuizAnswerSaveResult,
   QuizData,
@@ -52,6 +55,14 @@ export const studentApi = {
   shell: (request: Request) =>
     studentRequest(request, () =>
       http.get<StudentShellData>("/api/student/me", forwardedRequestInit(request)),
+    ),
+  island: (request: Request, courseId: string) =>
+    studentRequest(request, () =>
+      http.get<IslandData>(`/api/student/courses/${courseId}/island`, forwardedRequestInit(request)),
+    ),
+  points: (request: Request) =>
+    studentRequest(request, () =>
+      http.get<PointsData>("/api/student/points", forwardedRequestInit(request)),
     ),
   dashboard: (request: Request) =>
     studentRequest(request, () =>
@@ -107,7 +118,7 @@ export const studentApi = {
     signals?: unknown,
   ) =>
     studentRequest(request, () =>
-      http.post(
+      http.post<{ currentStage: WorkflowStage | null; submitted: boolean; points?: EarnedPoint[] }>(
         `/api/student/submissions/${submissionId}/stages/${stage}/complete`,
         { content, signals },
         forwardedRequestInit(request),

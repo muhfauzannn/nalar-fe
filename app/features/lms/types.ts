@@ -330,3 +330,55 @@ export type AiTutorClassification = {
   wasRedirected: boolean;
   responseInstruction: string;
 };
+
+// Poin Nalar (PRD §5.9): process behaviours only, never the AI Offloading Index.
+export type ProcessPointKind =
+  | "independent_draft"
+  | "hint_request"
+  | "reflective_question"
+  | "critical_evaluation"
+  | "substantial_revision"
+  | "specific_reflection"
+  | "journey_complete";
+
+export type EarnedPoint = { kind: ProcessPointKind; stage: WorkflowStage; points: number };
+
+export type PointEvent = EarnedPoint & {
+  id: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  at: string;
+};
+
+export type BadgeProgress = {
+  id: "penjelajah" | "penjelas" | "tekun";
+  progress: number;
+  target: number;
+  earned: boolean;
+};
+
+export type PostStatus = "done" | "current" | "locked";
+
+export type IslandData = {
+  course: { id: string; name: string; subjectName: string };
+  points: { total: number };
+  badges: BadgeProgress[];
+  bridge: { planks: number; total: number; students: number };
+  buildings: Array<{
+    assignmentId: string;
+    title: string;
+    dueAt: string | null;
+    open: boolean;
+    submissionStatus: string | null;
+    posts: Array<{ stage: WorkflowStage; status: PostStatus; points: number }>;
+    chestOpen: boolean;
+    points: number;
+  }>;
+  recent: PointEvent[];
+};
+
+export type PointsData = {
+  total: number;
+  badges: BadgeProgress[];
+  recent: PointEvent[];
+};

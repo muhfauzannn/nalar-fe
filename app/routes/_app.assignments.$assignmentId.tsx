@@ -5,7 +5,9 @@ import {
   AssignmentPageSkeleton,
   AssignmentPage,
   clearWritingSignals,
+  rememberEarned,
   studentApi,
+  takeEarned,
   writingSignalsKey,
   type WorkflowStage,
 } from "~/features/lms";
@@ -33,7 +35,8 @@ function writingSignalsFrom(formData: FormData) {
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
   if (!params.assignmentId) throw new Response("Assignment tidak ditemukan", { status: 404 });
-  return studentApi.assignment(request, params.assignmentId);
+  const data = await studentApi.assignment(request, params.assignmentId);
+  return { ...data, earned: takeEarned(params.assignmentId) };
 }
 
 export async function clientAction({ request, params }: Route.ClientActionArgs) {
@@ -65,7 +68,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
           stage: typeof submittedStage === "string" ? submittedStage : undefined,
         };
       }
-      await studentApi.completeStage(
+      const completion = await studentApi.completeStage(
         request,
         submissionId,
         submittedStage as WorkflowStage,
@@ -73,6 +76,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
         writingSignalsFrom(formData),
       );
       clearWritingSignals(writingSignalsKey(submissionId, submittedStage));
+      rememberEarned(params.assignmentId, completion.points);
     } else {
       return {
         error: "Aksi assignment tidak dikenali. Muat ulang halaman lalu coba lagi.",
@@ -123,6 +127,7 @@ export default function AssignmentRoute({ loaderData }: Route.ComponentProps) {
   return (
     <AssignmentPage
       data={loaderData}
+      earned={loaderData.earned}
       actionError={actionData?.error}
       actionCode={actionData && "code" in actionData ? actionData.code : undefined}
       actionDraft={actionData && "draft" in actionData ? actionData.draft : undefined}

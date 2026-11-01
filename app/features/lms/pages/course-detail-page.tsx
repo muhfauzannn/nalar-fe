@@ -86,6 +86,10 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
 
       <CourseProgress data={loaderData} nextAction={nextAction} />
 
+      {loaderData.assignments.length > 0 && (
+        <IslandBanner courseId={loaderData.course.id} subjectName={loaderData.course.subjectName} />
+      )}
+
       {loaderData.course.status === "archived" && (
         <Alert>
           <Archive />
@@ -121,6 +125,32 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+// The way into the course's island, where each assignment's five stages and
+// the Poin Nalar they earned are shown as a path of posts.
+function IslandBanner({ courseId, subjectName }: { courseId: string; subjectName: string }) {
+  return (
+    <Link
+      to={`/courses/${courseId}/island`}
+      className="group relative isolate flex items-center gap-4 overflow-hidden rounded-2xl bg-brand-lavender-soft p-4 pr-5 text-brand-lavender-foreground shadow-card transition-transform duration-150 active:scale-[0.99] sm:gap-6 sm:p-5"
+    >
+      <img
+        src="/game/academy.webp"
+        alt=""
+        width={304}
+        height={360}
+        className="h-20 w-auto shrink-0 transition-transform duration-200 group-hover:-translate-y-1 sm:h-24"
+      />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="font-heading text-lg font-semibold">Pulau {subjectName}</span>
+        <span className="text-sm opacity-80">
+          Nyalakan lima pos di setiap tugas dan kumpulkan Poin Nalar dari cara kerjamu.
+        </span>
+      </span>
+      <ArrowRight className="size-5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+    </Link>
   );
 }
 
