@@ -453,7 +453,7 @@ function QuizReview({ data }: { data: QuizData }) {
             render={<Link to={`/courses/${data.quiz.courseId}`} />}
           >
             <ArrowLeft data-icon="inline-start" />
-            Kembali ke course
+            Kembali ke pulau
           </Button>
         </CardFooter>
       </Card>

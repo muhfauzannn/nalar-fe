@@ -5,6 +5,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   ArrowLeft,
   BookOpen,
+  FlaskConical,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -13,7 +14,9 @@ import {
   Link2,
   RotateCcw,
 } from "lucide-react";
-import { Form, Link } from "react-router";
+import { Form, Link, useSearchParams } from "react-router";
+import { LABS } from "~/features/labs";
+import { cn } from "~/lib/utils";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
@@ -43,6 +46,9 @@ gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 export function LessonPage({ data: loaderData }: { data: LessonData }) {
   const scope = useRef<HTMLDivElement>(null);
+  const [params] = useSearchParams();
+  const labs = (loaderData.labs ?? []).filter((lab) => LABS[lab.labKey]);
+  const room = labs.length > 0 && params.get("ruang") === "lab" ? "lab" : "baca";
   const completed = loaderData.progressStatus === "completed";
   const contentBlocks = loaderData.content
     ?.trim()
@@ -122,8 +128,10 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
           />
         </div>
 
-        <LessonLabs labs={loaderData.labs ?? []} />
+        {labs.length > 0 && <RoomSwitch room={room} labs={labs} />}
 
+        {room === "lab" ? <LessonLabs labs={labs} /> : (
+          <>
         {loaderData.resources.some((resource) => resource.file) ? (
           <PdfStudyRoom resources={loaderData.resources} />
         ) : null}
@@ -226,7 +234,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                   render={<Link to={`/courses/${loaderData.courseId}`} />}
                 >
                   <ArrowLeft data-icon="inline-start" />
-                  Kembali ke course
+                  Kembali ke pulau
                 </Button>
               </CardFooter>
             </Card>
@@ -321,7 +329,38 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
             </div>
           </section>
         )}
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+// A lesson with a lab has two rooms, and only one is on screen: "Baca" (the
+// text, the PDF and its tutor) and "Coba" (the lab). The island's library opens
+// the first, its lab the second.
+function RoomSwitch({ room, labs }: { room: "baca" | "lab"; labs: LessonData["labs"] }) {
+  const titles = labs.map((lab) => LABS[lab.labKey]?.title).filter(Boolean).join(", ");
+  const tab = (value: "baca" | "lab", label: string, icon: React.ReactNode) => (
+    <Link
+      to={value === "lab" ? "?ruang=lab" : "?"}
+      replace
+      preventScrollReset
+      role="tab"
+      aria-selected={room === value}
+      className={cn(
+        "flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors duration-150 sm:flex-none",
+        room === value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+  return (
+    <div role="tablist" aria-label="Ruang materi" className="flex gap-1 self-start rounded-2xl bg-muted p-1 max-sm:w-full" data-lesson-reveal>
+      {tab("baca", "Baca materi", <BookOpen className="size-4" aria-hidden="true" />)}
+      {tab("lab", `Coba di lab${titles ? ` · ${titles}` : ""}`, <FlaskConical className="size-4" aria-hidden="true" />)}
     </div>
   );
 }

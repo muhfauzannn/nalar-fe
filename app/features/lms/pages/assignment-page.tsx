@@ -908,7 +908,7 @@ function SubmissionResult({ assignment }: { assignment: AssignmentData }) {
           </CardContent>
           <CardFooter>
             <Button type="button" variant="outline" className="w-full" render={<Link to={`/courses/${assignment.courseId}`} />}>
-              Kembali ke course
+              Kembali ke pulau
             </Button>
           </CardFooter>
         </Card>

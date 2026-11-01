@@ -51,7 +51,7 @@ function districtsOf(course: CourseData, island: IslandData) {
           key: `lab-${lab.id}`,
           place: "lab",
           title: LABS[lab.labKey]?.title ?? lab.labKey,
-          href: `/lessons/${lesson.id}`,
+          href: `/lessons/${lesson.id}?ruang=lab`,
           done: lab.challenges > 0 && lab.solved >= lab.challenges,
           detail: `${lab.solved} dari ${lab.challenges} tantangan`,
         });

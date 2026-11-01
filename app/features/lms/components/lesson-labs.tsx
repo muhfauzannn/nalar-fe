@@ -10,7 +10,7 @@ export function LessonLabs({ labs }: { labs: LessonData["labs"] }) {
   const shown = labs.filter((lab) => LABS[lab.labKey]);
   if (shown.length === 0) return null;
   return (
-    <section aria-label="Lab interaktif" className="flex flex-col gap-4" data-lesson-reveal>
+    <section aria-label="Lab interaktif" className="flex flex-col gap-4">
       {shown.map((lab) => {
         const entry = LABS[lab.labKey]!;
         const solve = async (challenge: string) =>
