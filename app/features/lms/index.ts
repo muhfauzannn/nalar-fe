@@ -19,6 +19,7 @@ export { CourseDetailPage } from "./pages/course-detail-page";
 export { IslandPage } from "./pages/island-page";
 export { BalaiPage } from "./pages/balai-page";
 export { WorldPage } from "./pages/world-page";
+export { BalaiOverlay, IslandOverlay, useWorld3d, WorldOverlay } from "./world3d";
 export { BadgesPage } from "./pages/badges-page";
 export { LessonPage } from "./pages/lesson-page";
 export { AssignmentPage } from "./pages/assignment-page";

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   Link,
   NavLink,
@@ -46,8 +46,12 @@ import { studentNav } from "~/config";
 import { authClient } from "~/lib/auth-client";
 import { forgetSignedIn } from "~/lib/session-hint";
 import { prefetchStudentPage } from "../api/student";
+import { isWorldPath, useWorld3d, WorldModeToggle, WorldOverlayContext } from "../world3d";
 import { StudentRouteSkeleton } from "./loading-skeletons";
 import type { StudentShellData } from "../types";
+
+// three.js and the world model load only when a world route opens in 3D.
+const WorldStage = lazy(() => import("../world3d/stage"));
 
 const navigationIcons: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
@@ -153,6 +157,11 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
       : null;
   const skeletonPathname = useDelayed(leavingFor, SKELETON_DELAY_MS);
   const prefetchPathname = usePrefetchOnIntent(location.pathname);
+  // Dunia, an island and its halls share one 3D canvas that stays mounted
+  // between them; each route draws its buttons into the layer over it.
+  const world3d = useWorld3d();
+  const inWorld = world3d && isWorldPath(location.pathname);
+  const [overlay, setOverlay] = useState<HTMLElement | null>(null);
 
   async function signOut() {
     setSigningOut(true);
@@ -252,6 +261,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
             <p className="truncate text-sm font-medium">{sectionLabel}</p>
           </div>
           <div className="flex items-center gap-2">
+            {isWorldPath(location.pathname) && <WorldModeToggle />}
             <GameHud />
             <SoundToggle />
             <ThemeToggle />
@@ -264,15 +274,27 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
             />
           )}
         </header>
-        <main className="flex-1 px-4 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-8 lg:px-10 lg:py-10">
-          <div className="mx-auto w-full max-w-7xl">
-            {skeletonPathname ? (
-              <StudentRouteSkeleton pathname={skeletonPathname} />
-            ) : (
+        {inWorld ? (
+          <main className="relative h-[calc(100dvh-3.5rem-4rem-env(safe-area-inset-bottom))] overflow-hidden md:h-[calc(100dvh-3.5rem)] lg:h-[calc(100dvh-3.5rem-1rem)] lg:rounded-b-xl">
+            <Suspense fallback={null}>
+              <WorldStage />
+            </Suspense>
+            <div ref={setOverlay} className="pointer-events-none absolute inset-0 z-10" />
+            <WorldOverlayContext.Provider value={overlay}>
               <Outlet />
-            )}
-          </div>
-        </main>
+            </WorldOverlayContext.Provider>
+          </main>
+        ) : (
+          <main className="flex-1 px-4 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-8 lg:px-10 lg:py-10">
+            <div className="mx-auto w-full max-w-7xl">
+              {skeletonPathname ? (
+                <StudentRouteSkeleton pathname={skeletonPathname} />
+              ) : (
+                <Outlet />
+              )}
+            </div>
+          </main>
+        )}
         <BottomNav section={section} />
         <GameFeelRoot />
         <GameToaster />

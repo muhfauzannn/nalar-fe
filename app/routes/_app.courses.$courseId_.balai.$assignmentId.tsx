@@ -1,5 +1,5 @@
 import type { Route } from "./+types/_app.courses.$courseId_.balai.$assignmentId";
-import { BalaiPage, CourseDetailPageSkeleton, studentApi, takeEarned, type WorkflowStage } from "~/features/lms";
+import { BalaiOverlay, BalaiPage, CourseDetailPageSkeleton, studentApi, takeEarned, useWorld3d, type WorkflowStage } from "~/features/lms";
 
 const STAGES: WorkflowStage[] = [
   "1_independent_effort",
@@ -11,11 +11,15 @@ const STAGES: WorkflowStage[] = [
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
   if (!params.courseId || !params.assignmentId) throw new Response("Course tidak ditemukan", { status: 404 });
-  const island = await studentApi.island(request, params.courseId);
+  // The course places the hall among the island's other buildings in 3D.
+  const [island, course] = await Promise.all([
+    studentApi.island(request, params.courseId),
+    studentApi.course(request, params.courseId),
+  ]);
   // ?nyala=<stage> after a stage was completed: that post lights up once.
   const nyala = new URL(request.url).searchParams.get("nyala") as WorkflowStage | null;
   const lit = nyala && STAGES.includes(nyala) ? { stage: nyala, awards: takeEarned(params.assignmentId) } : null;
-  return { island, lit };
+  return { island, course, lit };
 }
 
 export function HydrateFallback() {
@@ -27,5 +31,9 @@ export function meta() {
 }
 
 export default function BalaiRoute({ loaderData, params }: Route.ComponentProps) {
-  return <BalaiPage data={loaderData.island} assignmentId={params.assignmentId} lit={loaderData.lit} />;
+  return useWorld3d() ? (
+    <BalaiOverlay island={loaderData.island} course={loaderData.course} assignmentId={params.assignmentId} lit={loaderData.lit} />
+  ) : (
+    <BalaiPage data={loaderData.island} assignmentId={params.assignmentId} lit={loaderData.lit} />
+  );
 }

@@ -1,0 +1,165 @@
+import { useGLTF } from "@react-three/drei";
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import * as THREE from "three";
+
+import { hex, ring, TILE, type Tile, type Vec3 } from "./layout";
+
+// The world's models are KayKit packs (CC0, Kay Lousberg; licence in
+// public/game/KAYKIT-LICENSE.txt), packed into one GLB with Bernalar's lavender
+// roofs and mint grass by scripts/build-world-assets.mjs. Each model is a
+// root node named by its key: castle, church, windmill, archery, hex, trees…
+export const KIT_URL = "/game/world.glb";
+
+export function preloadKit() {
+  useGLTF.preload(KIT_URL, false, true);
+}
+
+/** The root object of one packed model, by its key. */
+export function useKit() {
+  const { scene } = useGLTF(KIT_URL, false, true);
+  return useMemo(() => {
+    scene.traverse((object) => {
+      if ((object as THREE.Mesh).isMesh) {
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
+    return (key: string) => {
+      const node = scene.getObjectByName(key);
+      if (!node) throw new Error(`world.glb has no ${key}`);
+      return node;
+    };
+  }, [scene]);
+}
+
+export type Placed = { p: Vec3; ry?: number; s?: number };
+
+// Deterministic randomness so the world is the same on every visit.
+export function rng(seed: number) {
+  let s = seed % 2147483647 || 1;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+export function seedOf(text: string) {
+  let h = 7;
+  for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+}
+
+export function Piece({ name, position = [0, 0, 0], ry = 0, scale = TILE, children }: { name: string; position?: Vec3; ry?: number; scale?: number; children?: ReactNode }) {
+  const kit = useKit();
+  const object = useMemo(() => kit(name).clone(true), [kit, name]);
+  return (
+    <group position={position} rotation={[0, ry, 0]} scale={scale}>
+      <primitive object={object} />
+      {children}
+    </group>
+  );
+}
+
+type Part = { geometry: THREE.BufferGeometry; material: THREE.Material; local: THREE.Matrix4 };
+
+/** Many copies of one model as one draw call per mesh inside it. */
+export function Instanced({ name, items, scale = TILE }: { name: string; items: Placed[]; scale?: number }) {
+  const kit = useKit();
+  const parts = useMemo(() => {
+    const node = kit(name);
+    node.updateWorldMatrix(true, true);
+    const inverse = node.matrixWorld.clone().invert();
+    const out: Part[] = [];
+    node.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.isMesh) out.push({ geometry: mesh.geometry, material: mesh.material as THREE.Material, local: inverse.clone().multiply(mesh.matrixWorld) });
+    });
+    return out;
+  }, [kit, name]);
+  if (items.length === 0) return null;
+  return (
+    <>
+      {parts.map((part, index) => (
+        <InstancedPart key={index} part={part} items={items} scale={scale} />
+      ))}
+    </>
+  );
+}
+
+function InstancedPart({ part, items, scale }: { part: Part; items: Placed[]; scale: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const mesh = ref.current!;
+    const m = new THREE.Matrix4();
+    items.forEach((item, index) => {
+      m.compose(new THREE.Vector3(...item.p), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, item.ry ?? 0, 0)), new THREE.Vector3().setScalar((item.s ?? 1) * scale));
+      mesh.setMatrixAt(index, m.multiply(part.local));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [items, part, scale]);
+  return <instancedMesh key={items.length} ref={ref} args={[part.geometry, part.material, items.length]} castShadow receiveShadow />;
+}
+
+const ROCK = "#3b3580";
+
+/** Hex tiles on top; under each, a rock column that is longest in the middle. */
+export function HexBoard({ tiles, seed, ghost = false }: { tiles: Tile[]; seed: number; ghost?: boolean }) {
+  const top = useMemo(() => tiles.map((tile) => ({ p: hex(tile) })), [tiles]);
+  const columns = useRef<THREE.InstancedMesh>(null);
+  const radius = Math.max(0, ...tiles.map(ring));
+  useLayoutEffect(() => {
+    const rand = rng(seed);
+    const m = new THREE.Matrix4();
+    tiles.forEach((tile, index) => {
+      const depth = 1.2 + (radius - ring(tile)) * 1.5 + rand() * 1.4;
+      const [x, , z] = hex(tile);
+      m.compose(new THREE.Vector3(x, -TILE - depth / 2 + 0.02, z), new THREE.Quaternion(), new THREE.Vector3(1, depth, 1));
+      columns.current!.setMatrixAt(index, m);
+    });
+    columns.current!.instanceMatrix.needsUpdate = true;
+    columns.current!.computeBoundingSphere();
+  }, [tiles, seed, radius]);
+  const column = useMemo(() => new THREE.CylinderGeometry(1.1547 * TILE * 0.97, 1.1547 * TILE * 0.8, 1, 6), []);
+  const rock = useMemo(() => new THREE.MeshStandardMaterial({ color: ROCK, flatShading: true, roughness: 0.95, transparent: ghost, opacity: ghost ? 0.5 : 1 }), [ghost]);
+  return (
+    <>
+      <Instanced name="hex" items={top} />
+      <instancedMesh key={tiles.length} ref={columns} args={[column, rock, tiles.length]} receiveShadow />
+    </>
+  );
+}
+
+const NO_HOUSES: string[] = [];
+
+/** Trees, rocks, hills and houses on the free tiles of an island, from its seed. */
+export function Decor({ tiles, seed, houses = NO_HOUSES }: { tiles: Tile[]; seed: number; houses?: string[] }) {
+  const layout = useMemo(() => {
+    const rand = rng(seed);
+    const groups: Record<string, Placed[]> = { trees: [], treesB: [], tree: [], rock: [], rockB: [], hills: [], mountain: [] };
+    const singles: { name: string; p: Vec3; ry: number }[] = [];
+    let house = 0;
+    for (const tile of tiles) {
+      const [x, , z] = hex(tile);
+      const roll = rand();
+      const ry = Math.floor(rand() * 6) * (Math.PI / 3);
+      const outer = ring(tile) >= 2;
+      if (roll < 0.16 && outer) groups[rand() < 0.5 ? "trees" : "treesB"]!.push({ p: [x, 0, z], ry });
+      else if (roll < 0.28 && outer) groups[rand() < 0.6 ? "hills" : "mountain"]!.push({ p: [x, 0, z], ry });
+      else if (roll < 0.4 && house < houses.length) singles.push({ name: houses[house++]!, p: [x, 0, z], ry });
+      else {
+        for (let k = 0, n = Math.floor(rand() * 3); k < n; k++) {
+          const a = rand() * Math.PI * 2, d = 0.5 + rand() * 0.6;
+          groups[rand() < 0.65 ? "tree" : rand() < 0.5 ? "rock" : "rockB"]!.push({ p: [x + Math.cos(a) * d * TILE, 0, z + Math.sin(a) * d * TILE], ry: rand() * 6, s: 0.8 + rand() * 0.5 });
+        }
+      }
+    }
+    return { groups, singles };
+  }, [tiles, seed, houses]);
+  return (
+    <>
+      {Object.entries(layout.groups).map(([name, items]) => <Instanced key={name} name={name} items={items} />)}
+      {layout.singles.map((single, index) => <Piece key={index} name={single.name} position={single.p} ry={single.ry} />)}
+    </>
+  );
+}

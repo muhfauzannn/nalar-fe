@@ -5,10 +5,8 @@ import { Link } from "react-router";
 import { gameGsap, gameToast, haptic, playSound, prefersReducedMotion } from "~/features/game-feel";
 
 import { cn } from "~/lib/utils";
-import { LABS } from "~/features/labs";
-import { formatDateTime } from "../lib/format";
-import { postNames } from "../lib/game";
 import { planksAdded } from "../components/game-moments";
+import { districtsOf, type Place, type Stop } from "../lib/districts";
 import type { CourseData, IslandData } from "../types";
 
 // A course as an island (PRD §5.9): every module is a district, and in it the
@@ -17,90 +15,12 @@ import type { CourseData, IslandData } from "../types";
 // teacher built is the map; nothing is authored twice. Like the rest of the
 // game world it keeps its light palette in both themes.
 
-const finished = new Set(["closed", "completed", "expired", "graded", "returned", "submitted"]);
-
-type Place = "library" | "lab" | "arena" | "hall";
-type Stop = {
-  key: string;
-  place: Place;
-  title: string;
-  href: string;
-  done: boolean;
-  detail: string;
-  posts?: IslandData["buildings"][number]["posts"];
-};
-
 const placeArt: Record<Place, { src: string; name: string }> = {
   library: { src: "/game/library.webp", name: "Perpustakaan" },
   lab: { src: "/game/lab.webp", name: "Lab" },
   arena: { src: "/game/arena.webp", name: "Arena latihan" },
   hall: { src: "/game/academy.webp", name: "Balai" },
 };
-
-function districtsOf(course: CourseData, island: IslandData) {
-  const buildingOf = new Map(island.buildings.map((item) => [item.assignmentId, item]));
-  const stopsFor = (moduleId: string | null, lessons: CourseData["modules"][number]["lessons"]) => {
-    const stops: Stop[] = [];
-    for (const lesson of lessons) {
-      stops.push({
-        key: `lesson-${lesson.id}`,
-        place: "library",
-        title: lesson.title,
-        href: `/lessons/${lesson.id}`,
-        done: lesson.status === "completed",
-        detail: lesson.status === "completed" ? "Sudah dibaca" : lesson.status === "in_progress" ? "Sedang dibaca" : "Materi",
-      });
-      for (const lab of island.labs.filter((item) => item.lessonId === lesson.id)) {
-        stops.push({
-          key: `lab-${lab.id}`,
-          place: "lab",
-          title: LABS[lab.labKey]?.title ?? lab.labKey,
-          href: `/lessons/${lesson.id}?ruang=lab`,
-          done: lab.challenges > 0 && lab.solved >= lab.challenges,
-          detail: `${lab.solved} dari ${lab.challenges} tantangan`,
-        });
-      }
-    }
-    for (const quiz of course.quizzes.filter((item) => item.moduleId === moduleId)) {
-      const isDone = finished.has(quiz.attemptStatus ?? "");
-      stops.push({
-        key: `quiz-${quiz.id}`,
-        place: "arena",
-        title: quiz.title,
-        href: `/quizzes/${quiz.id}`,
-        done: isDone,
-        detail: isDone ? "Selesai" : quiz.dueAt ? `Tenggat ${formatDateTime(quiz.dueAt)}` : "Latihan",
-      });
-    }
-    for (const assignment of course.assignments.filter((item) => item.moduleId === moduleId)) {
-      const building = buildingOf.get(assignment.id);
-      const lit = building?.posts.filter((post) => post.status === "done").length ?? 0;
-      const current = building?.posts.find((post) => post.status === "current");
-      stops.push({
-        key: `hall-${assignment.id}`,
-        place: "hall",
-        title: assignment.title,
-        href: `/courses/${course.course.id}/balai/${assignment.id}`,
-        done: Boolean(building?.chestOpen),
-        detail: building?.chestOpen
-          ? "Peti terbuka"
-          : current
-            ? `${lit}/5 pos · berikutnya ${postNames[current.stage]}`
-            : `Tenggat ${formatDateTime(assignment.dueAt)}`,
-        posts: building?.posts,
-      });
-    }
-    return stops;
-  };
-
-  const districts = course.modules
-    .slice()
-    .sort((a, b) => a.position - b.position)
-    .map((module) => ({ id: module.id, title: module.title, stops: stopsFor(module.id, module.lessons) }));
-  const loose = stopsFor(null, []);
-  if (loose.length > 0) districts.push({ id: "umum", title: "Alun-alun", stops: loose });
-  return districts.filter((district) => district.stops.length > 0);
-}
 
 export function IslandPage({ course, island }: { course: CourseData; island: IslandData }) {
   const districts = districtsOf(course, island);

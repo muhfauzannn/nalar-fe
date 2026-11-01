@@ -1,8 +1,10 @@
 import type { Route } from "./+types/_app.courses.$courseId";
 import {
   CourseDetailPageSkeleton,
+  IslandOverlay,
   IslandPage,
   studentApi,
+  useWorld3d,
 } from "~/features/lms";
 
 // A course is shown as its island; the plain list lives at /courses/:id/daftar.
@@ -24,5 +26,9 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export default function CourseIslandRoute({ loaderData }: Route.ComponentProps) {
-  return <IslandPage course={loaderData.course} island={loaderData.island} />;
+  return useWorld3d() ? (
+    <IslandOverlay course={loaderData.course} island={loaderData.island} />
+  ) : (
+    <IslandPage course={loaderData.course} island={loaderData.island} />
+  );
 }
