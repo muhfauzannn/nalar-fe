@@ -1,4 +1,4 @@
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, List, Plus } from "lucide-react";
 import { Link } from "react-router";
 
 import { cn } from "~/lib/utils";
@@ -95,12 +95,11 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         {active && <Bridge island={active} />}
       </div>
 
-      {(more.length > 0 || data.islands.length === 0) && (
-        <section aria-label="Pulau lainnya" className="flex flex-wrap gap-2">
+      <section aria-label="Pulau lainnya" className="flex flex-wrap items-center gap-2">
           {more.map((island) => (
             <Link
               key={island.course.id}
-              to={`/courses/${island.course.id}/island`}
+              to={`/courses/${island.course.id}`}
               className="flex items-center gap-2 rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-card-foreground shadow-card ring-1 ring-border"
             >
               Pulau {island.course.subjectName}
@@ -108,12 +107,25 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
             </Link>
           ))}
           {data.islands.length === 0 && (
-            <p className="text-sm text-muted-foreground">
+            <p className="w-full text-sm text-muted-foreground">
               Belum ada pulau. Gabung course dengan kode dari gurumu untuk membuka pulau pertamamu.
             </p>
           )}
+          <Link
+            to="/courses/join"
+            className="flex items-center gap-2 rounded-2xl bg-[#18153a] px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Gabung course
+          </Link>
+          <Link
+            to="/courses"
+            className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-foreground ring-1 ring-border hover:bg-muted"
+          >
+            <List className="size-4" aria-hidden="true" />
+            Tampilan daftar
+          </Link>
         </section>
-      )}
     </div>
   );
 }
@@ -123,7 +135,7 @@ function IslandSign({ island, at, highlighted }: { island: Island; at: { x: numb
   const lit = current?.postsDone ?? 0;
   return (
     <Link
-      to={`/courses/${island.course.id}/island`}
+      to={`/courses/${island.course.id}`}
       className={cn(
         "absolute max-w-[42%] -translate-x-1/2 rounded-2xl px-3 py-2 shadow-md transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] sm:max-w-[16rem] sm:px-4 sm:py-2.5",
         highlighted ? "bg-[#18153a] text-white" : "bg-white/95",
@@ -177,7 +189,7 @@ function Journey({ island }: { island: Island | null }) {
       </div>
       {current && island && (
         <Link
-          to={`/courses/${island.course.id}/island?tugas=${current.assignmentId}`}
+          to={`/courses/${island.course.id}/balai/${current.assignmentId}`}
           className="flex h-11 shrink-0 items-center rounded-xl bg-[#4bd29f] px-4 text-sm font-bold text-[#04352a] transition-transform duration-150 active:scale-[0.97]"
         >
           Masuk

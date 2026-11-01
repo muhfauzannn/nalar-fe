@@ -17,7 +17,7 @@ export function JoinCoursePage({ result }: { result?: ActionResult }) {
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-8">
       <PageHeader
-        crumbs={[{ label: "Course saya", to: "/courses" }]}
+        crumbs={[{ label: "Dunia", to: "/dunia" }]}
         title="Gabung ke course"
         description="Masukkan kode dari pengajarmu."
       />

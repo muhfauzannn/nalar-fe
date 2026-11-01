@@ -104,7 +104,7 @@ export function QuizPage({
         <div data-quiz-reveal>
           <PageHeader
             crumbs={[
-              { label: "Course saya", to: "/courses" },
+              { label: "Dunia", to: "/dunia" },
               { label: loaderData.quiz.courseName, to: `/courses/${loaderData.quiz.courseId}` },
             ]}
             eyebrow={<Badge variant="lavender">Quiz</Badge>}

@@ -1,281 +1,268 @@
-import { Users } from "lucide-react";
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Check, ChevronRight, List, Users } from "lucide-react";
+import { Link } from "react-router";
 
 import { cn } from "~/lib/utils";
-import { IslandJourney } from "../components/island-journey";
-import { PostSheet } from "../components/post-sheet";
-import { badgeCopy, postNames } from "../lib/game";
-import type { BadgeProgress, IslandData, PostStatus, WorkflowStage } from "../types";
+import { LABS } from "~/features/labs";
+import { formatDateTime } from "../lib/format";
+import { postNames } from "../lib/game";
+import type { CourseData, IslandData } from "../types";
 
-type Building = IslandData["buildings"][number];
+// A course as an island (PRD §5.9): every module is a district, and in it the
+// student finds the library (lessons with the PDF tutor), the lab, the arena
+// (quizzes) and the halls (assignments with their five posts). The course the
+// teacher built is the map; nothing is authored twice. Like the rest of the
+// game world it keeps its light palette in both themes.
 
-// Pad states as the canvas design "3D · Pulau" draws them.
-const padStyle: Record<PostStatus, { row: string; dot: string; tag: string; tagClass: string }> = {
-  done: { row: "", dot: "bg-[#4bd29f] border-[#18153a]", tag: "Menyala", tagClass: "text-[#0f6e56]" },
-  current: { row: "bg-[#dff7ee]", dot: "bg-white border-[#4bd29f]", tag: "Kamu di sini", tagClass: "text-[#0f6e56]" },
-  locked: { row: "", dot: "bg-[#f6f3fd] border-[#d3c5f8]", tag: "Terkunci", tagClass: "text-[#5d5a83]" },
+const finished = new Set(["closed", "completed", "expired", "graded", "returned", "submitted"]);
+
+type Place = "library" | "lab" | "arena" | "hall";
+type Stop = {
+  key: string;
+  place: Place;
+  title: string;
+  href: string;
+  done: boolean;
+  detail: string;
+  posts?: IslandData["buildings"][number]["posts"];
 };
-const segment: Record<PostStatus, string> = {
-  done: "bg-[#4bd29f]",
-  current: "bg-[#a6e9cf]",
-  locked: "bg-[#ece7fb]",
+
+const placeArt: Record<Place, { src: string; name: string }> = {
+  library: { src: "/game/library.webp", name: "Perpustakaan" },
+  lab: { src: "/game/lab.webp", name: "Lab" },
+  arena: { src: "/game/arena.webp", name: "Arena latihan" },
+  hall: { src: "/game/academy.webp", name: "Balai" },
 };
 
-// The course as an island (PRD §5.9): each assignment is a hall reached through
-// the five stages. Poin Nalar and badges reward how the work was done; the AI
-// Offloading Index is not here and never feeds them. The world keeps its own
-// light palette in both themes, like the artwork it sits on.
-export function IslandPage({ data }: { data: IslandData }) {
-  const [params, setParams] = useSearchParams();
-  const selected =
-    data.buildings.find((item) => item.assignmentId === params.get("tugas")) ??
-    data.buildings.find((item) => item.submissionStatus === "in_progress") ??
-    data.buildings.find((item) => !item.chestOpen && item.open) ??
-    data.buildings[0];
-  const backTo = `/courses/${data.course.id}`;
-  const [openPost, setOpenPost] = useState<WorkflowStage | null>(null);
+function districtsOf(course: CourseData, island: IslandData) {
+  const buildingOf = new Map(island.buildings.map((item) => [item.assignmentId, item]));
+  const stopsFor = (moduleId: string | null, lessons: CourseData["modules"][number]["lessons"]) => {
+    const stops: Stop[] = [];
+    for (const lesson of lessons) {
+      stops.push({
+        key: `lesson-${lesson.id}`,
+        place: "library",
+        title: lesson.title,
+        href: `/lessons/${lesson.id}`,
+        done: lesson.status === "completed",
+        detail: lesson.status === "completed" ? "Sudah dibaca" : lesson.status === "in_progress" ? "Sedang dibaca" : "Materi",
+      });
+      for (const lab of island.labs.filter((item) => item.lessonId === lesson.id)) {
+        stops.push({
+          key: `lab-${lab.id}`,
+          place: "lab",
+          title: LABS[lab.labKey]?.title ?? lab.labKey,
+          href: `/lessons/${lesson.id}`,
+          done: lab.challenges > 0 && lab.solved >= lab.challenges,
+          detail: `${lab.solved} dari ${lab.challenges} tantangan`,
+        });
+      }
+    }
+    for (const quiz of course.quizzes.filter((item) => item.moduleId === moduleId)) {
+      const isDone = finished.has(quiz.attemptStatus ?? "");
+      stops.push({
+        key: `quiz-${quiz.id}`,
+        place: "arena",
+        title: quiz.title,
+        href: `/quizzes/${quiz.id}`,
+        done: isDone,
+        detail: isDone ? "Selesai" : quiz.dueAt ? `Tenggat ${formatDateTime(quiz.dueAt)}` : "Latihan",
+      });
+    }
+    for (const assignment of course.assignments.filter((item) => item.moduleId === moduleId)) {
+      const building = buildingOf.get(assignment.id);
+      const lit = building?.posts.filter((post) => post.status === "done").length ?? 0;
+      const current = building?.posts.find((post) => post.status === "current");
+      stops.push({
+        key: `hall-${assignment.id}`,
+        place: "hall",
+        title: assignment.title,
+        href: `/courses/${course.course.id}/balai/${assignment.id}`,
+        done: Boolean(building?.chestOpen),
+        detail: building?.chestOpen
+          ? "Peti terbuka"
+          : current
+            ? `${lit}/5 pos · berikutnya ${postNames[current.stage]}`
+            : `Tenggat ${formatDateTime(assignment.dueAt)}`,
+        posts: building?.posts,
+      });
+    }
+    return stops;
+  };
+
+  const districts = course.modules
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((module) => ({ id: module.id, title: module.title, stops: stopsFor(module.id, module.lessons) }));
+  const loose = stopsFor(null, []);
+  if (loose.length > 0) districts.push({ id: "umum", title: "Alun-alun", stops: loose });
+  return districts.filter((district) => district.stops.length > 0);
+}
+
+export function IslandPage({ course, island }: { course: CourseData; island: IslandData }) {
+  const districts = districtsOf(course, island);
+  const next = districts.flatMap((district) => district.stops).find((stop) => !stop.done) ?? null;
+  const allStops = districts.flatMap((district) => district.stops);
+  const doneCount = allStops.filter((stop) => stop.done).length;
 
   return (
     <div className="rounded-[2rem] bg-[#d6ccf4] p-3 text-[#18153a] [color-scheme:light] sm:p-6">
-      {!selected ? (
-        <div className="flex flex-col items-center gap-4 py-16 text-center">
-          <img src="/game/academy.webp" alt="" width={304} height={360} className="h-40 w-auto" />
-          <p className="font-heading text-lg font-semibold">Belum ada balai di Pulau {data.course.subjectName}</p>
-          <Link to={backTo} className="text-sm font-medium underline underline-offset-4">
-            Kembali ke course
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-start gap-6">
-          <IslandJourney
-            building={selected}
-            backTo={backTo}
-            onSelectPost={setOpenPost}
-            className="mx-auto max-w-[37.5rem] flex-[1_1_32.5rem]"
-          />
-
-          <section className="flex min-w-0 flex-[1_1_23.75rem] flex-col gap-4">
-            {data.buildings.length > 1 && (
-              <nav aria-label="Balai di pulau ini" className="flex gap-2 overflow-x-auto pb-1">
-                {data.buildings.map((building) => {
-                  const active = building.assignmentId === selected.assignmentId;
-                  return (
-                    <button
-                      key={building.assignmentId}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() =>
-                        setParams({ tugas: building.assignmentId }, { replace: true, preventScrollReset: true })
-                      }
-                      className={cn(
-                        "flex shrink-0 items-center gap-2 rounded-2xl py-1.5 pl-1.5 pr-3.5 text-sm font-semibold transition-transform duration-150 active:scale-[0.97]",
-                        active ? "bg-[#18153a] text-white" : "bg-white/80 hover:bg-white",
-                      )}
-                    >
-                      <img src="/game/academy.webp" alt="" width={304} height={360} className="h-8 w-auto" />
-                      <span className="max-w-[11rem] truncate">{building.title}</span>
-                      {building.chestOpen && <span className="text-[#4bd29f]">✓</span>}
-                    </button>
-                  );
-                })}
-              </nav>
+      <div className="flex flex-col gap-5">
+        <header className="flex flex-wrap items-start gap-4 rounded-[1.75rem] bg-white p-5 sm:p-6">
+          <div className="min-w-0 flex-[1_1_18rem]">
+            <p className="text-[0.8125rem] text-[#5e5e72]">
+              <Link to="/dunia" className="underline-offset-4 hover:underline">
+                Dunia
+              </Link>{" "}
+              · {course.course.name}
+            </p>
+            <h1 className="mt-1 font-heading text-2xl font-bold text-balance sm:text-3xl">Pulau {course.course.subjectName}</h1>
+            {course.teachers.length > 0 && (
+              <p className="mt-1 text-sm text-[#5e5e72]">Pemandu: {course.teachers.join(", ")}</p>
             )}
-
-            <Header building={selected} data={data} />
-            <PadList building={selected} onSelect={setOpenPost} />
-            <ChestCard building={selected} />
-            <PrimaryAction building={selected} />
-            <IslandStats data={data} />
-          </section>
-          <PostSheet building={selected} stage={openPost} onOpenChange={(open) => !open && setOpenPost(null)} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Header({ building, data }: { building: Building; data: IslandData }) {
-  const lit = building.posts.filter((post) => post.status === "done").length;
-  const position = data.buildings.indexOf(building) + 1;
-  return (
-    <div className="rounded-[1.75rem] bg-white p-6">
-      <p className="text-[0.8125rem] text-[#5e5e72]">
-        Pulau {data.course.subjectName} · Balai {position} dari {data.buildings.length}
-      </p>
-      <h1 className="mb-3 mt-1 font-heading text-2xl font-bold text-balance sm:text-3xl">{building.title}</h1>
-      <div className="mb-2 flex gap-1" role="img" aria-label={`${lit} dari 5 pos menyala`}>
-        {building.posts.map((post) => (
-          <span key={post.stage} className={cn("h-2.5 flex-1 rounded", segment[post.status])} />
-        ))}
-      </div>
-      <p className="text-sm text-[#5e5e72]">
-        {building.chestOpen
-          ? "Kelima pos sudah menyala. Peti balai ini sudah terbuka."
-          : "Nyalakan kelima pos dengan cara kerjamu sendiri untuk membuka peti balai."}
-      </p>
-    </div>
-  );
-}
-
-function PadList({ building, onSelect }: { building: Building; onSelect: (stage: WorkflowStage) => void }) {
-  const started = building.submissionStatus !== null;
-  return (
-    <ol className="rounded-[1.75rem] bg-white px-3 py-2">
-      {building.posts.map((post, index) => {
-        const style = padStyle[post.status];
-        const state =
-          post.status === "done"
-            ? post.points > 0
-              ? `Selesai · +${post.points} Poin Nalar`
-              : "Selesai"
-            : post.status === "current"
-              ? "Sedang kamu kerjakan"
-              : index === 0 && !started
-                ? building.open
-                  ? "Mulai dari sini"
-                  : "Tugas sudah ditutup"
-                : `Terbuka setelah pos ${index}`;
-        return (
-          <li key={post.stage}>
-            <button
-              type="button"
-              onClick={() => onSelect(post.stage)}
-              className={cn(
-                "flex w-full items-center gap-3.5 rounded-[1.125rem] p-3 text-left transition-[background-color,transform] duration-150 hover:bg-[#f6f3fd] active:scale-[0.99]",
-                style.row,
-              )}
-            >
-            <span
-              className={cn(
-                "flex size-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-bold",
-                style.dot,
-              )}
-            >
-              {index + 1}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[0.9375rem] font-semibold">{postNames[post.stage]}</p>
-              <p className="mt-0.5 text-[0.8125rem] text-[#5e5e72]">{state}</p>
+            <div className="mt-3 flex items-center gap-3">
+              <div
+                className="h-2.5 w-full max-w-xs overflow-hidden rounded-full bg-[#ece7fb]"
+                role="progressbar"
+                aria-label="Tempat yang sudah dituntaskan"
+                aria-valuemin={0}
+                aria-valuemax={allStops.length}
+                aria-valuenow={doneCount}
+              >
+                <div className="h-full rounded-full bg-[#4bd29f]" style={{ width: `${allStops.length ? (doneCount / allStops.length) * 100 : 0}%` }} />
+              </div>
+              <span className="shrink-0 text-xs font-semibold tabular-nums">
+                {doneCount}/{allStops.length} tempat
+              </span>
             </div>
-            <span className={cn("shrink-0 text-[0.8125rem] font-semibold", style.tagClass)}>{style.tag}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#f6f3fd] pl-1.5 pr-4 font-heading font-semibold">
+              <img src="/game/coin.webp" alt="" width={125} height={128} className="size-8" />
+              <span className="tabular-nums">{island.points.total}</span>
+              <span className="sr-only">Poin Nalar di pulau ini</span>
+            </span>
+            <span className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#f6f3fd] px-3.5 text-sm font-semibold">
+              <Users className="size-4" aria-hidden="true" />
+              Jembatan {island.bridge.planks}/{island.bridge.total}
+            </span>
+            <Link
+              to={`/courses/${course.course.id}/daftar`}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl px-3.5 text-sm font-semibold ring-1 ring-[#d3c5f8] transition-colors duration-150 hover:bg-[#f6f3fd]"
+            >
+              <List className="size-4" aria-hidden="true" />
+              Tampilan daftar
+            </Link>
+          </div>
+        </header>
 
-function ChestCard({ building }: { building: Building }) {
-  return (
-    <div className="flex items-center gap-4 rounded-[1.75rem] bg-[#18153a] px-5 py-4.5 text-white">
-      <span className="flex size-22 shrink-0 items-center justify-center overflow-hidden rounded-[1.25rem] bg-white">
-        <img
-          src="/game/chest.webp"
-          alt=""
-          width={227}
-          height={240}
-          className={cn("size-[86%] object-contain", !building.chestOpen && "opacity-60 grayscale")}
-        />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-[#c6c1f1]">Hadiah balai</p>
-        <p className="mb-1 mt-0.5 font-semibold">Peti {building.title}</p>
-        <p className="text-[0.8125rem] text-[#c6c1f1]">
-          {building.chestOpen
-            ? `${building.points} Poin Nalar dari tugas ini, plus laporan reflektif dan Index yang hanya untukmu dan gurumu.`
-            : "Terbuka setelah Pos 5: laporan reflektif dan Index tugas ini, hanya untukmu dan gurumu."}
-        </p>
+        {next && <NextStop stop={next} />}
+
+        {districts.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-[1.75rem] bg-white/70 py-14 text-center">
+            <img src="/game/library.webp" alt="" width={315} height={360} className="h-32 w-auto" />
+            <p className="font-heading font-semibold">Pulau ini masih kosong</p>
+            <p className="text-sm text-[#5e5e72]">Gurumu belum menerbitkan materi atau tugas.</p>
+          </div>
+        ) : (
+          <ol className="flex flex-col gap-4">
+            {districts.map((district, index) => (
+              <District key={district.id} index={index} title={district.title} stops={district.stops} nextKey={next?.key ?? null} />
+            ))}
+          </ol>
+        )}
       </div>
     </div>
   );
 }
 
-function PrimaryAction({ building }: { building: Building }) {
-  const href = `/assignments/${building.assignmentId}`;
-  const current = building.posts.findIndex((post) => post.status === "current");
-  const label = building.chestOpen
-    ? "Buka peti"
-    : current >= 0
-      ? `Masuk Pos ${current + 1} · ${postNames[building.posts[current]!.stage]}`
-      : building.open
-        ? `Mulai Pos 1 · ${postNames["1_independent_effort"]}`
-        : null;
-  if (!label) return null;
+function NextStop({ stop }: { stop: Stop }) {
   return (
     <Link
-      to={href}
-      className="flex min-h-14 items-center justify-center rounded-[1.125rem] bg-[#4bd29f] px-4 text-center font-bold text-[#04352a] transition-transform duration-150 hover:bg-[#5fdcab] active:scale-[0.98]"
+      to={stop.href}
+      className="flex items-center gap-4 rounded-[1.5rem] bg-[#18153a] p-4 text-white transition-transform duration-150 active:scale-[0.99] sm:p-5"
     >
-      {label}
+      <span className="size-14 shrink-0 overflow-hidden rounded-2xl bg-[#dff7ee]">
+        <img src="/game/cat-avatar.webp" alt="" width={160} height={188} className="size-full object-cover" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs text-[#c6c1f1]">Lanjutkan · {placeArt[stop.place].name}</span>
+        <span className="block truncate font-heading text-lg font-semibold">{stop.title}</span>
+      </span>
+      <span className="flex h-11 shrink-0 items-center gap-1 rounded-xl bg-[#4bd29f] px-4 text-sm font-bold text-[#04352a]">
+        Masuk
+        <ChevronRight className="size-4" aria-hidden="true" />
+      </span>
     </Link>
   );
 }
 
-// Points, the class bridge and badges. The bridge is a class target: one
-// plank per finished journey, nobody named or ranked.
-function IslandStats({ data }: { data: IslandData }) {
-  const { planks, total } = data.bridge;
-  const shown = Math.min(total, 30);
-  const filled = total === 0 ? 0 : Math.round((planks / total) * shown);
+function District({ index, title, stops, nextKey }: { index: number; title: string; stops: Stop[]; nextKey: string | null }) {
+  const places = (["library", "lab", "arena", "hall"] as Place[]).filter((place) => stops.some((stop) => stop.place === place));
+  const done = stops.filter((stop) => stop.done).length;
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <div className="flex items-center gap-3 rounded-[1.5rem] bg-white/80 p-4">
-        <img src="/game/coin.webp" alt="" width={125} height={128} className="size-11 shrink-0" />
-        <div>
-          <p className="font-heading text-2xl font-semibold tabular-nums">{data.points.total}</p>
-          <p className="text-xs text-[#5e5e72]">Poin Nalar di pulau ini</p>
+    <li className="overflow-hidden rounded-[1.75rem] bg-white">
+      <div className="flex flex-wrap items-end gap-x-5 gap-y-3 bg-[linear-gradient(180deg,#f6f3fd,#ffffff)] px-5 pb-2 pt-4 sm:px-6">
+        <div className="min-w-0 flex-[1_1_14rem] self-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#5d5a83]">Wilayah {index + 1}</p>
+          <h2 className="font-heading text-xl font-bold">{title}</h2>
+          <p className="text-xs text-[#5e5e72] tabular-nums">
+            {done}/{stops.length} tempat tuntas
+          </p>
         </div>
-      </div>
-      <div className="flex flex-col justify-center gap-2 rounded-[1.5rem] bg-white/80 p-4">
-        <p className="flex items-baseline justify-between gap-2 text-sm font-semibold">
-          Jembatan kelas
-          <span className="text-xs font-normal text-[#5e5e72] tabular-nums">
-            {planks}/{total} papan
-          </span>
-        </p>
-        <div className="flex gap-0.5" aria-hidden="true">
-          {Array.from({ length: shown }, (_, index) => (
-            <span key={index} className={cn("h-2.5 flex-1 rounded-[2px]", index < filled ? "bg-[#4bd29f]" : "bg-[#ece7fb]")} />
+        <div className="flex items-end gap-1" aria-hidden="true">
+          {places.map((place) => (
+            <img key={place} src={placeArt[place].src} alt="" width={315} height={360} className="h-20 w-auto sm:h-24" />
           ))}
         </div>
-        <p className="flex items-center gap-1 text-[0.6875rem] text-[#5e5e72]">
-          <Users className="size-3 shrink-0" aria-hidden="true" />
-          Tiap tugas yang dituntaskan teman menambah papan.
-        </p>
       </div>
-      <Badges badges={data.badges} />
-    </div>
-  );
-}
-
-function Badges({ badges }: { badges: BadgeProgress[] }) {
-  return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-3 rounded-[1.5rem] bg-white/80 p-4 sm:col-span-2">
-      {badges.map((badge) => {
-        const copy = badgeCopy[badge.id];
-        return (
-          <li key={badge.id} className="flex min-w-[9rem] flex-1 items-center gap-2.5">
-            <img
-              src={copy.image}
-              alt=""
-              width={192}
-              height={200}
-              className={cn("size-11 shrink-0", !badge.earned && "opacity-45 grayscale")}
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">
-                {copy.title}
-                <span className="sr-only">{badge.earned ? ", sudah didapat" : ", belum didapat"}</span>
-              </p>
-              <p className="text-xs text-[#5e5e72]">
-                {badge.earned ? copy.detail : `${badge.progress}/${badge.target} · ${copy.detail}`}
-              </p>
-            </div>
+      <ul className="flex flex-col px-3 pb-3 sm:px-4">
+        {stops.map((stop) => (
+          <li key={stop.key}>
+            <Link
+              to={stop.href}
+              className={cn(
+                "flex items-center gap-3 rounded-[1.125rem] p-2.5 transition-colors duration-150 hover:bg-[#f6f3fd]",
+                stop.key === nextKey && "bg-[#dff7ee] hover:bg-[#d2f3e6]",
+              )}
+            >
+              <span className="relative shrink-0">
+                <img src={placeArt[stop.place].src} alt="" width={315} height={360} className="h-11 w-auto" />
+                {stop.done && (
+                  <span className="absolute -bottom-0.5 -right-1 flex size-5 items-center justify-center rounded-full bg-[#4bd29f] text-[#04352a] ring-2 ring-white">
+                    <Check className="size-3" strokeWidth={3.5} aria-hidden="true" />
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.6875rem] font-semibold uppercase tracking-wide text-[#5d5a83]">
+                  {placeArt[stop.place].name}
+                  <span className="sr-only">{stop.done ? ", tuntas" : ""}</span>
+                </span>
+                <span className="block truncate font-semibold">{stop.title}</span>
+                <span className="block truncate text-xs text-[#5e5e72]">{stop.detail}</span>
+              </span>
+              {stop.posts && (
+                <span className="hidden w-24 shrink-0 gap-1 sm:flex" aria-hidden="true">
+                  {stop.posts.map((post) => (
+                    <span
+                      key={post.stage}
+                      className={cn(
+                        "h-1.5 flex-1 rounded-full",
+                        post.status === "done" ? "bg-[#4bd29f]" : post.status === "current" ? "bg-[#a6e9cf]" : "bg-[#ece7fb]",
+                      )}
+                    />
+                  ))}
+                </span>
+              )}
+              {stop.key === nextKey ? (
+                <span className="shrink-0 text-xs font-bold text-[#0f6e56]">Kamu di sini</span>
+              ) : (
+                <ChevronRight className="size-4 shrink-0 text-[#5d5a83]" aria-hidden="true" />
+              )}
+            </Link>
           </li>
-        );
-      })}
-    </ul>
+        ))}
+      </ul>
+    </li>
   );
 }

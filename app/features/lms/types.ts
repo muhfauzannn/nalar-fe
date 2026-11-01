@@ -111,6 +111,7 @@ export type LessonData = {
     file: { name: string; size: number } | null;
     position: number;
   }>;
+  labs: Array<{ id: string; labKey: string; solved: string[] }>;
 };
 
 export type WorkflowStage =
@@ -362,6 +363,7 @@ export type PostStatus = "done" | "current" | "locked";
 export type IslandData = {
   course: { id: string; name: string; subjectName: string };
   points: { total: number };
+  labs: Array<{ id: string; lessonId: string; labKey: string; solved: number; challenges: number }>;
   badges: BadgeProgress[];
   bridge: { planks: number; total: number; students: number };
   buildings: Array<{

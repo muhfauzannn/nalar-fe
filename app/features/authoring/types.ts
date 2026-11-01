@@ -106,6 +106,8 @@ export type LessonEditorData = {
     courseName: string;
   };
   resources: ManagedResource[];
+  labs: Array<{ id: string; labKey: string }>;
+  labCatalog: Array<{ key: string; title: string; subject: string }>;
 };
 
 export type ManagedQuestion = {

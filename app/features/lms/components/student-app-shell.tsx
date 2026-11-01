@@ -51,18 +51,17 @@ const navigationIcons: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/dunia": Globe2,
   "/lencana": Award,
-  "/courses": BookOpen,
   "/manage": PencilRuler,
 };
 
-// Lessons, quizzes and assignments belong to "Course saya" even though their
+// Courses (islands), lessons, quizzes and assignments belong to "Dunia" even though their
 // URLs do not start with /courses.
 function sectionFor(pathname: string) {
   if (pathname.startsWith("/manage")) return "/manage";
   if (pathname === "/dashboard") return "/dashboard";
   if (pathname === "/dunia") return "/dunia";
   if (pathname === "/lencana") return "/lencana";
-  return "/courses";
+  return "/dunia";
 }
 
 function isAppPath(pathname: string) {

@@ -156,6 +156,10 @@ export const manageApi = {
     write(request, () =>
       http.putForm(`${base}/resources/${resourceId}/file`, form, init(request)),
     ),
+  attachLab: (request: Request, lessonId: string, labKey: string) =>
+    write(request, () => http.post(`${base}/lessons/${lessonId}/labs`, { labKey }, init(request))),
+  detachLab: (request: Request, labId: string) =>
+    write(request, () => http.delete(`${base}/labs/${labId}`, init(request))),
   deleteResource: (request: Request, resourceId: string) =>
     write(request, () => http.delete(`${base}/resources/${resourceId}`, init(request))),
   orderResources: (request: Request, lessonId: string, ids: string[]) =>

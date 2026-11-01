@@ -125,7 +125,7 @@ export function DashboardPage({ data, points }: { data: DashboardData; points: P
               Course saya
             </h2>
             {data.courses.length > 0 && (
-              <Button variant="outline" size="sm" render={<Link to="/courses" />}>
+              <Button variant="outline" size="sm" render={<Link to="/dunia" />}>
                 Lihat semua
                 <ArrowRight data-icon="inline-end" />
               </Button>

@@ -1,4 +1,4 @@
-import { ExternalLink, File, FileText, Link2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, File, FileText, FlaskConical, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { PageHeader } from "~/components/layout/page-header";
@@ -176,7 +176,88 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
           </ul>
         )}
       </section>
+
+      <LabsSection data={data} />
     </div>
+  );
+}
+
+// Labs come from Bernalar's catalog (PRD §5.10); a teacher only picks which
+// ones sit on this lesson. A lab students already used cannot be removed.
+function LabsSection({ data }: { data: LessonEditorData }) {
+  const attach = useAction();
+  const detach = useAction();
+  const available = data.labCatalog.filter((lab) => !data.labs.some((item) => item.labKey === lab.key));
+  const [picked, setChoice] = useState("");
+  // Falls back to the first lab still available once the picked one is attached.
+  const choice = available.some((lab) => lab.key === picked) ? picked : (available[0]?.key ?? "");
+  const titleOf = (key: string) => data.labCatalog.find((lab) => lab.key === key)?.title ?? key;
+
+  return (
+    <section aria-labelledby="labs-title" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 id="labs-title" className="font-heading text-2xl font-semibold tracking-tight">
+          Lab interaktif
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Alat 3D dengan tantangan penerapan. Muncul di atas materi dan di wilayah modul pada pulau siswa.
+        </p>
+      </div>
+      <ActionError error={attach.error ?? detach.error} />
+      {data.labs.length > 0 && (
+        <ul className="flex flex-col gap-3" aria-label="Lab di lesson ini">
+          {data.labs.map((lab) => (
+            <li key={lab.id}>
+              <Card>
+                <CardContent className="flex items-center gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-mint-soft text-brand-mint-foreground">
+                    <FlaskConical className="size-4.5" aria-hidden="true" />
+                  </span>
+                  <p className="min-w-0 flex-1 font-medium">{titleOf(lab.labKey)}</p>
+                  <ConfirmAction
+                    label="Lepas"
+                    title="Lepas lab ini?"
+                    description="Siswa tidak akan melihat lab ini lagi di lesson ini."
+                    confirmLabel="Lepas lab"
+                    variant="ghost"
+                    icon={<Trash2 data-icon="inline-start" />}
+                    disabled={detach.pending}
+                    onConfirm={() => detach.submit({ intent: "lab-detach", labId: lab.id })}
+                  />
+                </CardContent>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+      {available.length > 0 ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-end gap-3">
+            <Field className="min-w-[14rem] flex-1">
+              <FieldLabel htmlFor="lab-choice">Pilih lab</FieldLabel>
+              <NativeSelect id="lab-choice" value={choice} onChange={(event) => setChoice(event.target.value)}>
+                {available.map((lab) => (
+                  <NativeSelectOption key={lab.key} value={lab.key}>
+                    {lab.title} · {lab.subject}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Button
+              type="button"
+              loading={attach.pending}
+              disabled={!choice}
+              onClick={() => attach.submit({ intent: "lab-attach", labKey: choice })}
+            >
+              <Plus data-icon="inline-start" />
+              Pasang lab
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <p className="text-sm text-muted-foreground">Semua lab di katalog sudah dipasang di lesson ini.</p>
+      )}
+    </section>
   );
 }
 

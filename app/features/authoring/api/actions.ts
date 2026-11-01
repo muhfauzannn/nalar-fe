@@ -239,6 +239,10 @@ export async function lessonEditorAction({ request, params }: Args) {
       return runAction(() => manageApi.deleteResource(request, text(form, "resourceId")));
     case "resource-order":
       return runAction(() => manageApi.orderResources(request, lessonId, ids(form)));
+    case "lab-attach":
+      return runAction(() => manageApi.attachLab(request, lessonId, text(form, "labKey")));
+    case "lab-detach":
+      return runAction(() => manageApi.detachLab(request, text(form, "labId")));
     default:
       return unknownIntent;
   }

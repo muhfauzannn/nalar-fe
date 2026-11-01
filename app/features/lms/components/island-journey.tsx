@@ -53,7 +53,7 @@ export function IslandJourney({
 
       <Link
         to={backTo}
-        aria-label="Kembali ke course"
+        aria-label="Kembali ke pulau"
         className="absolute left-4 top-4 flex size-12 items-center justify-center rounded-2xl bg-white/92 transition-transform duration-150 active:scale-95"
       >
         <ChevronLeft className="size-5" strokeWidth={2.4} />

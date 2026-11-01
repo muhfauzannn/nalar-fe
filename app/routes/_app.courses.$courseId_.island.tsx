@@ -1,19 +1,14 @@
+import { redirect } from "react-router";
+
 import type { Route } from "./+types/_app.courses.$courseId_.island";
-import { CourseDetailPageSkeleton, IslandPage, studentApi } from "~/features/lms";
 
-export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-  if (!params.courseId) throw new Response("Course tidak ditemukan", { status: 404 });
-  return studentApi.island(request, params.courseId);
+// The old island address: the course itself is the island now, and a hall has
+// its own page.
+export function clientLoader({ request, params }: Route.ClientLoaderArgs) {
+  const hall = new URL(request.url).searchParams.get("tugas");
+  throw redirect(hall ? `/courses/${params.courseId}/balai/${hall}` : `/courses/${params.courseId}`);
 }
 
-export function HydrateFallback() {
-  return <CourseDetailPageSkeleton />;
-}
-
-export function meta(_: Route.MetaArgs) {
-  return [{ title: "Pulau | NALAR" }];
-}
-
-export default function IslandRoute({ loaderData }: Route.ComponentProps) {
-  return <IslandPage data={loaderData} />;
+export default function OldIslandRoute() {
+  return null;
 }

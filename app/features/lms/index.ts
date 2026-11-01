@@ -17,6 +17,7 @@ export { DashboardPage } from "./pages/dashboard-page";
 export { CoursesPage } from "./pages/courses-page";
 export { CourseDetailPage } from "./pages/course-detail-page";
 export { IslandPage } from "./pages/island-page";
+export { BalaiPage } from "./pages/balai-page";
 export { WorldPage } from "./pages/world-page";
 export { BadgesPage } from "./pages/badges-page";
 export { LessonPage } from "./pages/lesson-page";

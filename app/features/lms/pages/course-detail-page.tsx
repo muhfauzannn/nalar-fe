@@ -62,7 +62,7 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
   return (
     <div className="flex flex-col gap-8 lg:gap-10">
       <PageHeader
-        crumbs={[{ label: "Course saya", to: "/courses" }]}
+        crumbs={[{ label: "Dunia", to: "/dunia" }, { label: "Pulau", to: `/courses/${loaderData.course.id}` }]}
         eyebrow={
           <>
             <Badge variant="mint">{loaderData.course.subjectName}</Badge>
@@ -133,7 +133,7 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
 function IslandBanner({ courseId, subjectName }: { courseId: string; subjectName: string }) {
   return (
     <Link
-      to={`/courses/${courseId}/island`}
+      to={`/courses/${courseId}`}
       className="group relative isolate flex items-center gap-4 overflow-hidden rounded-2xl bg-brand-lavender-soft p-4 pr-5 text-brand-lavender-foreground shadow-card transition-transform duration-150 active:scale-[0.99] sm:gap-6 sm:p-5"
     >
       <img
@@ -146,7 +146,7 @@ function IslandBanner({ courseId, subjectName }: { courseId: string; subjectName
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="font-heading text-lg font-semibold">Pulau {subjectName}</span>
         <span className="text-sm opacity-80">
-          Nyalakan lima pos di setiap tugas dan kumpulkan Poin Nalar dari cara kerjamu.
+          Kembali ke tampilan pulau: wilayah per modul, lab, arena, dan balai.
         </span>
       </span>
       <ArrowRight className="size-5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />

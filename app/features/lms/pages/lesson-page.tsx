@@ -35,6 +35,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Separator } from "~/components/ui/separator";
+import { LessonLabs } from "../components/lesson-labs";
 import type { LessonData } from "../types";
 import { PdfStudyRoom } from "../components/pdf-study-room";
 
@@ -101,7 +102,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
         <div data-lesson-reveal>
           <PageHeader
             crumbs={[
-              { label: "Course saya", to: "/courses" },
+              { label: "Dunia", to: "/dunia" },
               { label: loaderData.courseName, to: `/courses/${loaderData.courseId}` },
             ]}
             eyebrow={
@@ -120,6 +121,8 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
             }
           />
         </div>
+
+        <LessonLabs labs={loaderData.labs ?? []} />
 
         {loaderData.resources.some((resource) => resource.file) ? (
           <PdfStudyRoom resources={loaderData.resources} />

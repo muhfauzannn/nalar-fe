@@ -148,7 +148,7 @@ export function AssignmentPage({
           completedStages={completedStages}
         />
 
-        {earned.length > 0 && <EarnedPoints earned={earned} courseId={loaderData.courseId} />}
+        {earned.length > 0 && <EarnedPoints earned={earned} courseId={loaderData.courseId} assignmentId={loaderData.id} />}
 
         {actionError && !terminalActionError && (
           <Alert variant="destructive">
@@ -180,7 +180,7 @@ export function AssignmentPage({
 }
 
 // What the stage just completed earned, shown once after the redirect.
-function EarnedPoints({ earned, courseId }: { earned: EarnedPoint[]; courseId: string }) {
+function EarnedPoints({ earned, courseId, assignmentId }: { earned: EarnedPoint[]; courseId: string; assignmentId: string }) {
   const total = earned.reduce((sum, item) => sum + item.points, 0);
   return (
     <section
@@ -192,8 +192,8 @@ function EarnedPoints({ earned, courseId }: { earned: EarnedPoint[]; courseId: s
         <p className="font-heading font-semibold tabular-nums">+{total} Poin Nalar</p>
         <p className="text-sm opacity-85">{earned.map((item) => pointCopy[item.kind].title).join(" · ")}</p>
       </div>
-      <Button variant="outline" size="sm" render={<Link to={`/courses/${courseId}/island`} />}>
-        Lihat pulau
+      <Button variant="outline" size="sm" render={<Link to={`/courses/${courseId}/balai/${assignmentId}`} />}>
+        Lihat balai
       </Button>
     </section>
   );
@@ -213,7 +213,7 @@ function AssignmentHeader({
   return (
     <PageHeader
       crumbs={[
-        { label: "Course saya", to: "/courses" },
+        { label: "Dunia", to: "/dunia" },
         { label: data.courseName, to: `/courses/${data.courseId}` },
       ]}
       eyebrow={

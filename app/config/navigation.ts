@@ -17,7 +17,6 @@ export const mainNav: readonly NavItem[] = [
 export const studentNav: readonly NavItem[] = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Dunia", href: "/dunia" },
-  { label: "Course saya", href: "/courses" },
   { label: "Lencana", href: "/lencana" },
   { label: "Kelola course", href: "/manage" },
 ] as const;

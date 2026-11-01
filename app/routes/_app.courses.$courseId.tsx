@@ -1,13 +1,18 @@
 import type { Route } from "./+types/_app.courses.$courseId";
 import {
-  CourseDetailPage,
   CourseDetailPageSkeleton,
+  IslandPage,
   studentApi,
 } from "~/features/lms";
 
+// A course is shown as its island; the plain list lives at /courses/:id/daftar.
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
   if (!params.courseId) throw new Response("Course tidak ditemukan", { status: 404 });
-  return studentApi.course(request, params.courseId);
+  const [course, island] = await Promise.all([
+    studentApi.course(request, params.courseId),
+    studentApi.island(request, params.courseId),
+  ]);
+  return { course, island };
 }
 
 export function HydrateFallback() {
@@ -15,9 +20,9 @@ export function HydrateFallback() {
 }
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "Detail Course | NALAR" }];
+  return [{ title: "Pulau | NALAR" }];
 }
 
-export default function CourseDetailRoute({ loaderData }: Route.ComponentProps) {
-  return <CourseDetailPage data={loaderData} />;
+export default function CourseIslandRoute({ loaderData }: Route.ComponentProps) {
+  return <IslandPage course={loaderData.course} island={loaderData.island} />;
 }
