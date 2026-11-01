@@ -1,4 +1,4 @@
-import type { BadgeProgress, EarnedPoint, ProcessPointKind, WorkflowStage } from "../types";
+import type { BadgeProgress, EarnedPoint, MissionId, ProcessPointKind, WorkflowStage } from "../types";
 
 // What each Poin Nalar is for, in the student's words. Every one rewards how the
 // work was done, never the AI Offloading Index (PRD §5.9).
@@ -49,7 +49,59 @@ export const badgeCopy: Record<BadgeProgress["id"], { title: string; detail: str
     detail: "Tiga kali merevisi drafmu secara substansial.",
     image: "/game/badge-tekun.webp",
   },
+  bangkit: {
+    title: "Bangkit",
+    detail: "Mendapat poin proses yang terlewat di tugas sebelumnya.",
+    image: "/game/badge-bangkit.webp",
+  },
 };
+
+export const missionCopy: Record<MissionId, string> = {
+  light_posts: "Nyalakan 3 pos",
+  ask_well: "Minta petunjuk atau ajukan pertanyaan reflektif ke NALAR",
+  revise_deeply: "Revisi drafmu sampai berubah berarti",
+};
+
+// Which Poin Nalar each post can give, in the order a student meets them.
+export const postKinds: Record<WorkflowStage, ProcessPointKind[]> = {
+  "1_independent_effort": ["independent_draft"],
+  "2_guided_questioning": ["hint_request", "reflective_question"],
+  "3_ai_evaluation": ["critical_evaluation"],
+  "4_revision_finalization": ["substantial_revision"],
+  "5_reflection": ["specific_reflection", "journey_complete"],
+};
+
+export const POINT_VALUES: Record<ProcessPointKind, number> = {
+  independent_draft: 20,
+  hint_request: 10,
+  reflective_question: 15,
+  critical_evaluation: 20,
+  substantial_revision: 25,
+  specific_reflection: 20,
+  journey_complete: 10,
+};
+
+export const weekdayShort = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+
+const levelKey = (userId: string) => `nalar:level-seen:${userId}`;
+
+// The level the student last saw, so a level-up is celebrated once.
+export function lastSeenLevel(userId: string): number | null {
+  try {
+    const value = Number(localStorage.getItem(levelKey(userId)));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function markLevelSeen(userId: string, level: number) {
+  try {
+    localStorage.setItem(levelKey(userId), String(level));
+  } catch {
+    // Without storage the celebration may show again; nothing else depends on it.
+  }
+}
 
 export const postNames: Record<WorkflowStage, string> = {
   "1_independent_effort": "Upaya mandiri",

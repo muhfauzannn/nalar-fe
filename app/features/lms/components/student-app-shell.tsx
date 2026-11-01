@@ -11,6 +11,8 @@ import {
 import {
   BookOpen,
   GraduationCap,
+  Award,
+  Globe2,
   LayoutDashboard,
   LogOut,
   PencilRuler,
@@ -47,6 +49,8 @@ import type { StudentShellData } from "../types";
 
 const navigationIcons: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
+  "/dunia": Globe2,
+  "/lencana": Award,
   "/courses": BookOpen,
   "/manage": PencilRuler,
 };
@@ -56,12 +60,16 @@ const navigationIcons: Record<string, LucideIcon> = {
 function sectionFor(pathname: string) {
   if (pathname.startsWith("/manage")) return "/manage";
   if (pathname === "/dashboard") return "/dashboard";
+  if (pathname === "/dunia") return "/dunia";
+  if (pathname === "/lencana") return "/lencana";
   return "/courses";
 }
 
 function isAppPath(pathname: string) {
   return (
     pathname === "/dashboard" ||
+    pathname === "/dunia" ||
+    pathname === "/lencana" ||
     pathname === "/courses" ||
     pathname.startsWith("/courses/") ||
     pathname === "/manage" ||

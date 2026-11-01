@@ -351,7 +351,7 @@ export type PointEvent = EarnedPoint & {
 };
 
 export type BadgeProgress = {
-  id: "penjelajah" | "penjelas" | "tekun";
+  id: "penjelajah" | "penjelas" | "tekun" | "bangkit";
   progress: number;
   target: number;
   earned: boolean;
@@ -370,15 +370,40 @@ export type IslandData = {
     dueAt: string | null;
     open: boolean;
     submissionStatus: string | null;
-    posts: Array<{ stage: WorkflowStage; status: PostStatus; points: number }>;
+    posts: Array<{ stage: WorkflowStage; status: PostStatus; points: number; earned: ProcessPointKind[] }>;
     chestOpen: boolean;
     points: number;
   }>;
   recent: PointEvent[];
 };
 
+export type LevelProgress = { level: number; title: string; into: number; needed: number };
+
+export type MissionId = "light_posts" | "ask_well" | "revise_deeply";
+
+// Level, weekly rhythm and missions come from Poin Nalar and completed stages
+// only; the AI Offloading Index never feeds them.
 export type PointsData = {
   total: number;
+  level: LevelProgress;
+  week: { activeDays: number[]; target: number; streakWeeks: number; daysLeft: number };
+  missions: Array<{ id: MissionId; progress: number; target: number }>;
   badges: BadgeProgress[];
   recent: PointEvent[];
+};
+
+export type WorldData = PointsData & {
+  islands: Array<{
+    course: { id: string; name: string; subjectName: string };
+    halls: number;
+    hallsDone: number;
+    points: number;
+    bridge: { planks: number; total: number; students: number };
+    current: {
+      assignmentId: string;
+      title: string;
+      postsDone: number;
+      post: { index: number; stage: WorkflowStage } | null;
+    } | null;
+  }>;
 };

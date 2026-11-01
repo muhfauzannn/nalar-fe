@@ -15,6 +15,7 @@ import type {
   QuizAnswerSaveResult,
   QuizData,
   StudentShellData,
+  WorldData,
   WorkflowStage,
 } from "../types";
 
@@ -59,6 +60,10 @@ export const studentApi = {
   island: (request: Request, courseId: string) =>
     studentRequest(request, () =>
       http.get<IslandData>(`/api/student/courses/${courseId}/island`, forwardedRequestInit(request)),
+    ),
+  world: (request: Request) =>
+    studentRequest(request, () =>
+      http.get<WorldData>("/api/student/world", forwardedRequestInit(request)),
     ),
   points: (request: Request) =>
     studentRequest(request, () =>

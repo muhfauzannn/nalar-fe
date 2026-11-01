@@ -25,10 +25,12 @@ const labelPlacement: Record<WorkflowStage, string> = {
 export function IslandJourney({
   building,
   backTo,
+  onSelectPost,
   className,
 }: {
   building: Building;
   backTo: string;
+  onSelectPost: (stage: WorkflowStage) => void;
   className?: string;
 }) {
   const href = `/assignments/${building.assignmentId}`;
@@ -64,11 +66,12 @@ export function IslandJourney({
       {building.posts.map((post, index) => {
         const at = padPositions[post.stage];
         return (
-          <Link
+          <button
             key={post.stage}
-            to={href}
-            aria-label={`Pos ${index + 1}, ${postNames[post.stage]}: ${statusName[post.status]}`}
-            className="group absolute block aspect-[2.6/1] w-[21%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] outline-none focus-visible:ring-3 focus-visible:ring-[#18153a]"
+            type="button"
+            onClick={() => onSelectPost(post.stage)}
+            aria-label={`Pos ${index + 1}, ${postNames[post.stage]}: ${statusName[post.status]}. Lihat rincian pos`}
+            className="group absolute block aspect-[2.6/1] cursor-pointer w-[21%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] outline-none focus-visible:ring-3 focus-visible:ring-[#18153a]"
             style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
           >
             <span
@@ -83,7 +86,7 @@ export function IslandJourney({
                   "bg-[radial-gradient(closest-side,rgb(211_197_248/0.85),rgb(211_197_248/0.45)_65%,transparent)]",
               )}
             />
-          </Link>
+          </button>
         );
       })}
 

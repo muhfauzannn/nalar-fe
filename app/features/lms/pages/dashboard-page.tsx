@@ -22,26 +22,42 @@ import {
 import { Separator } from "~/components/ui/separator";
 import { CourseCard } from "../components/course-card";
 import { formatDateTime, getGreeting, sentenceStatus } from "../lib/format";
-import { badgeCopy } from "../lib/game";
+import { LevelBar, LevelRing, LevelUpMoment, Missions, StreakChip, WeekTarget } from "../components/progress-widgets";
+import { useStudentId } from "../hooks/use-student-id";
 import type { DashboardData, PointsData } from "../types";
 
 export function DashboardPage({ data, points }: { data: DashboardData; points: PointsData | null }) {
   const firstName = data.user.name.split(/\s+/)[0] || "Siswa";
+  const studentId = useStudentId();
   const continueCourse =
     data.courses.find((course) => course.status === "published") ??
     data.courses[0];
 
   return (
     <div className="flex flex-col gap-10 lg:gap-12">
+      {points && studentId && <LevelUpMoment userId={studentId} points={points} />}
       <PageHeader
         title={`${getGreeting()}, ${firstName}.`}
         actions={
-          continueCourse && (
-            <Button size="lg" render={<Link to={`/courses/${continueCourse.id}`} />}>
-              Lanjut belajar
-              <ArrowRight data-icon="inline-end" />
-            </Button>
-          )
+          <>
+            {points && (
+              <Link
+                to="/dunia"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-card pl-1.5 pr-4 font-heading font-semibold shadow-card ring-1 ring-border transition-transform duration-150 active:scale-[0.97]"
+              >
+                <img src="/game/coin.webp" alt="" width={125} height={128} className="size-7" />
+                <span className="tabular-nums">{points.total.toLocaleString("id-ID")}</span>
+                <span className="sr-only">Poin Nalar, buka peta dunia</span>
+              </Link>
+            )}
+            {points && <StreakChip weeks={points.week.streakWeeks} className="h-10" />}
+            {continueCourse && (
+              <Button size="lg" render={<Link to={`/courses/${continueCourse.id}`} />}>
+                Lanjut belajar
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -58,40 +74,40 @@ export function DashboardPage({ data, points }: { data: DashboardData; points: P
             aria-hidden="true"
             className="pointer-events-none absolute -right-16 -bottom-24 hidden w-[26rem] select-none object-contain opacity-20 xl:block"
           />
-          <div className="relative flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
-            <div className="flex min-w-0 flex-1 flex-col gap-5">
-              <h2
-                id="learning-progress-title"
-                className="font-heading text-xl font-semibold tracking-tight text-balance sm:text-2xl"
-              >
-                Progres belajar
-              </h2>
-              <div className="flex max-w-lg flex-col gap-3">
-                <p className="flex items-baseline gap-3">
-                  <span className="font-heading text-5xl font-semibold tracking-tight tabular-nums">
-                    {data.summary.progress}%
-                  </span>
-                  <span className="text-sm text-primary-foreground/75">
-                    {data.summary.completedItems} dari {data.summary.totalItems} aktivitas
-                    selesai
-                  </span>
-                </p>
-                <div
-                  role="progressbar"
-                  aria-label="Progres keseluruhan"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={data.summary.progress}
-                  className="h-2 overflow-hidden rounded-full bg-primary-foreground/15"
-                >
-                  <div
-                    className="h-full rounded-full bg-brand-mint"
-                    style={{ width: `${data.summary.progress}%` }}
-                  />
+          <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:p-10">
+            {points ? (
+              <div className="flex min-w-0 items-center gap-5 sm:gap-6">
+                <LevelRing level={points.level} size={104} className="max-sm:hidden" />
+                <LevelRing level={points.level} size={76} className="sm:hidden" />
+                <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+                  <h2 id="learning-progress-title" className="font-heading text-2xl font-bold tracking-tight text-balance sm:text-3xl">
+                    {points.level.title}
+                  </h2>
+                  <LevelBar level={points.level} className="max-w-md" />
+                  <p className="text-sm text-primary-foreground/75">
+                    <strong className="font-semibold text-primary-foreground tabular-nums">
+                      {points.level.into} / {points.level.needed}
+                    </strong>{" "}
+                    Poin Nalar · {points.level.needed - points.level.into} lagi ke Level {points.level.level + 1}
+                  </p>
+                  <p className="text-xs text-primary-foreground/60 tabular-nums">
+                    Progres belajar {data.summary.progress}% · {data.summary.completedItems} dari {data.summary.totalItems} aktivitas selesai
+                  </p>
                 </div>
               </div>
-            </div>
-            {points && <PointsSummary points={points} />}
+            ) : (
+              <div className="flex flex-col gap-3">
+                <h2 id="learning-progress-title" className="font-heading text-xl font-semibold tracking-tight sm:text-2xl">
+                  Progres belajar
+                </h2>
+                <p className="font-heading text-5xl font-semibold tracking-tight tabular-nums">{data.summary.progress}%</p>
+              </div>
+            )}
+            {points && (
+              <div className="rounded-2xl bg-primary-foreground/10 p-4 lg:min-w-[17rem]">
+                <WeekTarget week={points.week} />
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -142,7 +158,20 @@ export function DashboardPage({ data, points }: { data: DashboardData; points: P
           )}
         </div>
 
-        <aside aria-labelledby="upcoming-title" className="min-w-0 xl:sticky xl:top-24">
+        <aside aria-labelledby="upcoming-title" className="flex min-w-0 flex-col gap-5 xl:sticky xl:top-24">
+          {points && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Misi minggu ini</CardTitle>
+                <CardAction>
+                  <span className="text-xs text-muted-foreground">sisa {points.week.daysLeft + 1} hari</span>
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                <Missions missions={points.missions} />
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle id="upcoming-title">Perlu diselesaikan</CardTitle>
@@ -198,37 +227,6 @@ export function DashboardPage({ data, points }: { data: DashboardData; points: P
           </Card>
         </aside>
       </section>
-    </div>
-  );
-}
-
-// Poin Nalar across all courses, with the badges earned so far. Process only:
-// the AI Offloading Index never appears here.
-function PointsSummary({ points }: { points: PointsData }) {
-  const earned = points.badges.filter((badge) => badge.earned);
-  return (
-    <div className="flex items-center gap-4 rounded-xl bg-primary-foreground/10 px-4 py-3 lg:shrink-0">
-      <img src="/game/coin.webp" alt="" width={125} height={128} className="size-12 shrink-0" />
-      <div className="min-w-0">
-        <p className="font-heading text-2xl font-semibold tabular-nums">{points.total}</p>
-        <p className="text-sm text-primary-foreground/75">Poin Nalar</p>
-      </div>
-      {earned.length > 0 && (
-        <ul className="ml-2 flex -space-x-2" aria-label="Lencana yang sudah didapat">
-          {earned.map((badge) => (
-            <li key={badge.id}>
-              <img
-                src={badgeCopy[badge.id].image}
-                alt={badgeCopy[badge.id].title}
-                title={badgeCopy[badge.id].title}
-                width={192}
-                height={200}
-                className="size-10"
-              />
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

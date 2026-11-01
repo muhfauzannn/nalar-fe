@@ -1,10 +1,12 @@
 import { Users } from "lucide-react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { cn } from "~/lib/utils";
 import { IslandJourney } from "../components/island-journey";
+import { PostSheet } from "../components/post-sheet";
 import { badgeCopy, postNames } from "../lib/game";
-import type { BadgeProgress, IslandData, PostStatus } from "../types";
+import type { BadgeProgress, IslandData, PostStatus, WorkflowStage } from "../types";
 
 type Building = IslandData["buildings"][number];
 
@@ -32,6 +34,7 @@ export function IslandPage({ data }: { data: IslandData }) {
     data.buildings.find((item) => !item.chestOpen && item.open) ??
     data.buildings[0];
   const backTo = `/courses/${data.course.id}`;
+  const [openPost, setOpenPost] = useState<WorkflowStage | null>(null);
 
   return (
     <div className="rounded-[2rem] bg-[#d6ccf4] p-3 text-[#18153a] [color-scheme:light] sm:p-6">
@@ -48,6 +51,7 @@ export function IslandPage({ data }: { data: IslandData }) {
           <IslandJourney
             building={selected}
             backTo={backTo}
+            onSelectPost={setOpenPost}
             className="mx-auto max-w-[37.5rem] flex-[1_1_32.5rem]"
           />
 
@@ -79,11 +83,12 @@ export function IslandPage({ data }: { data: IslandData }) {
             )}
 
             <Header building={selected} data={data} />
-            <PadList building={selected} />
+            <PadList building={selected} onSelect={setOpenPost} />
             <ChestCard building={selected} />
             <PrimaryAction building={selected} />
             <IslandStats data={data} />
           </section>
+          <PostSheet building={selected} stage={openPost} onOpenChange={(open) => !open && setOpenPost(null)} />
         </div>
       )}
     </div>
@@ -113,7 +118,7 @@ function Header({ building, data }: { building: Building; data: IslandData }) {
   );
 }
 
-function PadList({ building }: { building: Building }) {
+function PadList({ building, onSelect }: { building: Building; onSelect: (stage: WorkflowStage) => void }) {
   const started = building.submissionStatus !== null;
   return (
     <ol className="rounded-[1.75rem] bg-white px-3 py-2">
@@ -132,7 +137,15 @@ function PadList({ building }: { building: Building }) {
                   : "Tugas sudah ditutup"
                 : `Terbuka setelah pos ${index}`;
         return (
-          <li key={post.stage} className={cn("flex items-center gap-3.5 rounded-[1.125rem] p-3", style.row)}>
+          <li key={post.stage}>
+            <button
+              type="button"
+              onClick={() => onSelect(post.stage)}
+              className={cn(
+                "flex w-full items-center gap-3.5 rounded-[1.125rem] p-3 text-left transition-[background-color,transform] duration-150 hover:bg-[#f6f3fd] active:scale-[0.99]",
+                style.row,
+              )}
+            >
             <span
               className={cn(
                 "flex size-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-bold",
@@ -146,6 +159,7 @@ function PadList({ building }: { building: Building }) {
               <p className="mt-0.5 text-[0.8125rem] text-[#5e5e72]">{state}</p>
             </div>
             <span className={cn("shrink-0 text-[0.8125rem] font-semibold", style.tagClass)}>{style.tag}</span>
+            </button>
           </li>
         );
       })}

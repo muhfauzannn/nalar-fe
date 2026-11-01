@@ -1,0 +1,222 @@
+import { ChevronRight, Plus } from "lucide-react";
+import { Link } from "react-router";
+
+import { cn } from "~/lib/utils";
+import { LevelBar, LevelUpMoment, Missions, StreakChip } from "../components/progress-widgets";
+import { useStudentId } from "../hooks/use-student-id";
+import { missionCopy, postNames } from "../lib/game";
+import type { WorldData } from "../types";
+
+type Island = WorldData["islands"][number];
+
+// Where each island's sign sits on /game/world-map.webp (share of width and
+// height), for the three islands that hold courses. The misty fourth island
+// invites the student to join another course.
+const anchors = [
+  { x: 0.33, y: 0.2 },
+  { x: 0.68, y: 0.06 },
+  { x: 0.8, y: 0.46 },
+];
+const misty = { x: 0.17, y: 0.3 };
+
+// The canvas "3D · Peta dunia": every course is a floating island, with the
+// student's level, Poin Nalar and weekly streak above and where they left off
+// below. Nothing on it comes from the AI Offloading Index.
+export function WorldPage({ data, name }: { data: WorldData; name: string }) {
+  const studentId = useStudentId();
+  const shown = data.islands.slice(0, anchors.length);
+  const more = data.islands.slice(anchors.length);
+  const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? null;
+  const mission = data.missions.find((item) => item.progress < item.target) ?? null;
+
+  return (
+    <div className="flex flex-col gap-4 text-[#18153a] [color-scheme:light]">
+      {studentId && <LevelUpMoment userId={studentId} points={data} />}
+
+      <div className="relative isolate overflow-hidden rounded-[2rem] bg-[#d6ccf4]">
+        <img
+          src="/game/world-map.webp"
+          alt="Dunia Bernalar: pulau-pulau melayang, satu untuk setiap course"
+          width={1440}
+          height={960}
+          className="block aspect-[3/2] w-full select-none object-cover max-md:aspect-[4/5]"
+          draggable={false}
+        />
+
+        <header className="absolute inset-x-3 top-3 flex flex-wrap items-center gap-2 sm:inset-x-4 sm:top-4">
+          <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/92 py-2 pl-2 pr-4 shadow-sm">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#18153a] font-heading font-bold text-white">
+              {name.slice(0, 1).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">
+                {name.split(/\s+/)[0]} · Level {data.level.level}
+              </p>
+              <LevelBar level={data.level} className="mt-1 h-1.5 w-28 bg-[#ece7fb]" />
+            </div>
+          </div>
+          <span className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white/92 pl-2 pr-4 font-heading font-semibold shadow-sm">
+            <img src="/game/coin.webp" alt="" width={125} height={128} className="size-8" />
+            <span className="tabular-nums">{data.total.toLocaleString("id-ID")}</span>
+            <span className="sr-only">Poin Nalar</span>
+          </span>
+          <StreakChip weeks={data.week.streakWeeks} className="h-12 rounded-2xl" />
+        </header>
+
+        {shown.map((island, index) => (
+          <IslandSign key={island.course.id} island={island} at={anchors[index]!} highlighted={island === active} />
+        ))}
+
+        <Link
+          to="/courses/join"
+          className="absolute hidden -translate-x-1/2 rounded-2xl bg-[#18153a]/80 px-3.5 py-2 text-[#ece7fb] transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] xl:block"
+          style={{ left: `${misty.x * 100}%`, top: `${misty.y * 100}%` }}
+        >
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            <Plus className="size-4" aria-hidden="true" />
+            Pulau berikutnya
+          </span>
+          <span className="text-xs opacity-80">Gabung course lain</span>
+        </Link>
+
+        <aside className="absolute bottom-4 right-4 hidden w-[22rem] flex-col gap-3 xl:flex">
+          <Journey island={active} />
+          {mission && <MissionStrip mission={mission} />}
+          {active && <Bridge island={active} />}
+        </aside>
+      </div>
+
+      <div className="grid items-start gap-3 md:grid-cols-2 xl:hidden">
+        <Journey island={active} />
+        <div className="rounded-[1.5rem] bg-card p-4 text-card-foreground shadow-card ring-1 ring-border">
+          <p className="mb-3 font-heading font-semibold">Misi minggu ini</p>
+          <Missions missions={data.missions} />
+        </div>
+        {active && <Bridge island={active} />}
+      </div>
+
+      {(more.length > 0 || data.islands.length === 0) && (
+        <section aria-label="Pulau lainnya" className="flex flex-wrap gap-2">
+          {more.map((island) => (
+            <Link
+              key={island.course.id}
+              to={`/courses/${island.course.id}/island`}
+              className="flex items-center gap-2 rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-card-foreground shadow-card ring-1 ring-border"
+            >
+              Pulau {island.course.subjectName}
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          ))}
+          {data.islands.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Belum ada pulau. Gabung course dengan kode dari gurumu untuk membuka pulau pertamamu.
+            </p>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function IslandSign({ island, at, highlighted }: { island: Island; at: { x: number; y: number }; highlighted: boolean }) {
+  const current = island.current;
+  const lit = current?.postsDone ?? 0;
+  return (
+    <Link
+      to={`/courses/${island.course.id}/island`}
+      className={cn(
+        "absolute max-w-[42%] -translate-x-1/2 rounded-2xl px-3 py-2 shadow-md transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] sm:max-w-[16rem] sm:px-4 sm:py-2.5",
+        highlighted ? "bg-[#18153a] text-white" : "bg-white/95",
+      )}
+      style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
+    >
+      {highlighted && <p className="text-[0.6875rem] text-[#c6c1f1]">Sedang dijelajahi</p>}
+      <p className="truncate font-heading text-sm font-bold sm:text-base">Pulau {island.course.subjectName}</p>
+      {current ? (
+        <>
+          <div className="my-1.5 flex gap-1 max-sm:hidden" aria-hidden="true">
+            {Array.from({ length: 5 }, (_, index) => (
+              <span
+                key={index}
+                className={cn(
+                  "h-1.5 w-6 rounded-full",
+                  index < lit ? "bg-[#4bd29f]" : highlighted ? "bg-white/25" : "bg-[#ece7fb]",
+                )}
+              />
+            ))}
+          </div>
+          <p className={cn("truncate text-xs", highlighted ? "text-[#c6c1f1]" : "text-[#5e5e72]")}>
+            {current.title} · {lit}/5 pos
+          </p>
+        </>
+      ) : (
+        <p className={cn("text-xs", highlighted ? "text-[#c6c1f1]" : "text-[#5e5e72]")}>
+          {island.halls === 0 ? "Belum ada balai" : `${island.hallsDone}/${island.halls} balai tuntas`}
+        </p>
+      )}
+    </Link>
+  );
+}
+
+function Journey({ island }: { island: Island | null }) {
+  const current = island?.current ?? null;
+  return (
+    <div className="flex items-center gap-3 rounded-[1.5rem] bg-white p-3.5 text-[#18153a] shadow-md">
+      <span className="size-14 shrink-0 overflow-hidden rounded-2xl bg-[#dff7ee]">
+        <img src="/game/cat-avatar.webp" alt="" width={160} height={188} className="size-full object-cover" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-[#5e5e72]">{current ? "Lanjutkan perjalanan" : "Semua balai tuntas"}</p>
+        <p className="truncate font-semibold">
+          {current?.post
+            ? `Pos ${current.post.index} · ${postNames[current.post.stage]}`
+            : current
+              ? `Masuk balai ${current.title}`
+              : "Tunggu tugas berikutnya dari gurumu"}
+        </p>
+      </div>
+      {current && island && (
+        <Link
+          to={`/courses/${island.course.id}/island?tugas=${current.assignmentId}`}
+          className="flex h-11 shrink-0 items-center rounded-xl bg-[#4bd29f] px-4 text-sm font-bold text-[#04352a] transition-transform duration-150 active:scale-[0.97]"
+        >
+          Masuk
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function MissionStrip({ mission }: { mission: WorldData["missions"][number] }) {
+  return (
+    <div className="rounded-[1.25rem] bg-white/92 px-4 py-3 shadow-sm">
+      <p className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-semibold">Misi: {missionCopy[mission.id]}</span>
+        <span className="text-xs font-semibold tabular-nums">
+          {mission.progress}/{mission.target}
+        </span>
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#ece7fb]" aria-hidden="true">
+        <div className="h-full rounded-full bg-[#4bd29f]" style={{ width: `${(mission.progress / mission.target) * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// A class target: one plank per finished journey, nobody named or ranked.
+function Bridge({ island }: { island: Island }) {
+  const { planks, total } = island.bridge;
+  return (
+    <div className="rounded-[1.25rem] bg-white/92 px-4 py-3 text-[#18153a] shadow-sm ring-1 ring-black/5">
+      <p className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-semibold">Jembatan kelas {island.course.name}</span>
+        <span className="text-xs font-semibold tabular-nums">
+          {planks}/{total}
+        </span>
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#ece7fb]" aria-hidden="true">
+        <div className="h-full rounded-full bg-[#4bd29f]" style={{ width: `${total ? (planks / total) * 100 : 0}%` }} />
+      </div>
+    </div>
+  );
+}
