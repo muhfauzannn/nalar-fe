@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Form, Link, useSearchParams } from "react-router";
 import { LABS } from "~/features/labs";
+import { gameToast, useOnBecomeTrue } from "~/features/game-feel";
 import { cn } from "~/lib/utils";
 
 import { PageHeader } from "~/components/layout/page-header";
@@ -50,6 +51,9 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
   const labs = (loaderData.labs ?? []).filter((lab) => LABS[lab.labKey]);
   const room = labs.length > 0 && params.get("ruang") === "lab" ? "lab" : "baca";
   const completed = loaderData.progressStatus === "completed";
+  useOnBecomeTrue(completed, () =>
+    gameToast({ title: "Perpustakaan tuntas", sub: `${loaderData.title} selesai dibaca`, sound: "small" }),
+  );
   const contentBlocks = loaderData.content
     ?.trim()
     .split(/\n{2,}/)

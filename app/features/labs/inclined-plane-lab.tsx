@@ -1,6 +1,7 @@
 import { Check, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
+import { announcePoints, flyCoin, HAPTIC, haptic, playSound } from "~/features/game-feel";
 import { cn } from "~/lib/utils";
 
 // Lab "Bidang miring" (Fisika SMA kelas X, dinamika). A plank hinged on a base
@@ -177,15 +178,25 @@ export function InclinedPlaneLab({
     setPhase("done");
     const ok = solves(challenge.id, angle, surface);
     if (!ok) {
+      // Gentle, never a punishment: a soft low note and a hint.
+      playSound("bonk");
+      haptic(HAPTIC.tap);
       setFeedback({ ok: false, text: hintFor(challenge.id, angle, surface) });
       return;
     }
+    playSound("small");
+    haptic(HAPTIC.award);
     setFeedback({ ok: true, text: "Tepat!" });
     if (!done.includes(challenge.id)) {
       setDone((list) => [...list, challenge.id]);
       try {
         const points = await onSolve(challenge.id);
         setFeedback({ ok: true, text: "Tepat!", points });
+        if (points > 0 && svg.current) {
+          const box = svg.current.getBoundingClientRect();
+          flyCoin({ x: box.left + box.width / 2, y: box.top + box.height * 0.4 });
+          window.setTimeout(() => announcePoints(points), 800);
+        }
       } catch {
         setFeedback({ ok: true, text: "Tepat! Poinnya belum tersimpan, coba lagi nanti." });
       }

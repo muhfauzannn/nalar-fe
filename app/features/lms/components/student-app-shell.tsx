@@ -22,6 +22,7 @@ import {
 import { Brand } from "~/components/layout/brand";
 import { cn } from "~/lib/utils";
 import { ThemeToggle } from "~/components/layout/theme-toggle";
+import { GameFeelRoot, GameHud, GameToaster, SoundToggle } from "~/features/game-feel";
 import { Separator } from "~/components/ui/separator";
 import {
   Sidebar,
@@ -250,7 +251,11 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
             <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
             <p className="truncate text-sm font-medium">{sectionLabel}</p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <GameHud />
+            <SoundToggle />
+            <ThemeToggle />
+          </div>
           {navigation.state !== "idle" && (
             <div
               data-nav-progress
@@ -269,6 +274,8 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
           </div>
         </main>
         <BottomNav section={section} />
+        <GameFeelRoot />
+        <GameToaster />
       </SidebarInset>
     </SidebarProvider>
   );

@@ -1,10 +1,10 @@
 import { Check, Flame } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { cn } from "~/lib/utils";
 import { lastSeenLevel, markLevelSeen, missionCopy, weekdayShort } from "../lib/game";
 import type { PointsData } from "../types";
+import { LevelMoment } from "./game-moments";
 
 // Shared pieces of the canvas "Dashboard siswa" and "Dunia": the level ring,
 // the weekly target, missions and the level-up moment. Everything shown here
@@ -139,51 +139,21 @@ export function Missions({ missions, className }: { missions: PointsData["missio
 // The canvas "Naik level" moment, shown once per new level. The first visit
 // only records the level, so nobody is greeted with a level-up for old work.
 export function LevelUpMoment({ userId, points }: { userId: string; points: PointsData }) {
-  const [open, setOpen] = useState(false);
+  const [before, setBefore] = useState<number | null>(null);
   useEffect(() => {
     const seen = lastSeenLevel(userId);
-    if (seen !== null && points.level.level > seen) setOpen(true);
+    if (seen !== null && points.level.level > seen) setBefore(seen);
     else markLevelSeen(userId, points.level.level);
   }, [userId, points.level.level]);
-
-  const close = (next: boolean) => {
-    setOpen(next);
-    if (!next) markLevelSeen(userId, points.level.level);
-  };
-  const earned = points.badges.filter((badge) => badge.earned).length;
-
+  if (before === null) return null;
   return (
-    <Dialog open={open} onOpenChange={close}>
-      <DialogContent
-        showCloseButton={false}
-        className="max-w-[calc(100%-2rem)] gap-0 overflow-hidden bg-[#18153a] p-0 text-center text-white ring-0 sm:max-w-sm"
-      >
-        <div className="relative flex flex-col items-center gap-3 px-6 pb-6 pt-8">
-          <span aria-hidden="true" className="absolute inset-x-0 top-0 h-48 bg-[radial-gradient(closest-side,rgb(75_210_159/0.35),transparent)]" />
-          <p className="relative text-sm font-medium text-[#c6c1f1]">Kamu naik level</p>
-          <img src="/game/cat-celebrate.webp" alt="" width={320} height={318} className="relative size-40 motion-safe:animate-in motion-safe:zoom-in-90 motion-safe:duration-500" />
-          <span className="relative rounded-full bg-[#4bd29f] px-4 py-1 font-heading text-sm font-bold text-[#04352a]">
-            Level {points.level.level}
-          </span>
-          <DialogTitle className="relative font-heading text-2xl font-bold text-white">{points.level.title}</DialogTitle>
-          <DialogDescription className="relative text-sm text-[#c6c1f1]">
-            Poin datang dari cara kerjamu: draf sendiri, pertanyaan yang baik, revisi yang sungguh-sungguh.
-          </DialogDescription>
-          <div className="relative mt-1 grid w-full grid-cols-2 gap-2">
-            <div className="rounded-2xl bg-white/10 p-3">
-              <p className="font-heading text-xl font-bold tabular-nums">{points.total}</p>
-              <p className="text-xs text-[#c6c1f1]">Poin Nalar total</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-3">
-              <p className="font-heading text-xl font-bold tabular-nums">{earned}</p>
-              <p className="text-xs text-[#c6c1f1]">Lencana didapat</p>
-            </div>
-          </div>
-          <DialogClose className="relative mt-2 flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#4bd29f] font-bold text-[#04352a] transition-transform duration-150 active:scale-[0.98]">
-            Mantap, lanjut
-          </DialogClose>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <LevelMoment
+      before={before}
+      points={points}
+      onClose={() => {
+        markLevelSeen(userId, points.level.level);
+        setBefore(null);
+      }}
+    />
   );
 }

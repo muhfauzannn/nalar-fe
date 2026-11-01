@@ -1,10 +1,14 @@
 import { ChevronRight, List, Plus } from "lucide-react";
-import { Link } from "react-router";
+import { useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router";
+
+import { finished, gameGsap, gameToast, playSound, prefersReducedMotion } from "~/features/game-feel";
 
 import { cn } from "~/lib/utils";
 import { LevelBar, LevelUpMoment, Missions, StreakChip } from "../components/progress-widgets";
 import { useStudentId } from "../hooks/use-student-id";
 import { missionCopy, postNames } from "../lib/game";
+import { missionsJustDone } from "../components/game-moments";
 import type { WorldData } from "../types";
 
 type Island = WorldData["islands"][number];
@@ -38,12 +42,36 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
   const more = data.islands.slice(anchors.length);
   const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? null;
   const mission = data.missions.find((item) => item.progress < item.target) ?? null;
+  const navigate = useNavigate();
+  const map = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!studentId) return;
+    missionsJustDone(studentId, data.missions).forEach((item, index) =>
+      window.setTimeout(
+        () => gameToast({ title: "Misi selesai", sub: missionCopy[item.id], points: `${item.target}/${item.target}`, sound: "ding" }),
+        600 + index * 900,
+      ),
+    );
+  }, [studentId, data.missions]);
+
+  // Meso "terbang": the map zooms toward the island before the island opens.
+  function flyTo(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (prefersReducedMotion() || !map.current || event.metaKey || event.ctrlKey) return;
+    event.preventDefault();
+    const box = map.current.getBoundingClientRect(), from = event.currentTarget.getBoundingClientRect();
+    const origin = `${((from.left + from.width / 2 - box.left) / box.width) * 100}% ${((from.top + from.height - box.top) / box.height) * 100}%`;
+    playSound("whoosh");
+    const g = gameGsap();
+    void finished(g.timeline().to(map.current, { scale: 2.4, opacity: 0.2, transformOrigin: origin, duration: 0.6, ease: "power3.in" })).then(() => navigate(href));
+  }
 
   return (
     <div className="flex flex-col gap-4 text-[#18153a] [color-scheme:light] max-md:-mx-4 max-md:-mt-8 sm:max-md:-mx-6">
       {studentId && <LevelUpMoment userId={studentId} points={data} />}
 
       <div className="relative isolate overflow-hidden bg-[#d6ccf4] md:rounded-[2rem]">
+        <div ref={map}>
         <picture>
           <source media="(max-width: 767px)" srcSet="/game/world-map-portrait.webp" width={768} height={1152} />
           <img
@@ -55,6 +83,7 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
             draggable={false}
           />
         </picture>
+        </div>
 
         <header className="absolute inset-x-3 top-3 flex items-center gap-2 sm:inset-x-4 sm:top-4 md:flex-wrap">
           <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/92 py-2 pl-2 pr-4 shadow-sm max-md:flex-1">
@@ -77,7 +106,7 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         </header>
 
         {shown.map((island, index) => (
-          <IslandSign key={island.course.id} island={island} anchor={anchors[index]!} highlighted={island === active} />
+          <IslandSign key={island.course.id} island={island} anchor={anchors[index]!} highlighted={island === active} onFly={flyTo} />
         ))}
 
         <Link
@@ -96,14 +125,14 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         </Link>
 
         <aside className="absolute bottom-4 right-4 hidden w-[22rem] flex-col gap-3 xl:flex">
-          <Journey island={active} />
+          <Journey island={active} onFly={flyTo} />
           {mission && <MissionStrip mission={mission} />}
           {active && <Bridge island={active} />}
         </aside>
       </div>
 
       <div className="grid items-start gap-3 max-md:relative max-md:z-10 max-md:-mt-16 max-md:px-3 md:grid-cols-2 xl:hidden">
-        <Journey island={active} />
+        <Journey island={active} onFly={flyTo} />
         <div className="rounded-[1.5rem] bg-card p-4 text-card-foreground shadow-card ring-1 ring-border">
           <p className="mb-3 font-heading font-semibold">Misi minggu ini</p>
           <Missions missions={data.missions} />
@@ -146,20 +175,26 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
   );
 }
 
+type Fly = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => void;
+
 function IslandSign({
   island,
   anchor,
   highlighted,
+  onFly,
 }: {
   island: Island;
   anchor: (typeof anchors)[number];
   highlighted: boolean;
+  onFly: Fly;
 }) {
   const current = island.current;
   const lit = current?.postsDone ?? 0;
   return (
     <Link
       to={`/courses/${island.course.id}`}
+      data-press
+      onClick={(event) => onFly(event, `/courses/${island.course.id}`)}
       className={cn(
         "absolute max-w-[46%] -translate-x-1/2 rounded-2xl px-3 py-1.5 shadow-md max-md:max-w-[40%] transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] sm:max-w-[16rem] sm:px-4 sm:py-2.5",
         placed,
@@ -196,7 +231,7 @@ function IslandSign({
   );
 }
 
-function Journey({ island }: { island: Island | null }) {
+function Journey({ island, onFly }: { island: Island | null; onFly: Fly }) {
   const current = island?.current ?? null;
   return (
     <div className="flex items-center gap-3 rounded-[1.5rem] bg-white p-3.5 text-[#18153a] shadow-md">
@@ -216,6 +251,8 @@ function Journey({ island }: { island: Island | null }) {
       {current && island && (
         <Link
           to={`/courses/${island.course.id}/balai/${current.assignmentId}`}
+          data-press
+          onClick={(event) => onFly(event, `/courses/${island.course.id}/balai/${current.assignmentId}`)}
           className="flex h-11 shrink-0 items-center rounded-xl bg-[#4bd29f] px-4 text-sm font-bold text-[#04352a] transition-transform duration-150 active:scale-[0.97]"
         >
           Masuk

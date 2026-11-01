@@ -1,9 +1,12 @@
 import { ChevronLeft } from "lucide-react";
-import { Link } from "react-router";
+import { useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router";
+
+import { announcePoints, awardChip, flyCoin, gameGsap, HAPTIC, haptic, playSound, prefersReducedMotion } from "~/features/game-feel";
 
 import { cn } from "~/lib/utils";
-import { padPositions, postNames } from "../lib/game";
-import type { IslandData, WorkflowStage } from "../types";
+import { padPositions, pointCopy, postNames } from "../lib/game";
+import type { EarnedPoint, IslandData, WorkflowStage } from "../types";
 
 type Building = IslandData["buildings"][number];
 
@@ -27,6 +30,10 @@ export function IslandJourney({
   backTo,
   onSelectPost,
   subject,
+  chest = building.chestOpen ? "open" : "locked",
+  onOpenChest,
+  lit,
+  onLitDone,
   className,
 }: {
   building: Building;
@@ -34,12 +41,66 @@ export function IslandJourney({
   onSelectPost: (stage: WorkflowStage) => void;
   /** On phones the island name and progress float next to the back button. */
   subject?: string;
+  chest?: "locked" | "ready" | "open";
+  onOpenChest?: () => void;
+  /** The post that was just completed and the points it earned: played once. */
+  lit?: { stage: WorkflowStage; awards: EarnedPoint[] } | null;
+  onLitDone?: () => void;
   className?: string;
 }) {
   const href = `/assignments/${building.assignmentId}`;
   const current = building.posts.find((post) => post.status === "current");
+  const navigate = useNavigate();
+  const root = useRef<HTMLDivElement>(null);
+  const cat = useRef<HTMLSpanElement>(null);
+  const played = useRef(false);
+
+  // Meso moment "pos menyala": anticipation dip, glow and ring, the crystal
+  // drops in, award chips rise, coins fly to the header, the cat hops on.
+  useEffect(() => {
+    if (!lit || played.current || !root.current) return;
+    played.current = true;
+    const pad = root.current.querySelector<HTMLElement>(`[data-stage="${lit.stage}"]`);
+    if (!pad) return onLitDone?.();
+    const gain = lit.awards.reduce((sum, award) => sum + award.points, 0);
+    const g = gameGsap();
+    if (prefersReducedMotion()) {
+      playSound("chord");
+      haptic(HAPTIC.award);
+      if (gain) announcePoints(gain);
+      onLitDone?.();
+      return;
+    }
+    const box = pad.getBoundingClientRect();
+    const center = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    const timeline = g.timeline({ onComplete: () => onLitDone?.() });
+    timeline
+      .from(pad, { scale: 0.86, duration: 0.14, ease: "power2.in" })
+      .addLabel("act")
+      .add(() => { playSound("chord"); haptic(HAPTIC.award); })
+      .fromTo(pad.querySelector("[data-glow]"), { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.55, ease: "nalar.spring" })
+      .fromTo(pad.querySelector("[data-ring]"), { scale: 0.9, opacity: 0.9 }, { scale: 2.4, opacity: 0, duration: 0.7, ease: "power2.out" }, "<");
+    const crystal = pad.querySelector("[data-crystal]");
+    if (crystal) timeline.fromTo(crystal, { y: -36, opacity: 0, scale: 0.6 }, { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: "bounce.out" }, "<0.05");
+    lit.awards.forEach((award, index) => {
+      timeline.add(awardChip({ x: center.x, y: center.y - 34 - index * 30 }, award.points, pointCopy[award.kind].title), `act+=${0.15 + index * 0.18}`);
+      timeline.add(flyCoin({ x: center.x, y: center.y - 20 }), `act+=${0.35 + index * 0.15}`);
+    });
+    if (gain) timeline.add(() => announcePoints(gain), "act+=0.95");
+    if (cat.current && current) {
+      const from = padPositions[lit.stage], to = padPositions[current.stage];
+      timeline
+        .add(() => playSound("whoosh"), "act+=1.1")
+        .fromTo(cat.current, { left: `${from.x * 100}%`, top: `${from.y * 100}%` }, { left: `${to.x * 100}%`, top: `${to.y * 100}%`, duration: 0.5, ease: "power2.inOut" }, "act+=1.1")
+        .fromTo(cat.current, { y: 0 }, { y: -26, duration: 0.25, yoyo: true, repeat: 1, ease: "power2.out" }, "<");
+    } else {
+      timeline.to({}, { duration: 0.6 });
+    }
+  }, [lit, current, onLitDone]);
+
   return (
     <div
+      ref={root}
       className={cn(
         "relative isolate aspect-[2/3] w-full overflow-hidden rounded-[2rem] bg-[#d6ccf4] text-[#18153a]",
         className,
@@ -80,6 +141,8 @@ export function IslandJourney({
           <button
             key={post.stage}
             type="button"
+            data-stage={post.stage}
+            data-press
             onClick={() => onSelectPost(post.stage)}
             aria-label={`Pos ${index + 1}, ${postNames[post.stage]}: ${statusName[post.status]}. Lihat rincian pos`}
             className="group absolute block aspect-[2.6/1] cursor-pointer w-[21%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] outline-none focus-visible:ring-3 focus-visible:ring-[#18153a]"
@@ -87,6 +150,7 @@ export function IslandJourney({
           >
             <span
               aria-hidden="true"
+              data-glow
               className={cn(
                 "absolute inset-[10%] rounded-[50%]",
                 post.status === "done" &&
@@ -97,6 +161,18 @@ export function IslandJourney({
                   "bg-[radial-gradient(closest-side,rgb(211_197_248/0.85),rgb(211_197_248/0.45)_65%,transparent)]",
               )}
             />
+            <span aria-hidden="true" data-ring className="absolute inset-0 rounded-[50%] border-3 border-white opacity-0" />
+            {post.status === "done" && (
+              <img
+                src="/game/crystal.webp"
+                alt=""
+                data-crystal
+                width={185}
+                height={240}
+                className="pointer-events-none absolute bottom-[55%] left-1/2 w-[46%] -translate-x-1/2 drop-shadow-[0_6px_8px_rgba(24,21,58,0.25)]"
+                draggable={false}
+              />
+            )}
           </button>
         );
       })}
@@ -124,6 +200,7 @@ export function IslandJourney({
 
       {current && (
         <span
+          ref={cat}
           className="pointer-events-none absolute h-[4.75rem] w-16 -translate-x-[30%] -translate-y-[105%] overflow-hidden rounded-[50%] border-3 border-[#4bd29f] bg-white shadow-lg max-sm:h-16 max-sm:w-[3.4rem]"
           style={{ left: `${padPositions[current.stage].x * 100}%`, top: `${padPositions[current.stage].y * 100}%` }}
         >
@@ -131,22 +208,31 @@ export function IslandJourney({
         </span>
       )}
 
-      {building.chestOpen && (
-        <Link
-          to={href}
-          aria-label="Peti terbuka: lihat laporan reflektifmu"
-          className="absolute left-[40%] top-[12%] w-[17%] transition-transform duration-200 hover:-translate-y-1"
-        >
-          <img
-            src="/game/chest.webp"
-            alt=""
-            width={227}
-            height={240}
-            className="w-full drop-shadow-[0_6px_10px_rgba(24,21,58,0.35)]"
-            draggable={false}
-          />
-        </Link>
-      )}
+      <button
+        type="button"
+        data-press
+        onClick={() => (chest === "open" ? navigate(href) : chest === "ready" ? onOpenChest?.() : onSelectPost("5_reflection"))}
+        aria-label={chest === "open" ? "Peti terbuka: lihat laporan reflektifmu" : chest === "ready" ? "Buka peti balai" : "Peti terkunci sampai Pos 5 menyala"}
+        className="absolute left-[40%] top-[11%] w-[17%] transition-transform duration-200 hover:-translate-y-1"
+      >
+        <img
+          src={chest === "open" ? "/game/chest.webp" : "/game/chest-closed.webp"}
+          alt=""
+          width={227}
+          height={240}
+          className={cn(
+            "w-full drop-shadow-[0_6px_10px_rgba(24,21,58,0.35)]",
+            chest === "locked" && "opacity-75 grayscale-[0.85]",
+            chest === "ready" && "motion-safe:animate-[beckon_1.8s_ease-in-out_infinite]",
+          )}
+          draggable={false}
+        />
+        {chest === "ready" && (
+          <span className="absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap rounded-[9px] bg-[#4bd29f] px-2 py-0.5 text-[0.6875rem] font-extrabold text-[#04352a]">
+            Buka peti
+          </span>
+        )}
+      </button>
     </div>
   );
 }

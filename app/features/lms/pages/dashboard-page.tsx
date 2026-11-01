@@ -24,11 +24,24 @@ import { CourseCard } from "../components/course-card";
 import { formatDateTime, getGreeting, sentenceStatus } from "../lib/format";
 import { LevelBar, LevelRing, LevelUpMoment, Missions, StreakChip, WeekTarget } from "../components/progress-widgets";
 import { useStudentId } from "../hooks/use-student-id";
+import { missionsJustDone } from "../components/game-moments";
+import { missionCopy } from "../lib/game";
+import { gameToast } from "~/features/game-feel";
+import { useEffect } from "react";
 import type { DashboardData, PointsData } from "../types";
 
 export function DashboardPage({ data, points }: { data: DashboardData; points: PointsData | null }) {
   const firstName = data.user.name.split(/\s+/)[0] || "Siswa";
   const studentId = useStudentId();
+  useEffect(() => {
+    if (!studentId || !points) return;
+    missionsJustDone(studentId, points.missions).forEach((item, index) =>
+      window.setTimeout(
+        () => gameToast({ title: "Misi selesai", sub: missionCopy[item.id], points: `${item.target}/${item.target}`, sound: "ding" }),
+        600 + index * 900,
+      ),
+    );
+  }, [studentId, points]);
   const continueCourse =
     data.courses.find((course) => course.status === "published") ??
     data.courses[0];

@@ -20,8 +20,10 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Form, Link, useNavigation } from "react-router";
+
+import { enterSilentZone } from "~/features/game-feel";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
@@ -440,6 +442,8 @@ function ActiveStage({
 }) {
   const submission = assignment.submission;
   const stage = submission?.currentStage ?? "1_independent_effort";
+  // Writing a stage is a silent zone: no game sound or vibration until it is left.
+  useEffect(() => enterSilentZone(), [stage]);
   // Sinyal 1: only the two texts the student writes on their own are recorded.
   const recorded = stage === "1_independent_effort" || stage === "4_revision_finalization";
   const writing = useWritingSignals(writingSignalsKey(submission?.id ?? "none", stage));
@@ -467,6 +471,7 @@ function ActiveStage({
             <Form method="post">
               <input type="hidden" name="intent" value="complete-stage" />
               <input type="hidden" name="submissionId" value={submission.id} />
+              <input type="hidden" name="courseId" value={assignment.courseId} />
               <input type="hidden" name="stage" value={stage} />
               <input type="hidden" name="content" value="" />
               <Button type="submit" disabled={working}>
@@ -484,6 +489,7 @@ function ActiveStage({
           >
             <input type="hidden" name="intent" value="complete-stage" />
             <input type="hidden" name="submissionId" value={submission.id} />
+              <input type="hidden" name="courseId" value={assignment.courseId} />
             <input type="hidden" name="stage" value={stage} />
             <input ref={signalsField} type="hidden" name="signals" defaultValue="" />
             <FieldGroup>

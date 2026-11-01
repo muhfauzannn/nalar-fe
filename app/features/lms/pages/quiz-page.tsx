@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
+import { gameToast, HAPTIC, haptic, playSound, useOnBecomeTrue } from "~/features/game-feel";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
@@ -60,6 +61,11 @@ export function QuizPage({
   const navigation = useNavigation();
   const working = navigation.state === "submitting";
   const submitted = loaderData.attempt?.status === "submitted";
+  useOnBecomeTrue(submitted, () => {
+    playSound("stamp");
+    haptic(HAPTIC.award);
+    gameToast({ title: "Arena tuntas", sub: "Nilai kuis tidak menjadi Poin Nalar; cara memperbaikinya yang penting", sound: "ding" });
+  });
   const expired =
     loaderData.attempt?.isExpired || actionCode === "QUIZ_ATTEMPT_EXPIRED";
   const activeAttempt = Boolean(

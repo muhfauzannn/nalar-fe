@@ -1,12 +1,17 @@
 import { Users } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
+
+import { http } from "~/lib/http";
 
 import { cn } from "~/lib/utils";
 import { IslandJourney } from "../components/island-journey";
 import { PostSheet } from "../components/post-sheet";
+import { BadgeMoment, ChestMoment, chestSeen, markBadgeSeen, markChestSeen, newBadges } from "../components/game-moments";
+import { LevelUpMoment } from "../components/progress-widgets";
+import { useStudentId } from "../hooks/use-student-id";
 import { badgeCopy, postNames } from "../lib/game";
-import type { BadgeProgress, IslandData, PostStatus, WorkflowStage } from "../types";
+import type { BadgeProgress, EarnedPoint, IslandData, PointsData, PostStatus, WorkflowStage } from "../types";
 
 type Building = IslandData["buildings"][number];
 
@@ -27,10 +32,51 @@ const segment: Record<PostStatus, string> = {
 // step on the right. Poin Nalar and badges reward how the work was done; the AI
 // Offloading Index is not here and never feeds them. The world keeps its own
 // light palette in both themes, like the artwork it sits on.
-export function BalaiPage({ data, assignmentId }: { data: IslandData; assignmentId: string }) {
+export function BalaiPage({
+  data,
+  assignmentId,
+  lit = null,
+}: {
+  data: IslandData;
+  assignmentId: string;
+  lit?: { stage: WorkflowStage; awards: EarnedPoint[] } | null;
+}) {
   const selected = data.buildings.find((item) => item.assignmentId === assignmentId) ?? null;
   const backTo = `/courses/${data.course.id}`;
   const [openPost, setOpenPost] = useState<WorkflowStage | null>(null);
+  const studentId = useStudentId();
+  const navigate = useNavigate();
+  const location = useLocation();
+  // A chest that the student has not opened on this device yet waits, beckoning.
+  const [chest, setChest] = useState<"locked" | "ready" | "open">(selected?.chestOpen ? "open" : "locked");
+  const [moment, setMoment] = useState<"chest" | { badge: BadgeProgress["id"] } | null>(null);
+  const [badgeQueue, setBadgeQueue] = useState<BadgeProgress["id"][]>([]);
+  const [points, setPoints] = useState<PointsData | null>(null);
+
+  useEffect(() => {
+    if (selected?.chestOpen) setChest(chestSeen(selected.assignmentId) ? "open" : "ready");
+  }, [selected?.chestOpen, selected?.assignmentId]);
+
+  // After the lit post: drop ?nyala so a reload does not replay it, then let
+  // the level-up check run with fresh points.
+  const litDone = useCallback(() => {
+    navigate(location.pathname, { replace: true, preventScrollReset: true });
+    http.get<PointsData>("/api/student/points").then(setPoints).catch(() => {});
+  }, [navigate, location.pathname]);
+
+  function afterChest() {
+    if (selected) markChestSeen(selected.assignmentId);
+    setChest("open");
+    const fresh = studentId ? newBadges(studentId, data.badges) : [];
+    setBadgeQueue(fresh.slice(1));
+    setMoment(fresh[0] ? { badge: fresh[0] } : null);
+  }
+  function afterBadge(id: BadgeProgress["id"]) {
+    if (studentId) markBadgeSeen(studentId, id);
+    const [next, ...rest] = badgeQueue;
+    setBadgeQueue(rest);
+    setMoment(next ? { badge: next } : null);
+  }
 
   return (
     <div className="bg-[#d6ccf4] text-[#18153a] [color-scheme:light] max-md:-mx-4 max-md:-mt-8 max-md:pb-4 sm:max-md:-mx-6 md:rounded-[2rem] md:p-6">
@@ -49,6 +95,10 @@ export function BalaiPage({ data, assignmentId }: { data: IslandData; assignment
             backTo={backTo}
             onSelectPost={setOpenPost}
             subject={data.course.subjectName}
+            chest={chest}
+            onOpenChest={() => setMoment("chest")}
+            lit={lit}
+            onLitDone={litDone}
             className="mx-auto max-md:rounded-none md:max-w-[37.5rem] md:flex-[1_1_32.5rem]"
           />
 
@@ -57,10 +107,13 @@ export function BalaiPage({ data, assignmentId }: { data: IslandData; assignment
             <Header building={selected} data={data} />
             <PadList building={selected} onSelect={setOpenPost} />
             <ChestCard building={selected} />
-            <PrimaryAction building={selected} />
+            <PrimaryAction building={selected} chest={chest} onOpenChest={() => setMoment("chest")} />
             <IslandStats data={data} />
           </section>
           <PostSheet building={selected} stage={openPost} onOpenChange={(open) => !open && setOpenPost(null)} />
+          {moment === "chest" && <ChestMoment points={selected.points} assignmentId={selected.assignmentId} onClose={afterChest} />}
+          {moment && moment !== "chest" && <BadgeMoment badge={moment.badge} onClose={() => afterBadge(moment.badge)} />}
+          {points && studentId && !moment && <LevelUpMoment userId={studentId} points={points} />}
         </div>
       )}
     </div>
@@ -199,11 +252,23 @@ function ChestCard({ building }: { building: Building }) {
   );
 }
 
-function PrimaryAction({ building }: { building: Building }) {
+function PrimaryAction({ building, chest, onOpenChest }: { building: Building; chest: "locked" | "ready" | "open"; onOpenChest: () => void }) {
   const href = `/assignments/${building.assignmentId}`;
   const current = building.posts.findIndex((post) => post.status === "current");
+  if (chest === "ready") {
+    return (
+      <button
+        type="button"
+        data-press
+        onClick={onOpenChest}
+        className="flex min-h-14 items-center justify-center rounded-[1.125rem] bg-[#4bd29f] px-4 text-center font-bold text-[#04352a] hover:bg-[#5fdcab]"
+      >
+        Buka peti balai
+      </button>
+    );
+  }
   const label = building.chestOpen
-    ? "Buka peti"
+    ? "Baca laporan reflektif"
     : current >= 0
       ? `Masuk Pos ${current + 1} · ${postNames[building.posts[current]!.stage]}`
       : building.open
@@ -213,7 +278,8 @@ function PrimaryAction({ building }: { building: Building }) {
   return (
     <Link
       to={href}
-      className="flex min-h-14 items-center justify-center rounded-[1.125rem] bg-[#4bd29f] px-4 text-center font-bold text-[#04352a] transition-transform duration-150 hover:bg-[#5fdcab] active:scale-[0.98]"
+      data-press
+      className="flex min-h-14 items-center justify-center rounded-[1.125rem] bg-[#4bd29f] px-4 text-center font-bold text-[#04352a] hover:bg-[#5fdcab]"
     >
       {label}
     </Link>

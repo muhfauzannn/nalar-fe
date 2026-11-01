@@ -77,6 +77,11 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
       );
       clearWritingSignals(writingSignalsKey(submissionId, submittedStage));
       rememberEarned(params.assignmentId, completion.points);
+      // The post lights up on the hall, where the student sees the path move on.
+      const courseId = formData.get("courseId");
+      if (typeof courseId === "string" && courseId) {
+        return redirect(`/courses/${courseId}/balai/${params.assignmentId}?nyala=${submittedStage}`);
+      }
     } else {
       return {
         error: "Aksi assignment tidak dikenali. Muat ulang halaman lalu coba lagi.",

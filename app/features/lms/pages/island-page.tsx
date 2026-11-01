@@ -1,10 +1,14 @@
 import { Check, ChevronRight, List, Users } from "lucide-react";
+import { useEffect } from "react";
 import { Link } from "react-router";
+
+import { gameGsap, gameToast, haptic, playSound, prefersReducedMotion } from "~/features/game-feel";
 
 import { cn } from "~/lib/utils";
 import { LABS } from "~/features/labs";
 import { formatDateTime } from "../lib/format";
 import { postNames } from "../lib/game";
+import { planksAdded } from "../components/game-moments";
 import type { CourseData, IslandData } from "../types";
 
 // A course as an island (PRD §5.9): every module is a district, and in it the
@@ -104,6 +108,21 @@ export function IslandPage({ course, island }: { course: CourseData; island: Isl
   const allStops = districts.flatMap((district) => district.stops);
   const doneCount = allStops.filter((stop) => stop.done).length;
 
+  // Meso "papan jembatan": a classmate (or you) finished a hall since last time.
+  useEffect(() => {
+    const added = planksAdded(island.course.id, island.bridge.planks);
+    if (added === 0) return;
+    const timer = window.setTimeout(() => {
+      playSound("plank");
+      haptic(12);
+      if (!prefersReducedMotion()) {
+        gameGsap().fromTo("#bridge-chip", { y: -10, scale: 1.15 }, { y: 0, scale: 1, duration: 0.5, ease: "bounce.out" });
+      }
+      gameToast({ title: added === 1 ? "Papan baru di jembatan kelas" : `${added} papan baru di jembatan kelas`, sub: "Tugas yang dituntaskan bersama", points: `${island.bridge.planks}/${island.bridge.total}`, sound: "small" });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [island.course.id, island.bridge.planks, island.bridge.total]);
+
   return (
     <div className="rounded-[2rem] bg-[#d6ccf4] p-3 text-[#18153a] [color-scheme:light] sm:p-6">
       <div className="flex flex-col gap-5">
@@ -141,7 +160,7 @@ export function IslandPage({ course, island }: { course: CourseData; island: Isl
               <span className="tabular-nums">{island.points.total}</span>
               <span className="sr-only">Poin Nalar di pulau ini</span>
             </span>
-            <span className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#f6f3fd] px-3.5 text-sm font-semibold">
+            <span id="bridge-chip" className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#f6f3fd] px-3.5 text-sm font-semibold">
               <Users className="size-4" aria-hidden="true" />
               Jembatan {island.bridge.planks}/{island.bridge.total}
             </span>
@@ -220,6 +239,7 @@ function District({ index, title, stops, nextKey }: { index: number; title: stri
           <li key={stop.key}>
             <Link
               to={stop.href}
+              data-press
               className={cn(
                 "flex items-center gap-3 rounded-[1.125rem] p-2.5 transition-colors duration-150 hover:bg-[#f6f3fd]",
                 stop.key === nextKey && "bg-[#dff7ee] hover:bg-[#d2f3e6]",
