@@ -413,6 +413,99 @@ function Windmill({ scale }: { scale: number }) {
   );
 }
 
+// ---- cobblestone paths --------------------------------------------------------------------
+
+/**
+ * The island's paths, as in the concept art: from the square in front of the
+ * library to every other place and to each hall's first post, around each hall's
+ * posts, and out to the island's front edge. Gentle seeded bends.
+ */
+function pathCurves(layout: IslandLayout, seed: number) {
+  const rand = rng(seed);
+  const hub = new THREE.Vector3(0, 0, 1.7);
+  const curves: THREE.CatmullRomCurve3[] = [];
+  const bend = (from: THREE.Vector3, to: THREE.Vector3) => {
+    const mid = from.clone().lerp(to, 0.5);
+    const side = new THREE.Vector3(-(to.z - from.z), 0, to.x - from.x).normalize().multiplyScalar((rand() - 0.5) * 1.1);
+    return new THREE.CatmullRomCurve3([from, mid.add(side), to]);
+  };
+  const toward = (point: THREE.Vector3, target: THREE.Vector3, by: number) => point.clone().add(target.clone().sub(point).setY(0).normalize().multiplyScalar(by));
+  for (const place of layout.places) {
+    if (place.place === "library") continue;
+    const at = new THREE.Vector3(...hex(place.tile));
+    curves.push(bend(hub, toward(at, hub, 1.25)));
+  }
+  for (const hall of layout.halls) {
+    const pads = hall.pads.map((tile) => new THREE.Vector3(...hex(tile)));
+    curves.push(bend(hub, toward(pads[0]!, hub, 0.95)));
+    curves.push(new THREE.CatmullRomCurve3(pads));
+  }
+  const radius = Math.max(...layout.tiles.map(ring));
+  const edge = new THREE.Vector3(0.45, 0, 1).normalize().multiplyScalar((radius + 0.6) * 2.25);
+  curves.push(bend(hub, edge));
+  return curves;
+}
+
+function CobblePaths({ curves, seed }: { curves: THREE.CatmullRomCurve3[]; seed: number }) {
+  const stones = useRef<THREE.InstancedMesh>(null);
+  const { strip, placements } = useMemo(() => {
+    const rand = rng(seed);
+    const positions: number[] = [];
+    const index: number[] = [];
+    const placed: { p: THREE.Vector3; s: number; r: number }[] = [];
+    const width = 0.46;
+    for (const curve of curves) {
+      const steps = Math.max(4, Math.round(curve.getLength() / 0.22));
+      const base = positions.length / 3;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const p = curve.getPointAt(t);
+        const tangent = curve.getTangentAt(t);
+        const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize().multiplyScalar(width);
+        positions.push(p.x + side.x, 0.012, p.z + side.z, p.x - side.x, 0.012, p.z - side.z);
+        if (i < steps) {
+          const a = base + i * 2;
+          index.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+        }
+        // cobbles: two or three per step, scattered across the path
+        for (let k = 0, n = 2 + Math.floor(rand() * 2); k < n; k++) {
+          const across = (rand() - 0.5) * 1.7;
+          placed.push({ p: p.clone().add(side.clone().multiplyScalar(across)), s: 0.75 + rand() * 0.5, r: rand() * Math.PI });
+        }
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(index);
+    geometry.computeVertexNormals();
+    return { strip: geometry, placements: placed };
+  }, [curves, seed]);
+  useLayoutEffect(() => {
+    const mesh = stones.current;
+    if (!mesh) return;
+    const m = new THREE.Matrix4();
+    const tint = new THREE.Color();
+    const rand = rng(seed + 7);
+    placements.forEach((stone, i) => {
+      m.compose(new THREE.Vector3(stone.p.x, 0.03, stone.p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, stone.r, 0)), new THREE.Vector3(stone.s, 1, stone.s));
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, tint.set(rand() < 0.5 ? "#e9e3f4" : "#d4cce6"));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [placements, seed]);
+  const cobble = useMemo(() => new THREE.CylinderGeometry(0.12, 0.14, 0.05, 7), []);
+  const stoneMat = useMemo(() => new THREE.MeshStandardMaterial({ roughness: 0.9 }), []);
+  const groundMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c7bcdc", roughness: 0.95 }), []);
+  return (
+    <>
+      <mesh geometry={strip} material={groundMat} receiveShadow />
+      <instancedMesh key={placements.length} ref={stones} args={[cobble, stoneMat, placements.length]} receiveShadow />
+    </>
+  );
+}
+
 function DetailIsland({ layout, position, scene }: { layout: IslandLayout; position: Vec3; scene: WorldScene }) {
   const navigate = useNavigate();
   const shot = scene.shot;
@@ -420,10 +513,20 @@ function DetailIsland({ layout, position, scene }: { layout: IslandLayout; posit
   const onIsland = shot.kind === "island" && shot.courseId === layout.courseId;
   const focusHall = shot.kind === "hall" && shot.courseId === layout.courseId ? shot.assignmentId : layout.nextHall;
   const go = (href: string) => navigate(href);
+  const curves = useMemo(() => pathCurves(layout, seed), [layout, seed]);
+  // Nothing grows on the paths.
+  const free = useMemo(() => {
+    const samples = curves.flatMap((curve) => curve.getSpacedPoints(Math.max(4, Math.round(curve.getLength() / 0.6))));
+    return layout.free.filter((tile) => {
+      const [x, , z] = hex(tile);
+      return samples.every((p) => Math.hypot(p.x - x, p.z - z) > 1.25);
+    });
+  }, [curves, layout.free]);
   return (
     <group position={position}>
       <HexBoard tiles={layout.tiles} seed={seed} />
-      <Decor tiles={layout.free} seed={seed + 1} houses={HOUSES} />
+      <CobblePaths curves={curves} seed={seed} />
+      <Decor tiles={free} seed={seed + 1} houses={HOUSES} />
       {layout.places.map((place) => {
         const at = hex(place.tile);
         const piece = PLACE_PIECE[place.place];

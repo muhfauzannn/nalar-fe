@@ -106,29 +106,61 @@ export function dome(r, { seg = 20, squash = 1, lip = 0.06 } = {}) {
  * A storybook cone roof: concave sides, a thick eave that curls out, a little
  * finial ball. flare is how far the eave kicks out (share of r).
  */
-export function spire(r, h, { seg = 14, flare = 0.18, thick = Math.max(0.08, r * 0.1), curve = 1.5 } = {}) {
+export function spire(r, h, { seg = 16, flare = 0.18, thick = Math.max(0.08, r * 0.1), curve = 1.5, rows = 0 } = {}) {
   const pts = [[0, -thick], [r * (1 + flare) - thick * 0.4, -thick], [r * (1 + flare), -thick * 0.3], [r * (1 + flare) * 0.98, 0]];
-  for (let i = 1; i <= 10; i++) {
-    const t = i / 10;
-    pts.push([r * (1 - t) ** curve, h * t]);
+  const steps = rows > 0 ? rows * 4 : 10;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const rr = r * (1 - t) ** curve;
+    // rows: a small lip every few steps, so the cone reads as tiled courses
+    if (rows > 0 && i % 4 === 0 && i < steps) {
+      pts.push([rr, h * t]);
+      pts.push([rr * 0.9, h * t + h * 0.004]);
+    } else pts.push([rr, h * t]);
   }
   return lathe(pts, seg);
 }
 
-/** Thick gable roof (two slabs and a ridge), over a w × d footprint, eaves at y = 0. */
-export function gable(w, d, h, { overhang = 0.22, thick = 0.16 } = {}) {
+/**
+ * Thick gable roof (two slopes and a ridge) over a w × d footprint, eaves at
+ * y = 0. rows > 0 lays each slope as overlapping courses of tiles, each lower
+ * course standing a little proud, so the roof reads as shingled, not a slab.
+ */
+export function gable(w, d, h, { overhang = 0.22, thick = 0.16, rows = 0 } = {}) {
   const half = w / 2 + overhang;
   const slope = Math.atan2(h, w / 2);
   const len = half / Math.cos(slope);
-  const parts = [-1, 1].map((side) => {
-    const slab = box(len, thick, d + overhang * 2, thick * 0.45);
-    slab.translate(0, -thick / 2, 0);
-    slab.rotateZ(side * -slope);
-    slab.translate(side * (len / 2) * Math.cos(slope) * 1, h - (len / 2) * Math.sin(slope), 0);
-    return slab;
-  });
-  const ridge = new THREE.CylinderGeometry(thick * 0.75, thick * 0.75, d + overhang * 2.2, 10).rotateX(Math.PI / 2).translate(0, h + thick * 0.15, 0);
+  const depth = d + overhang * 2;
+  const parts = [];
+  for (const side of [-1, 1]) {
+    const courses = rows > 0 ? rows : 1;
+    for (let k = 0; k < courses; k++) {
+      const piece = (len / courses) * (rows > 0 ? 1.12 : 1);
+      const t = thick * (rows > 0 ? 0.62 : 1);
+      const slab = box(piece, t, depth, t * 0.45);
+      // k = 0 at the ridge; each course further down sits a hair higher off the deck
+      const along = (len / courses) * (k + 0.5);
+      const lift = rows > 0 ? k * thick * 0.12 : 0;
+      slab.translate(0, -t / 2 + lift, 0);
+      slab.rotateZ(side * -slope);
+      slab.translate(side * along * Math.cos(slope), h - along * Math.sin(slope), 0);
+      parts.push(slab);
+    }
+  }
+  const ridge = new THREE.CylinderGeometry(thick * 0.75, thick * 0.75, depth * 1.05, 12).rotateX(Math.PI / 2).translate(0, h + thick * 0.15, 0);
   return merge([...parts, ridge.toNonIndexed()]);
+}
+
+/** A dome with raised ribs (gold by default) and a ring at its foot: observatories, libraries. */
+export function ribbedDome(r, { ribs = 8, squash = 0.9, at = [0, 0, 0], ramp = PAL.roof, rib = PAL.gold } = {}) {
+  const parts = [part(dome(r, { seg: 28, squash, lip: 0.04 }), { ramp, at })];
+  for (let i = 0; i < ribs; i++) {
+    const g = new THREE.TorusGeometry(r * 1.005, Math.max(0.012, r * 0.035), 6, 16, Math.PI / 2);
+    g.scale(1, squash, 1).translate(0, 0.04, 0).rotateY((i / ribs) * Math.PI * 2);
+    parts.push(part(g, { ramp: rib, at }));
+  }
+  parts.push(part(new THREE.TorusGeometry(r * 1.02, Math.max(0.02, r * 0.05), 6, 28).rotateX(Math.PI / 2), { ramp: rib, at: [at[0], at[1] + 0.03, at[2]] }));
+  return parts;
 }
 
 /** A triangular gable end (the wall under a gable roof), depth t. */
@@ -254,36 +286,43 @@ export function stoneCourses(w, h, { at = [0, 0, 0], seed = 3, density = 0.35, s
   return out;
 }
 
-/** A pine with three drooping tiers, widest at the bottom, each a soft skirt with a rolled rim. */
+/** A soft pine: four drooping tiers with rolled rims, widest at the bottom, on a flared trunk. */
 export function pine(h = 1.6, seed = 1) {
   const rand = rng(seed);
   const trunkH = h * 0.2;
-  const parts = [part(drum(h * 0.045, h * 0.065, trunkH + h * 0.12, { seg: 7 }), { ramp: PAL.woodDark })];
+  const parts = [part(K_trunk(h, trunkH + h * 0.12), { ramp: PAL.woodDark })];
   const tiers = [
-    { r: 0.4, y: 0.16, th: 0.36 },
-    { r: 0.31, y: 0.4, th: 0.32 },
-    { r: 0.21, y: 0.62, th: 0.36 },
+    { r: 0.42, y: 0.14, th: 0.3 },
+    { r: 0.35, y: 0.32, th: 0.28 },
+    { r: 0.27, y: 0.5, th: 0.27 },
+    { r: 0.18, y: 0.66, th: 0.32 },
   ];
   tiers.forEach((t, i) => {
     const r = h * t.r, th = h * t.th;
-    // skirt: a rolled rim that droops below the tier, then a concave rise to the tip
-    const g = lathe([[0, -th * 0.12], [r * 0.7, -th * 0.12], [r * 0.98, -th * 0.08], [r, 0], [r * 0.82, th * 0.1], [r * 0.5, th * 0.4], [r * 0.24, th * 0.72], [0, th]], 10);
-    parts.push(part(g, { ramp: i === 1 ? PAL.leaf : PAL.leafDark, at: [0, h * t.y + trunkH * 0.5, 0], rot: [(rand() - 0.5) * 0.06, rand() * 6, (rand() - 0.5) * 0.06] }));
+    // a soft skirt: the rim rolls under, then the tier rises in a gentle concave curve
+    const g = lathe([[0, -th * 0.16], [r * 0.62, -th * 0.17], [r * 0.9, -th * 0.13], [r * 1.0, -th * 0.04], [r * 0.97, th * 0.05], [r * 0.82, th * 0.14], [r * 0.6, th * 0.34], [r * 0.38, th * 0.58], [r * 0.18, th * 0.82], [0, th]], 14);
+    parts.push(part(g, { ramp: i % 2 ? PAL.leaf : PAL.leafDark, at: [0, h * t.y + trunkH * 0.5, 0], rot: [(rand() - 0.5) * 0.06, rand() * 6, (rand() - 0.5) * 0.06] }));
   });
   return parts;
 }
 
-/** A round-crowned tree: trunk and a cluster of blobs. */
+/** A trunk that flares into the ground like roots. */
+function K_trunk(h, len) {
+  return lathe([[0, 0], [h * 0.11, 0], [h * 0.075, h * 0.03], [h * 0.055, h * 0.08], [h * 0.045, len], [0, len]], 10);
+}
+
+/** A round-crowned tree: a flared trunk and a cloud of soft clumps. */
 export function roundTree(h = 1.6, seed = 1) {
   const rand = rng(seed);
-  const parts = [part(drum(h * 0.06, h * 0.09, h * 0.45, { seg: 8 }), { ramp: PAL.wood })];
-  const n = 4;
+  const parts = [part(K_trunk(h * 1.1, h * 0.5), { ramp: PAL.wood })];
+  const n = 7;
   for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + rand();
-    const r = h * (0.22 + rand() * 0.08);
-    parts.push(part(blob(r, seed * 7 + i, { detail: 1, wobble: 0.1 }), { ramp: PAL.leaf, at: [Math.cos(a) * h * 0.14, h * (0.62 + rand() * 0.12), Math.sin(a) * h * 0.14] }));
+    const a = (i / n) * Math.PI * 2 + rand() * 0.4;
+    const ring = i % 2 ? 0.2 : 0.13;
+    const r = h * (0.17 + rand() * 0.06);
+    parts.push(part(blob(r, seed * 7 + i, { detail: 2, wobble: 0.08 }), { ramp: i % 3 ? PAL.leaf : PAL.leafDark, at: [Math.cos(a) * h * ring, h * (0.6 + (i % 2) * 0.12 + rand() * 0.06), Math.sin(a) * h * ring] }));
   }
-  parts.push(part(blob(h * 0.27, seed * 13, { detail: 1 }), { ramp: PAL.leaf, at: [0, h * 0.82, 0] }));
+  parts.push(part(blob(h * 0.24, seed * 13, { detail: 2, wobble: 0.06 }), { ramp: PAL.leaf, at: [0, h * 0.84, 0] }));
   return parts;
 }
 
