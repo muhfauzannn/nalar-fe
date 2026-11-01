@@ -12,12 +12,22 @@ type Island = WorldData["islands"][number];
 // Where each island's sign sits on /game/world-map.webp (share of width and
 // height), for the three islands that hold courses. The misty fourth island
 // invites the student to join another course.
+// `x`/`y` are on the landscape art, `mx`/`my` on the portrait art phones get.
 const anchors = [
-  { x: 0.33, y: 0.2 },
-  { x: 0.68, y: 0.06 },
-  { x: 0.8, y: 0.46 },
+  { x: 0.33, y: 0.2, mx: 0.3, my: 0.3 },
+  { x: 0.68, y: 0.06, mx: 0.74, my: 0.41 },
+  { x: 0.8, y: 0.46, mx: 0.7, my: 0.74 },
 ];
-const misty = { x: 0.17, y: 0.3 };
+const misty = { x: 0.17, y: 0.3, mx: 0.2, my: 0.27 };
+
+const at = (anchor: { x: number; y: number; mx: number; my: number }) =>
+  ({
+    "--x": `${anchor.x * 100}%`,
+    "--y": `${anchor.y * 100}%`,
+    "--mx": `${anchor.mx * 100}%`,
+    "--my": `${anchor.my * 100}%`,
+  }) as React.CSSProperties;
+const placed = "left-[var(--mx)] top-[var(--my)] md:left-[var(--x)] md:top-[var(--y)]";
 
 // The canvas "3D · Peta dunia": every course is a floating island, with the
 // student's level, Poin Nalar and weekly streak above and where they left off
@@ -30,21 +40,24 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
   const mission = data.missions.find((item) => item.progress < item.target) ?? null;
 
   return (
-    <div className="flex flex-col gap-4 text-[#18153a] [color-scheme:light]">
+    <div className="flex flex-col gap-4 text-[#18153a] [color-scheme:light] max-md:-mx-4 max-md:-mt-8 sm:max-md:-mx-6">
       {studentId && <LevelUpMoment userId={studentId} points={data} />}
 
-      <div className="relative isolate overflow-hidden rounded-[2rem] bg-[#d6ccf4]">
-        <img
-          src="/game/world-map.webp"
-          alt="Dunia Bernalar: pulau-pulau melayang, satu untuk setiap course"
-          width={1440}
-          height={960}
-          className="block aspect-[3/2] w-full select-none object-cover max-md:aspect-[4/5]"
-          draggable={false}
-        />
+      <div className="relative isolate overflow-hidden bg-[#d6ccf4] md:rounded-[2rem]">
+        <picture>
+          <source media="(max-width: 767px)" srcSet="/game/world-map-portrait.webp" width={768} height={1152} />
+          <img
+            src="/game/world-map.webp"
+            alt="Dunia Bernalar: pulau-pulau melayang, satu untuk setiap course"
+            width={1440}
+            height={960}
+            className="block aspect-[2/3] w-full select-none object-cover md:aspect-[3/2]"
+            draggable={false}
+          />
+        </picture>
 
-        <header className="absolute inset-x-3 top-3 flex flex-wrap items-center gap-2 sm:inset-x-4 sm:top-4">
-          <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/92 py-2 pl-2 pr-4 shadow-sm">
+        <header className="absolute inset-x-3 top-3 flex items-center gap-2 sm:inset-x-4 sm:top-4 md:flex-wrap">
+          <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/92 py-2 pl-2 pr-4 shadow-sm max-md:flex-1">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#18153a] font-heading font-bold text-white">
               {name.slice(0, 1).toUpperCase()}
             </span>
@@ -52,31 +65,34 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
               <p className="truncate text-sm font-semibold">
                 {name.split(/\s+/)[0]} · Level {data.level.level}
               </p>
-              <LevelBar level={data.level} className="mt-1 h-1.5 w-28 bg-[#ece7fb]" />
+              <LevelBar level={data.level} className="mt-1 h-1.5 w-full max-w-28 bg-[#ece7fb]" />
             </div>
           </div>
-          <span className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white/92 pl-2 pr-4 font-heading font-semibold shadow-sm">
+          <span className="inline-flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-white/92 pl-2 pr-4 font-heading font-semibold shadow-sm md:h-12">
             <img src="/game/coin.webp" alt="" width={125} height={128} className="size-8" />
             <span className="tabular-nums">{data.total.toLocaleString("id-ID")}</span>
             <span className="sr-only">Poin Nalar</span>
           </span>
-          <StreakChip weeks={data.week.streakWeeks} className="h-12 rounded-2xl" />
+          <StreakChip weeks={data.week.streakWeeks} className="h-12 rounded-2xl max-md:hidden" />
         </header>
 
         {shown.map((island, index) => (
-          <IslandSign key={island.course.id} island={island} at={anchors[index]!} highlighted={island === active} />
+          <IslandSign key={island.course.id} island={island} anchor={anchors[index]!} highlighted={island === active} />
         ))}
 
         <Link
           to="/courses/join"
-          className="absolute hidden -translate-x-1/2 rounded-2xl bg-[#18153a]/80 px-3.5 py-2 text-[#ece7fb] transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] xl:block"
-          style={{ left: `${misty.x * 100}%`, top: `${misty.y * 100}%` }}
+          className={cn(
+            "absolute hidden -translate-x-1/2 rounded-2xl bg-[#18153a]/80 px-3.5 py-2 text-[#ece7fb] transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] xl:block",
+            placed,
+          )}
+          style={at(misty)}
         >
           <span className="flex items-center gap-1.5 text-sm font-semibold">
             <Plus className="size-4" aria-hidden="true" />
             Pulau berikutnya
           </span>
-          <span className="text-xs opacity-80">Gabung course lain</span>
+          <span className="text-xs opacity-80 max-md:hidden">Gabung course lain</span>
         </Link>
 
         <aside className="absolute bottom-4 right-4 hidden w-[22rem] flex-col gap-3 xl:flex">
@@ -86,7 +102,7 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         </aside>
       </div>
 
-      <div className="grid items-start gap-3 md:grid-cols-2 xl:hidden">
+      <div className="grid items-start gap-3 max-md:relative max-md:z-10 max-md:-mt-16 max-md:px-3 md:grid-cols-2 xl:hidden">
         <Journey island={active} />
         <div className="rounded-[1.5rem] bg-card p-4 text-card-foreground shadow-card ring-1 ring-border">
           <p className="mb-3 font-heading font-semibold">Misi minggu ini</p>
@@ -95,7 +111,7 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         {active && <Bridge island={active} />}
       </div>
 
-      <section aria-label="Pulau lainnya" className="flex flex-wrap items-center gap-2">
+      <section aria-label="Pulau lainnya" className="flex flex-wrap items-center gap-2 max-md:px-3">
           {more.map((island) => (
             <Link
               key={island.course.id}
@@ -130,19 +146,28 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
   );
 }
 
-function IslandSign({ island, at, highlighted }: { island: Island; at: { x: number; y: number }; highlighted: boolean }) {
+function IslandSign({
+  island,
+  anchor,
+  highlighted,
+}: {
+  island: Island;
+  anchor: (typeof anchors)[number];
+  highlighted: boolean;
+}) {
   const current = island.current;
   const lit = current?.postsDone ?? 0;
   return (
     <Link
       to={`/courses/${island.course.id}`}
       className={cn(
-        "absolute max-w-[42%] -translate-x-1/2 rounded-2xl px-3 py-2 shadow-md transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] sm:max-w-[16rem] sm:px-4 sm:py-2.5",
+        "absolute max-w-[46%] -translate-x-1/2 rounded-2xl px-3 py-1.5 shadow-md max-md:max-w-[40%] transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] sm:max-w-[16rem] sm:px-4 sm:py-2.5",
+        placed,
         highlighted ? "bg-[#18153a] text-white" : "bg-white/95",
       )}
-      style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
+      style={at(anchor)}
     >
-      {highlighted && <p className="text-[0.6875rem] text-[#c6c1f1]">Sedang dijelajahi</p>}
+      {highlighted && <p className="text-[0.6875rem] text-[#c6c1f1] max-md:hidden">Sedang dijelajahi</p>}
       <p className="truncate font-heading text-sm font-bold sm:text-base">Pulau {island.course.subjectName}</p>
       {current ? (
         <>
@@ -158,7 +183,8 @@ function IslandSign({ island, at, highlighted }: { island: Island; at: { x: numb
             ))}
           </div>
           <p className={cn("truncate text-xs", highlighted ? "text-[#c6c1f1]" : "text-[#5e5e72]")}>
-            {current.title} · {lit}/5 pos
+            <span className="max-md:hidden">{current.title} · </span>
+            {lit}/5 pos
           </p>
         </>
       ) : (

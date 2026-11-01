@@ -26,11 +26,14 @@ export function IslandJourney({
   building,
   backTo,
   onSelectPost,
+  subject,
   className,
 }: {
   building: Building;
   backTo: string;
   onSelectPost: (stage: WorkflowStage) => void;
+  /** On phones the island name and progress float next to the back button. */
+  subject?: string;
   className?: string;
 }) {
   const href = `/assignments/${building.assignmentId}`;
@@ -59,9 +62,17 @@ export function IslandJourney({
         <ChevronLeft className="size-5" strokeWidth={2.4} />
       </Link>
 
-      <span className="absolute left-[71.8%] top-[3.5%] max-w-[52%] -translate-x-1/2 truncate rounded-xl bg-[#18153a] px-3 py-1.5 text-[0.8125rem] font-semibold text-white">
+      <span className="absolute left-[71.8%] top-[3.5%] max-w-[52%] -translate-x-1/2 truncate rounded-xl bg-[#18153a] px-3 py-1.5 text-[0.8125rem] font-semibold text-white max-md:hidden">
         {building.title}
       </span>
+      {subject && (
+        <div className="absolute left-[4.5rem] right-3 top-4 min-w-0 rounded-2xl bg-white/92 px-3 py-1.5 md:hidden">
+          <p className="truncate text-[0.6875rem] text-[#5e5e72]">Pulau {subject}</p>
+          <p className="truncate text-sm font-bold">
+            {building.title} · {building.posts.filter((post) => post.status === "done").length}/5
+          </p>
+        </div>
+      )}
 
       {building.posts.map((post, index) => {
         const at = padPositions[post.stage];

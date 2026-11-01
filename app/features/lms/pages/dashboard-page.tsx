@@ -122,7 +122,7 @@ export function DashboardPage({ data, points }: { data: DashboardData; points: P
               id="my-courses-title"
               className="font-heading text-2xl font-semibold tracking-tight"
             >
-              Course saya
+              Pulau saya
             </h2>
             {data.courses.length > 0 && (
               <Button variant="outline" size="sm" render={<Link to="/dunia" />}>

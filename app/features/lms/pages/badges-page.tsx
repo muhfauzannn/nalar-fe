@@ -33,14 +33,14 @@ export function BadgesPage({ data }: { data: PointsData }) {
         </section>
       )}
 
-      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <ul className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {data.badges.map((badge) => {
           const copy = badgeCopy[badge.id];
           return (
             <li
               key={badge.id}
               className={cn(
-                "flex flex-col items-center gap-3 rounded-[1.5rem] p-5 text-center shadow-card ring-1 ring-border",
+                "flex flex-col items-center gap-2 rounded-[1.5rem] p-3.5 text-center shadow-card ring-1 ring-border sm:gap-3 sm:p-5",
                 badge.earned ? "bg-card" : "bg-muted/40",
               )}
             >
@@ -49,14 +49,14 @@ export function BadgesPage({ data }: { data: PointsData }) {
                 alt=""
                 width={192}
                 height={200}
-                className={cn("size-24", !badge.earned && "opacity-40 grayscale")}
+                className={cn("size-16 sm:size-24", !badge.earned && "opacity-40 grayscale")}
               />
               <div>
                 <p className="font-heading font-semibold">
                   {copy.title}
                   <span className="sr-only">{badge.earned ? ", sudah didapat" : ", belum didapat"}</span>
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">{copy.detail}</p>
+                <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{copy.detail}</p>
               </div>
               {!badge.earned && (
                 <div className="mt-auto w-full">

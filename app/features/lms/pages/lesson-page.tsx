@@ -341,7 +341,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
 // the first, its lab the second.
 function RoomSwitch({ room, labs }: { room: "baca" | "lab"; labs: LessonData["labs"] }) {
   const titles = labs.map((lab) => LABS[lab.labKey]?.title).filter(Boolean).join(", ");
-  const tab = (value: "baca" | "lab", label: string, icon: React.ReactNode) => (
+  const tab = (value: "baca" | "lab", label: React.ReactNode, icon: React.ReactNode) => (
     <Link
       to={value === "lab" ? "?ruang=lab" : "?"}
       replace
@@ -360,7 +360,13 @@ function RoomSwitch({ room, labs }: { room: "baca" | "lab"; labs: LessonData["la
   return (
     <div role="tablist" aria-label="Ruang materi" className="flex gap-1 self-start rounded-2xl bg-muted p-1 max-sm:w-full" data-lesson-reveal>
       {tab("baca", "Baca materi", <BookOpen className="size-4" aria-hidden="true" />)}
-      {tab("lab", `Coba di lab${titles ? ` · ${titles}` : ""}`, <FlaskConical className="size-4" aria-hidden="true" />)}
+      {tab(
+        "lab",
+        <>
+          Coba di lab{titles && <span className="max-sm:hidden"> · {titles}</span>}
+        </>,
+        <FlaskConical className="size-4" aria-hidden="true" />,
+      )}
     </div>
   );
 }

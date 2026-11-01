@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { Brand } from "~/components/layout/brand";
+import { cn } from "~/lib/utils";
 import { ThemeToggle } from "~/components/layout/theme-toggle";
 import { Separator } from "~/components/ui/separator";
 import {
@@ -258,7 +259,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
             />
           )}
         </header>
-        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+        <main className="flex-1 px-4 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-8 lg:px-10 lg:py-10">
           <div className="mx-auto w-full max-w-7xl">
             {skeletonPathname ? (
               <StudentRouteSkeleton pathname={skeletonPathname} />
@@ -267,7 +268,53 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
             )}
           </div>
         </main>
+        <BottomNav section={section} />
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+const shortLabels: Record<string, string> = {
+  "/dashboard": "Beranda",
+  "/manage": "Kelola",
+};
+
+// On phones the four destinations sit under the thumb, as in the canvas
+// "Dunia (HP)"; the sidebar stays for wider screens.
+function BottomNav({ section }: { section: string }) {
+  return (
+    <nav
+      aria-label="Navigasi utama"
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden"
+    >
+      <ul className="mx-auto flex max-w-md">
+        {studentNav.map((item) => {
+          const Icon = navigationIcons[item.href] ?? BookOpen;
+          const active = item.href === section;
+          return (
+            <li key={item.href} className="flex-1">
+              <NavLink
+                to={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex h-16 flex-col items-center justify-center gap-1 text-[0.6875rem] font-semibold transition-colors duration-150",
+                  active ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-150",
+                    active && "bg-brand-lavender-soft text-brand-lavender-foreground",
+                  )}
+                >
+                  <Icon className="size-5" aria-hidden="true" />
+                </span>
+                {shortLabels[item.href] ?? item.label}
+              </NavLink>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

@@ -251,7 +251,7 @@ export function InclinedPlaneLab({
   const surfaceTone = SURFACES[surface].tone;
 
   return (
-    <div className="relative isolate overflow-hidden rounded-[1.75rem] bg-[#ece7fb] text-[#18153a] [color-scheme:light]">
+    <div className="relative isolate flex flex-col overflow-hidden rounded-[1.75rem] bg-[#ece7fb] text-[#18153a] [color-scheme:light] max-sm:gap-2 max-sm:pb-3">
       <svg
         ref={svg}
         viewBox="40 0 880 550"
@@ -399,7 +399,7 @@ export function InclinedPlaneLab({
       </svg>
 
       {/* Challenge strip. */}
-      <div className="absolute left-3 right-3 top-3 flex flex-wrap items-start gap-2 sm:left-4 sm:right-auto sm:max-w-[30rem]">
+      <div className="absolute left-3 right-3 top-3 flex flex-wrap items-start gap-2 max-sm:static max-sm:order-first max-sm:px-3 max-sm:pt-3 sm:left-4 sm:right-auto sm:max-w-[30rem]">
         <ol className="flex gap-1.5" aria-label="Tantangan">
           {CHALLENGES.map((item, index) => {
             const isDone = done.includes(item.id);
@@ -426,7 +426,7 @@ export function InclinedPlaneLab({
       </div>
 
       {/* Surface choice, floating on the bench. */}
-      <div className="absolute bottom-3 left-3 flex gap-1.5 rounded-2xl bg-white/92 p-1.5 shadow-sm sm:bottom-4 sm:left-4" role="radiogroup" aria-label="Permukaan papan">
+      <div className="absolute bottom-3 left-3 flex gap-1.5 rounded-2xl bg-white/92 p-1.5 shadow-sm max-sm:static max-sm:mx-3 max-sm:justify-between sm:bottom-4 sm:left-4" role="radiogroup" aria-label="Permukaan papan">
         {(Object.keys(SURFACES) as Surface[]).map((key) => {
           const fixed = challenge.surface !== undefined;
           return (
@@ -438,7 +438,7 @@ export function InclinedPlaneLab({
               disabled={locked || (fixed && key !== challenge.surface)}
               onClick={() => setSurface(key)}
               className={cn(
-                "flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-colors duration-150 disabled:opacity-35 sm:text-sm",
+                "flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-colors duration-150 disabled:opacity-35 max-sm:min-h-10 max-sm:flex-1 max-sm:justify-center sm:text-sm",
                 surface === key ? "bg-[#18153a] text-white" : "hover:bg-[#ece7fb]",
               )}
             >
@@ -451,8 +451,8 @@ export function InclinedPlaneLab({
       </div>
 
       {/* Release or reset, and the readout. */}
-      <div className="absolute bottom-3 right-3 flex items-end gap-2 sm:bottom-4 sm:right-4">
-        <div className="rounded-2xl bg-white/92 px-3 py-2 text-right text-xs tabular-nums shadow-sm sm:text-sm">
+      <div className="absolute bottom-3 right-3 flex items-end gap-2 max-sm:static max-sm:mx-3 max-sm:items-stretch sm:bottom-4 sm:right-4">
+        <div className="rounded-2xl bg-white/92 px-3 py-2 text-right text-xs tabular-nums shadow-sm max-sm:flex-1 max-sm:text-left sm:text-sm">
           <p>
             θ <strong>{angle.toFixed(1)}°</strong> · a = <strong>{p.acceleration.toFixed(2)}</strong> m/s²
           </p>

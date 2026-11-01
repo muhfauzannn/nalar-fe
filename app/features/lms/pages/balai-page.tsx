@@ -33,7 +33,7 @@ export function BalaiPage({ data, assignmentId }: { data: IslandData; assignment
   const [openPost, setOpenPost] = useState<WorkflowStage | null>(null);
 
   return (
-    <div className="rounded-[2rem] bg-[#d6ccf4] p-3 text-[#18153a] [color-scheme:light] sm:p-6">
+    <div className="bg-[#d6ccf4] text-[#18153a] [color-scheme:light] max-md:-mx-4 max-md:-mt-8 max-md:pb-4 sm:max-md:-mx-6 md:rounded-[2rem] md:p-6">
       {!selected ? (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <img src="/game/academy.webp" alt="" width={304} height={360} className="h-40 w-auto" />
@@ -43,15 +43,17 @@ export function BalaiPage({ data, assignmentId }: { data: IslandData; assignment
           </Link>
         </div>
       ) : (
-        <div className="flex flex-wrap items-start gap-6">
+        <div className="flex flex-wrap items-start md:gap-6">
           <IslandJourney
             building={selected}
             backTo={backTo}
             onSelectPost={setOpenPost}
-            className="mx-auto max-w-[37.5rem] flex-[1_1_32.5rem]"
+            subject={data.course.subjectName}
+            className="mx-auto max-md:rounded-none md:max-w-[37.5rem] md:flex-[1_1_32.5rem]"
           />
 
-          <section className="flex min-w-0 flex-[1_1_23.75rem] flex-col gap-4">
+          <section className="flex min-w-0 flex-[1_1_23.75rem] flex-col gap-4 max-md:px-3">
+            <CurrentPostCard building={selected} onOpen={setOpenPost} />
             <Header building={selected} data={data} />
             <PadList building={selected} onSelect={setOpenPost} />
             <ChestCard building={selected} />
@@ -61,6 +63,41 @@ export function BalaiPage({ data, assignmentId }: { data: IslandData; assignment
           <PostSheet building={selected} stage={openPost} onOpenChange={(open) => !open && setOpenPost(null)} />
         </div>
       )}
+    </div>
+  );
+}
+
+// The canvas "Pulau (HP)": on phones the post you are on sits in a card that
+// overlaps the bottom of the island, with one button to open it.
+function CurrentPostCard({ building, onOpen }: { building: Building; onOpen: (stage: WorkflowStage) => void }) {
+  const index = building.posts.findIndex((post) => post.status === "current");
+  const post = index >= 0 ? building.posts[index]! : null;
+  const next = post ?? (building.chestOpen ? null : building.posts[0]!);
+  if (!next) return null;
+  const at = building.posts.indexOf(next);
+  return (
+    <div className="relative z-10 -mt-16 flex flex-col gap-2.5 rounded-[1.5rem] bg-white p-3.5 shadow-lg md:hidden">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full border-4 border-[#4bd29f] bg-[#dff7ee] text-sm font-bold">
+          {at + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[0.9375rem] font-bold">{postNames[next.stage]}</p>
+          <p className="text-xs text-[#5e5e72]">{post ? "Sedang kamu kerjakan" : "Mulai dari pos pertama"}</p>
+        </div>
+        {building.points > 0 && (
+          <span className="shrink-0 rounded-full bg-[#dff7ee] px-2.5 py-1 text-xs font-bold text-[#0f6e56] tabular-nums">
+            +{building.points}
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => onOpen(next.stage)}
+        className="flex min-h-12 items-center justify-center rounded-2xl bg-[#18153a] text-[0.9375rem] font-semibold text-white transition-transform duration-150 active:scale-[0.98]"
+      >
+        Masuk pos
+      </button>
     </div>
   );
 }
