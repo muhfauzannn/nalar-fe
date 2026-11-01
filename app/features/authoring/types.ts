@@ -256,6 +256,7 @@ export type SubmissionProcess = {
     completedAt: string | null;
     versions: number;
     content: string | null;
+    writing: WritingSummary | null;
   }>;
   tutor: {
     promptCount: number;
@@ -290,4 +291,17 @@ export type SubmissionProcess = {
     at: string | null;
     current: boolean;
   }>;
+};
+
+export type WritingSummary = {
+  activeSeconds: number;
+  typedChars: number;
+  deletedChars: number;
+  pasteCount: number;
+  pastedChars: number;
+  largestPaste: number;
+  longPauses: number;
+  focusLosses: number;
+  finalChars: number;
+  pastedShare: number;
 };

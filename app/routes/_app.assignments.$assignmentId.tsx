@@ -4,7 +4,9 @@ import type { Route } from "./+types/_app.assignments.$assignmentId";
 import {
   AssignmentPageSkeleton,
   AssignmentPage,
+  clearWritingSignals,
   studentApi,
+  writingSignalsKey,
   type WorkflowStage,
 } from "~/features/lms";
 import { HttpError } from "~/lib/http";
@@ -16,6 +18,18 @@ const workflowStages: WorkflowStage[] = [
   "4_revision_finalization",
   "5_reflection",
 ];
+
+// The writing signal is best-effort: a missing or broken one never blocks a stage.
+function writingSignalsFrom(formData: FormData) {
+  const raw = formData.get("signals");
+  if (typeof raw !== "string" || !raw) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
   if (!params.assignmentId) throw new Response("Assignment tidak ditemukan", { status: 404 });
@@ -56,7 +70,9 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
         submissionId,
         submittedStage as WorkflowStage,
         submittedContent.trim() || undefined,
+        writingSignalsFrom(formData),
       );
+      clearWritingSignals(writingSignalsKey(submissionId, submittedStage));
     } else {
       return {
         error: "Aksi assignment tidak dikenali. Muat ulang halaman lalu coba lagi.",

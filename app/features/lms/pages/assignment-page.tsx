@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowRight,
   Brain,
   CalendarClock,
@@ -19,6 +20,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { useRef } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { PageHeader } from "~/components/layout/page-header";
@@ -51,6 +53,7 @@ import { formatDateTime } from "../lib/format";
 import type { AssignmentData, OffloadingLevel, OffloadingResult, WorkflowStage } from "../types";
 import { AccessNotice, contactTeacher, datedFact, noticeFacts, type Notice } from "../components/access-notice";
 import { AiTutorPanel } from "../components/ai-tutor-panel";
+import { useWritingSignals, writingSignalsKey } from "../hooks/use-writing-signals";
 
 const stageCopy: Record<
   WorkflowStage,
@@ -411,8 +414,12 @@ function ActiveStage({
   actionDraft?: string;
 }) {
   const submission = assignment.submission;
+  const stage = submission?.currentStage ?? "1_independent_effort";
+  // Sinyal 1: only the two texts the student writes on their own are recorded.
+  const recorded = stage === "1_independent_effort" || stage === "4_revision_finalization";
+  const writing = useWritingSignals(writingSignalsKey(submission?.id ?? "none", stage));
+  const signalsField = useRef<HTMLInputElement>(null);
   if (!submission) return null;
-  const stage = submission.currentStage;
   const copy = stageCopy[stage];
   const finalStage = stage === "5_reflection";
 
@@ -444,10 +451,16 @@ function ActiveStage({
             </Form>
           </div>
         ) : (
-          <Form method="post">
+          <Form
+            method="post"
+            onSubmit={() => {
+              if (recorded && signalsField.current) signalsField.current.value = writing.snapshot();
+            }}
+          >
             <input type="hidden" name="intent" value="complete-stage" />
             <input type="hidden" name="submissionId" value={submission.id} />
             <input type="hidden" name="stage" value={stage} />
+            <input ref={signalsField} type="hidden" name="signals" defaultValue="" />
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor={`content-${stage}`}>{copy.prompt}</FieldLabel>
@@ -461,8 +474,19 @@ function ActiveStage({
                   defaultValue={actionDraft}
                   placeholder="Tulis jawabanmu…"
                   className="min-h-56 resize-y bg-background text-base leading-relaxed sm:min-h-64"
+                  {...(recorded ? writing.bind : {})}
                 />
                 <FieldDescription>{copy.guidance}</FieldDescription>
+                {recorded ? (
+                  <p className="flex gap-2 text-xs/relaxed text-muted-foreground">
+                    <Activity className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    <span>
+                      Di tahap ini NALAR mencatat cara kamu menulis: lama menulis, banyak teks yang
+                      ditempel, jeda panjang, dan berapa kali kamu pindah tab. Isi ketikanmu per tombol
+                      tidak direkam. Catatan ini dipakai untuk laporan refleksimu, bukan untuk nilai.
+                    </span>
+                  </p>
+                ) : null}
               </Field>
 
               {finalStage && (

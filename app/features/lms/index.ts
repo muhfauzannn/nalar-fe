@@ -1,5 +1,6 @@
 export { prefetchStudentPage, studentApi } from "./api/student";
 export { StudentAppShell } from "./components/student-app-shell";
+export { clearWritingSignals, writingSignalsKey } from "./hooks/use-writing-signals";
 export {
   ActivityPageSkeleton,
   AssignmentPageSkeleton,

@@ -71,7 +71,12 @@ export function SubmissionProcessPage({ data }: { data: SubmissionProcess }) {
                   {stage.stage === "2_guided_questioning" ? (
                     <TutorTurns tutor={tutor} />
                   ) : stage.content ? (
-                    <Artifact content={stage.content} versions={stage.versions} />
+                    <>
+                      <Artifact content={stage.content} versions={stage.versions} />
+                      {WRITTEN.includes(stage.stage) && stage.status === "completed" ? (
+                        <Writing writing={stage.writing} />
+                      ) : null}
+                    </>
                   ) : stage.status !== "locked" ? (
                     <p className="text-sm text-muted-foreground">Belum ada tulisan.</p>
                   ) : null}
@@ -106,6 +111,46 @@ function Artifact({ content, versions }: { content: string; versions: number }) 
       )}
       {versions > 1 ? <p className="mt-2 text-xs text-muted-foreground">Disimpan {versions} kali</p> : null}
     </div>
+  );
+}
+
+// Stages whose text is the student's own, and so carry a writing signal.
+const WRITTEN = ["1_independent_effort", "4_revision_finalization"];
+
+const minutes = (seconds: number) =>
+  seconds < 60 ? `${seconds} detik` : `${Math.round(seconds / 60)} menit`;
+
+// How the text came about (sinyal 1). Facts only; the Index weighs them.
+function Writing({ writing }: { writing: SubmissionProcess["stages"][number]["writing"] }) {
+  if (!writing) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Belum ada catatan cara menulis untuk tahap ini (dikerjakan sebelum perekaman aktif).
+      </p>
+    );
+  }
+  const pasted = Math.round(writing.pastedShare * 100);
+  const facts = [
+    { label: "Menulis aktif", value: minutes(writing.activeSeconds) },
+    {
+      label: "Teks yang ditempel",
+      value: writing.pasteCount ? `${pasted}% · ${writing.pasteCount}×` : "Tidak ada",
+      note: writing.pasteCount ? `Tempelan terbesar ${writing.largestPaste} karakter` : undefined,
+      strong: pasted >= 50,
+    },
+    { label: "Diketik / dihapus", value: `${writing.typedChars} / ${writing.deletedChars} karakter` },
+    { label: "Jeda panjang", value: `${writing.longPauses}×`, note: "Diam 30 detik atau lebih" },
+    { label: "Pindah tab", value: `${writing.focusLosses}×` },
+  ];
+  return (
+    <dl className="grid grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))] gap-x-4 gap-y-2 rounded-2xl border border-dashed p-3 text-xs" aria-label="Cara menulis">
+      {facts.map((fact) => (
+        <div key={fact.label} title={fact.note}>
+          <dt className="text-muted-foreground">{fact.label}</dt>
+          <dd className={cn("tabular-nums", fact.strong ? "font-semibold" : "font-medium")}>{fact.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

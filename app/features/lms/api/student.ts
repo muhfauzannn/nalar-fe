@@ -104,11 +104,12 @@ export const studentApi = {
     submissionId: string,
     stage: WorkflowStage,
     content?: string,
+    signals?: unknown,
   ) =>
     studentRequest(request, () =>
       http.post(
         `/api/student/submissions/${submissionId}/stages/${stage}/complete`,
-        { content },
+        { content, signals },
         forwardedRequestInit(request),
       ),
     ),
