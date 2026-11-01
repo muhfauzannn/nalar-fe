@@ -402,7 +402,7 @@ const PLACE_PIECE = { library: { name: "church", scale: TILE * 1.35, label: "Per
 function Windmill({ scale }: { scale: number }) {
   const kit = useKit();
   const object = useMemo(() => kit("windmill").clone(true), [kit]);
-  const fan = useMemo(() => object.getObjectByName("building_windmill_top_fan_blue"), [object]);
+  const fan = useMemo(() => object.getObjectByName("fan"), [object]);
   useFrame((_, delta) => {
     if (fan) fan.rotation.z -= delta * 0.9;
   });
