@@ -193,3 +193,101 @@ export type QuestionDraft =
 export type ActionResult =
   | { ok: true; message?: string }
   | { ok: false; error: string; code?: string };
+
+// ---- teacher analytics (AI Offloading Index, read-only) ----------------
+
+export type OffloadingLevel =
+  | "1_ai_as_tool"
+  | "2_ai_as_scaffold"
+  | "3_partial_offloading"
+  | "4_full_offloading";
+export type WorkflowStage =
+  | "1_independent_effort"
+  | "2_guided_questioning"
+  | "3_ai_evaluation"
+  | "4_revision_finalization"
+  | "5_reflection";
+export type PromptIntent = "direct_answer" | "explanation_hint" | "reflective_evaluative";
+
+export type AssignmentAnalytics = {
+  assignment: {
+    id: string;
+    title: string;
+    status: WorkStatus;
+    dueAt: string | null;
+    courseId: string;
+    courseName: string;
+  };
+  counts: { enrolled: number; notStarted: number; inProgress: number; submitted: number; analyzed: number };
+  distribution: Array<{ level: OffloadingLevel; count: number }>;
+  commonFactors: Array<{ factor: string; students: number; averageContribution: number; example: string }>;
+  students: Array<{
+    membershipId: string;
+    name: string;
+    submissionId: string | null;
+    status: "not_started" | "in_progress" | "submitted" | "returned";
+    currentStage: WorkflowStage | null;
+    stagesCompleted: number;
+    submittedAt: string | null;
+    offloading: {
+      level: OffloadingLevel;
+      score: number;
+      previousScore: number | null;
+      topFactor: { factor: string; contribution: number; plainExplanation: string } | null;
+    } | null;
+  }>;
+};
+
+export type SubmissionProcess = {
+  assignment: { id: string; title: string; courseId: string; courseName: string };
+  student: { name: string };
+  submission: {
+    id: string;
+    attemptNumber: number;
+    status: "not_started" | "in_progress" | "submitted" | "returned";
+    currentStage: WorkflowStage;
+    startedAt: string | null;
+    submittedAt: string | null;
+  };
+  stages: Array<{
+    stage: WorkflowStage;
+    status: "locked" | "in_progress" | "completed";
+    startedAt: string | null;
+    completedAt: string | null;
+    versions: number;
+    content: string | null;
+  }>;
+  tutor: {
+    promptCount: number;
+    intents: Record<PromptIntent, number>;
+    redirected: number;
+    messages: Array<{
+      id: string;
+      author: "student" | "tutor" | "system";
+      content: string;
+      mode: "hint" | "feedback" | null;
+      intent: PromptIntent | null;
+      wasRedirected: boolean;
+      createdAt: string;
+    }>;
+  };
+  offloading: {
+    level: OffloadingLevel;
+    score: number;
+    intentInput: number;
+    effortInput: number;
+    studentReport: string;
+    recommendations: string[];
+    factors: Array<{ factor: string; contribution: number; plainExplanation: string }>;
+    computedAt: string;
+  } | null;
+  trend: Array<{
+    assignmentId: string;
+    assignmentTitle: string;
+    submissionId: string;
+    level: OffloadingLevel;
+    score: number;
+    at: string | null;
+    current: boolean;
+  }>;
+};

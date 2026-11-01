@@ -50,6 +50,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-level-1: var(--level-1);
+  --color-level-2: var(--level-2);
+  --color-level-3: var(--level-3);
+  --color-level-4: var(--level-4);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -106,6 +110,12 @@
   --chart-4: #006c4c;
   --chart-5: #837fab;
 
+  /* AI Offloading Index levels: one ordered ramp, light -> dark as reliance grows */
+  --level-1: #b9aaf0;
+  --level-2: #8b7fd6;
+  --level-3: #5d5a83;
+  --level-4: #18153a;
+
   --radius: 1rem;
   --card-shadow: 0 10px 30px rgb(0 0 0 / 0.05);
 
@@ -154,6 +164,11 @@
   --chart-3: #d3c5f8;
   --chart-4: #74f7c1;
   --chart-5: #a9a4d6;
+
+  --level-1: #4a4480;
+  --level-2: #6c62b8;
+  --level-3: #a99be8;
+  --level-4: #e3dfff;
 
   --card-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
 

@@ -3,6 +3,7 @@ import { redirect } from "react-router";
 import { forwardedRequestInit, http, HttpError } from "~/lib/http";
 import type {
   ActionResult,
+  AssignmentAnalytics,
   AssignmentEditorData,
   CourseEditorData,
   LessonEditorData,
@@ -13,6 +14,7 @@ import type {
   ResourceType,
   Scenario,
   Subject,
+  SubmissionProcess,
   WorkStatus,
 } from "../types";
 
@@ -210,6 +212,17 @@ export const manageApi = {
   assignment: (request: Request, assignmentId: string) =>
     load(request, () =>
       http.get<AssignmentEditorData>(`${base}/assignments/${assignmentId}`, init(request)),
+    ),
+  assignmentAnalytics: (request: Request, assignmentId: string) =>
+    load(request, () =>
+      http.get<AssignmentAnalytics>(`${base}/assignments/${assignmentId}/analytics`, init(request)),
+    ),
+  submissionProcess: (request: Request, assignmentId: string, submissionId: string) =>
+    load(request, () =>
+      http.get<SubmissionProcess>(
+        `${base}/assignments/${assignmentId}/submissions/${submissionId}`,
+        init(request),
+      ),
     ),
   updateAssignment: (
     request: Request,

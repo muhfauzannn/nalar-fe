@@ -1,5 +1,6 @@
-import { Copy, Lock, Plus, X } from "lucide-react";
+import { ChartBar, Copy, Lock, Plus, X } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -38,11 +39,19 @@ export function AssignmentEditorPage({ data }: { data: AssignmentEditorData }) {
           </>
         }
         actions={
-          <AssignmentStatusActions
-            status={assignment.status}
-            submissionCount={submissionCount}
-            ready={readiness.ready}
-          />
+          <>
+            {assignment.status !== "draft" ? (
+              <Button variant="outline" render={<Link to={`/manage/assignments/${assignment.id}/analytics`} />}>
+                <ChartBar data-icon="inline-start" />
+                Analitik kelas
+              </Button>
+            ) : null}
+            <AssignmentStatusActions
+              status={assignment.status}
+              submissionCount={submissionCount}
+              ready={readiness.ready}
+            />
+          </>
         }
       />
 

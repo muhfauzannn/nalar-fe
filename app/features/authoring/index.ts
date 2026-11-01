@@ -12,6 +12,7 @@ export {
   quizEditorAction,
 } from "./api/actions";
 export { manageApi } from "./api/manage";
+export { AssignmentAnalyticsPage } from "./pages/assignment-analytics-page";
 export { AssignmentEditorPage } from "./pages/assignment-editor-page";
 export { CourseEditorPage } from "./pages/course-editor-page";
 export { JoinCoursePage } from "./pages/join-course-page";
@@ -19,4 +20,5 @@ export { LessonEditorPage } from "./pages/lesson-editor-page";
 export { MyCoursesPage } from "./pages/my-courses-page";
 export { NewCoursePage } from "./pages/new-course-page";
 export { QuizEditorPage } from "./pages/quiz-editor-page";
+export { SubmissionProcessPage } from "./pages/submission-process-page";
 export type * from "./types";
