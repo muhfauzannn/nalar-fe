@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { gameGsap } from "~/features/game-feel";
 
 import { preloadKit } from "./kit";
+import { registerVeil } from "./veil";
 import { WorldScene3D } from "./scene";
 
 preloadKit();
@@ -37,6 +38,7 @@ export default function WorldStage() {
           <WorldScene3D />
         </Suspense>
       </Canvas>
+      <div ref={registerVeil} aria-hidden className="pointer-events-none absolute inset-0 z-[5] bg-[#f6f2ff] opacity-0" />
       <WorldLoader />
     </div>
   );

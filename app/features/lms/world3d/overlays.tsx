@@ -21,15 +21,15 @@ import { useStageScene, type ChestState } from "./store";
 // these instead of its 2D page; it puts its data on stage and draws its dock
 // into the overlay layer the student shell keeps above the canvas.
 
-function Overlay({ children }: { children: ReactNode }) {
+export function Overlay({ children }: { children: ReactNode }) {
   const host = useWorldOverlay();
   return host ? createPortal(<div className="contents text-[#18153a] [color-scheme:light]">{children}</div>, host) : null;
 }
 
-const card = "pointer-events-auto rounded-[22px] bg-white shadow-[0_12px_30px_-10px_rgba(24,21,58,.35)]";
-const press = "transition-transform duration-150 active:scale-[0.97]";
+export const card = "pointer-events-auto rounded-[22px] bg-white shadow-[0_12px_30px_-10px_rgba(24,21,58,.35)]";
+export const press = "transition-transform duration-150 active:scale-[0.97]";
 
-function TopBar({ back, crumbs }: { back?: string; crumbs: { label: string; to?: string }[] }) {
+export function TopBar({ back, crumbs }: { back?: string; crumbs: { label: string; to?: string }[] }) {
   return (
     <div className="absolute left-3 right-3 top-3 flex items-center gap-2 sm:left-4 sm:top-4">
       {back && (
@@ -53,7 +53,7 @@ function TopBar({ back, crumbs }: { back?: string; crumbs: { label: string; to?:
   );
 }
 
-function Dock({ children, className }: { children: ReactNode; className?: string }) {
+export function Dock({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("absolute inset-x-3 bottom-4 flex flex-col items-center gap-2 sm:bottom-6", className)}>{children}</div>;
 }
 
@@ -139,7 +139,13 @@ export function IslandOverlay({ course, island }: { course: CourseData; island: 
       <TopBar back={valid ? `/courses/${courseId}` : "/dunia"} crumbs={[{ label: "Dunia", to: "/dunia" }, valid ? { label: `Pulau ${course.course.subjectName}`, to: `/courses/${courseId}` } : { label: `Pulau ${course.course.subjectName}` }, ...(valid ? [{ label: placeName[valid] }] : [])]} />
       <Dock>
         {valid ? (
-          <PlaceCard title={placeName[valid]} stops={stops.filter((stop) => stop.place === valid)} closeTo={`/courses/${courseId}`} />
+          <PlaceCard
+            title={placeName[valid]}
+            // The library opens into the classroom: each lesson goes on its blackboard.
+            stops={stops.filter((stop) => stop.place === valid).map((stop) => (valid === "library" ? { ...stop, href: `/courses/${courseId}/kelas?materi=${stop.key.replace(/^lesson-/, "")}` } : stop))}
+            closeTo={`/courses/${courseId}`}
+            action={valid === "library" ? { to: `/courses/${courseId}/kelas`, label: "Masuk kelas" } : undefined}
+          />
         ) : stops.length === 0 ? (
           <div className={cn(card, "w-full max-w-[26rem] p-4 text-center")}>
             <p className="font-semibold">Pulau ini masih kosong</p>
@@ -168,7 +174,7 @@ export function IslandOverlay({ course, island }: { course: CourseData; island: 
   );
 }
 
-function PlaceCard({ title, stops, closeTo }: { title: string; stops: Stop[]; closeTo: string }) {
+function PlaceCard({ title, stops, closeTo, action }: { title: string; stops: Stop[]; closeTo: string; action?: { to: string; label: string } }) {
   return (
     <section aria-label={title} className={cn(card, "flex max-h-[min(22rem,55dvh)] w-full max-w-[26rem] flex-col p-2")}>
       <header className="flex items-center justify-between gap-2 px-2.5 pb-1 pt-1.5">
@@ -177,6 +183,11 @@ function PlaceCard({ title, stops, closeTo }: { title: string; stops: Stop[]; cl
           <X className="size-4" aria-hidden="true" />
         </Link>
       </header>
+      {action && (
+        <Link to={action.to} className={cn("mx-1 mb-1 flex items-center justify-center gap-2 rounded-[14px] bg-[#18153a] px-4 py-3 text-sm font-bold text-white", press)}>
+          {action.label}
+        </Link>
+      )}
       <ul className="flex flex-col overflow-y-auto">
         {stops.map((stop) => (
           <li key={stop.key}>

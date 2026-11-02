@@ -67,12 +67,12 @@ export function useWorld3d() {
   );
 }
 
-/** The 3D world routes: Dunia, an island, and a hall on it. */
+/** The 3D world routes: Dunia, an island, its classroom and its halls. */
 export function isWorldPath(pathname: string) {
   if (pathname === "/dunia") return true;
   const parts = pathname.split("/").filter(Boolean);
   if (parts[0] !== "courses" || !parts[1] || parts[1] === "join") return false;
-  return parts.length === 2 || (parts.length === 4 && parts[2] === "balai");
+  return parts.length === 2 || (parts.length === 3 && parts[2] === "kelas") || (parts.length === 4 && parts[2] === "balai");
 }
 
 /** The layer over the canvas where world routes put their buttons and cards. */

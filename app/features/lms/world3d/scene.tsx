@@ -1,6 +1,6 @@
 import { Html } from "@react-three/drei";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useNavigation } from "react-router";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -11,10 +11,13 @@ import { cn } from "~/lib/utils";
 import { prefetchStudentPage } from "../api/student";
 import { pointCopy, postNames } from "../lib/game";
 import type { IslandSketch, PostStatus } from "../types";
+import { Classroom, preloadClassroom } from "./classroom";
 import { HexBoard, STILL } from "./ground";
+import { Clickable, Sign, SignText } from "./signs";
 import { Decor, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit";
 import { hex, islandLayout, ring, sketchOf, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
 import { cameraView, MidClouds, Sky } from "./sky";
+import { fadeVeil } from "./veil";
 import { shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
@@ -43,12 +46,19 @@ function cameraFor(shot: WorldShot, islands: WorldIsland[], detail: IslandLayout
     // The building sits in the upper half, above the card that lists its places.
     return { target: add(base, place ? hex(place.tile, -1.4) : [0, -1.4, 0]), from: [34, 22, 46], zoom: 58, phone: { zoom: 52 } };
   }
+  if (shot.kind === "classroom") {
+    // Diving at the library's door; the room takes over under the veil.
+    const library = detail?.places.find((item) => item.place === "library");
+    return { target: add(base, library ? hex(library.tile, 0.9) : [0, 0.9, 0]), from: [34, 22, 46], zoom: 150, phone: { zoom: 130 }, calm: true };
+  }
   const hall = detail?.halls.find((item) => item.assignmentId === shot.assignmentId);
   return { target: add(base, hall ? hex(hall.center, 1) : [0, 1, 0]), from: [30, 40, 46], zoom: 50, phone: { zoom: 46 } };
 }
 
 function CameraRig({ shot }: { shot: CameraShot }) {
-  const { camera, size } = useThree();
+  const { camera: current, size } = useThree();
+  // The world's own orthographic camera, even while the classroom's is the default.
+  const [camera] = useState(() => current);
   const state = useRef({ tx: 0, ty: 0, tz: 0, px: 40, py: 34, pz: 40, zoom: 15 });
   const first = useRef(true);
   const flight = useRef<ReturnType<ReturnType<typeof gameGsap>["to"]> | null>(null);
@@ -90,67 +100,6 @@ function CameraRig({ shot }: { shot: CameraShot }) {
     camera.updateProjectionMatrix();
   });
   return null;
-}
-
-// ---- signs and clicks -------------------------------------------------------------------
-
-function Sign({ position, children, show: wanted, onClick, dark = false, minor = false, label }: { position: Vec3; children: ReactNode; show: boolean; onClick?: () => void; dark?: boolean; minor?: boolean; label: string }) {
-  // On a narrow screen the minor signs would pile up; the dock names those places.
-  const narrow = useThree((t) => t.size.width < 600);
-  const show = wanted && !(minor && narrow);
-  return (
-    <Html position={position} center zIndexRange={[20, 0]} style={{ pointerEvents: show ? "auto" : "none" }}>
-      <button
-        type="button"
-        onClick={onClick}
-        tabIndex={show ? 0 : -1}
-        aria-hidden={!show}
-        aria-label={label}
-        className={cn(
-          "whitespace-nowrap rounded-[14px] px-3 py-1.5 text-left shadow-[0_6px_16px_rgba(24,21,58,.2)] transition-[opacity,transform] duration-300 active:scale-[0.96] max-sm:px-2.5 max-sm:py-1",
-          dark ? "bg-[#18153a] text-white" : "bg-white/95 text-[#18153a]",
-          !show && "pointer-events-none translate-y-1.5 scale-[0.96] opacity-0",
-        )}
-      >
-        {children}
-      </button>
-    </Html>
-  );
-}
-
-function SignText({ small, strong }: { small: string; strong: string }) {
-  return (
-    <>
-      <small className="block text-[10.5px] opacity-70">{small}</small>
-      <strong className="block max-w-[14rem] truncate text-[13.5px] max-sm:text-[12.5px]">{strong}</strong>
-    </>
-  );
-}
-
-function Clickable({ onClick, children, label }: { onClick: () => void; children: ReactNode; label: string }) {
-  const ref = useRef<THREE.Group>(null);
-  return (
-    <group
-      ref={ref}
-      name={label}
-      onClick={(event: ThreeEvent<MouseEvent>) => {
-        event.stopPropagation();
-        playSound("click");
-        onClick();
-      }}
-      onPointerOver={(event) => {
-        event.stopPropagation();
-        document.body.style.cursor = "pointer";
-        gameGsap().to(ref.current!.scale, { x: 1.04, y: 1.04, z: 1.04, duration: 0.18, ease: "power2.out" });
-      }}
-      onPointerOut={() => {
-        document.body.style.cursor = "";
-        gameGsap().to(ref.current!.scale, { x: 1, y: 1, z: 1, duration: 0.2, ease: "power2.out" });
-      }}
-    >
-      {children}
-    </group>
-  );
 }
 
 /** Points a building's door (+z in KayKit) at a spot. */
@@ -390,7 +339,8 @@ function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout;
             />
           ))}
           <Chest position={hex(hall.chest, 0.02)} toward={center} state={chestState} onTap={() => (scene.chest?.assignmentId === hall.assignmentId ? scene.chest.onOpen() : onGo(hall.href))} />
-          {catIndex >= 0 && (
+          {/* DOM over the canvas shows even when the world is hidden: not in the classroom. */}
+          {catIndex >= 0 && scene.shot.kind !== "classroom" && (
             <group ref={catRef} position={padPositions[catIndex]}>
               <Html center position={[0, 1.6, 0]} zIndexRange={[19, 0]} style={{ pointerEvents: "none" }}>
                 <span className="block h-[54px] w-[46px] overflow-hidden rounded-full border-[3px] border-[#4bd29f] bg-white shadow-[0_8px_16px_rgba(24,21,58,.3)]">
@@ -757,8 +707,46 @@ export function WorldScene3D() {
   }, [atWorld, worldIds]);
   const shadowVersion = `${shot.kind}-${shotCourse}-${shotLayout?.halls.map((h) => h.posts?.map((p) => p.status).join()).join()}-${scene.chest?.state}`;
 
+  // The classroom swaps in under the veil once the dive at the door is under way,
+  // and the world swaps back the same way. The world stays mounted meanwhile.
+  const wantRoom = shot.kind === "classroom";
+  const [room, setRoom] = useState(wantRoom);
+  useEffect(() => {
+    if (wantRoom === room) return;
+    let live = true;
+    void (async () => {
+      if (wantRoom && !STILL) await new Promise((resolve) => setTimeout(resolve, 520));
+      if (!live) return;
+      await fadeVeil(1, STILL ? 0 : 200);
+      if (!live) return;
+      setRoom(wantRoom);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await fadeVeil(0, STILL ? 0 : 420);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [wantRoom, room]);
+  // The classroom's model is fetched while the student is on an island, before it is needed.
+  useEffect(() => {
+    if (shot.kind === "island" || shot.kind === "place") preloadClassroom();
+  }, [shot.kind]);
+  const classroomCourse = shot.kind === "classroom" ? shot.courseId : focus?.courseId ?? null;
+
   return (
     <>
+      {room && classroomCourse && (
+        <Suspense fallback={null}>
+          <Classroom
+            courseId={classroomCourse}
+            board={shot.kind === "classroom" && shot.board}
+            lesson={scene.lesson}
+            course={detail?.course ?? null}
+            island={detail?.island ?? null}
+          />
+        </Suspense>
+      )}
+      <group visible={!room}>
       <CameraRig shot={camera} />
       <hemisphereLight args={["#fbf7ff", "#7f75c9", 1.15]} />
       <directionalLight
@@ -796,6 +784,7 @@ export function WorldScene3D() {
       })}
       {scene.world && <JoinIsland position={join} show={atWorld} />}
       {islands.slice(1).map((island) => <Bridge key={island.courseId} from={center} to={island.position} />)}
+      </group>
     </>
   );
 }
