@@ -18,7 +18,7 @@ import { Decor, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit
 import { hex, islandLayout, ring, sketchOf, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
 import { cameraView, MidClouds, Sky } from "./sky";
 import { fadeVeil } from "./veil";
-import { shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
+import { classroomForScene, shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
 const ISO: Vec3 = [40, 34, 40];
@@ -658,13 +658,13 @@ function layoutOf(course: { id: string; name: string; subjectName: string }, ske
 }
 
 export function WorldScene3D() {
-  const staged = useWorldScene();
+  const scene = useWorldScene();
   const navigate = useNavigate();
-  // While the next world route loads, the camera already flies to it.
+  // Only the camera anticipates navigation. Scene contents keep the committed
+  // route's data until the destination loader stages its complete snapshot.
   const pending = useNavigation().location;
   const next = pending ? shotForUrl(pending.pathname, pending.search) : null;
-  const scene = useMemo(() => (next ? { ...staged, shot: next } : staged), [staged, JSON.stringify(next)]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { shot } = scene;
+  const shot = next ?? scene.shot;
   // The open course's own data is the freshest sketch of its island; the others
   // come with Dunia. Equal sketches give the very same layout object (layoutOf),
   // so nothing is rebuilt when the course's data arrives.
@@ -709,7 +709,15 @@ export function WorldScene3D() {
 
   // The classroom swaps in under the veil once the dive at the door is under way,
   // and the world swaps back the same way. The world stays mounted meanwhile.
-  const wantRoom = shot.kind === "classroom";
+  const classroom = useMemo(() => classroomForScene(scene), [scene]);
+  // Keep the last complete room while the exit veil closes. Neither a pending
+  // destination nor another course's data may replace its contents mid-exit.
+  const [lastClassroom, setLastClassroom] = useState(classroom);
+  useEffect(() => {
+    if (classroom) setLastClassroom(classroom);
+  }, [classroom]);
+  const roomData = classroom ?? lastClassroom;
+  const wantRoom = classroom !== null;
   const [room, setRoom] = useState(wantRoom);
   useEffect(() => {
     if (wantRoom === room) return;
@@ -731,18 +739,13 @@ export function WorldScene3D() {
   useEffect(() => {
     if (shot.kind === "island" || shot.kind === "place") preloadClassroom();
   }, [shot.kind]);
-  const classroomCourse = shot.kind === "classroom" ? shot.courseId : focus?.courseId ?? null;
-
   return (
     <>
-      {room && classroomCourse && (
+      {room && roomData && (
         <Suspense fallback={null}>
           <Classroom
-            courseId={classroomCourse}
-            board={shot.kind === "classroom" && shot.board}
-            lesson={scene.lesson}
-            course={detail?.course ?? null}
-            island={detail?.island ?? null}
+            key={roomData.courseId}
+            {...roomData}
           />
         </Suspense>
       )}

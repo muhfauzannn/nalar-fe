@@ -29,6 +29,15 @@ export type WorldScene = {
   lesson: LessonData | null;
 };
 
+/** A room can only consume the data committed by its own route loader. */
+export function classroomForScene(scene: WorldScene) {
+  const { shot, detail, lesson } = scene;
+  if (shot.kind !== "classroom" || !detail) return null;
+  if (detail.course.course.id !== shot.courseId || detail.island.course.id !== shot.courseId) return null;
+  if (lesson && lesson.courseId !== shot.courseId) return null;
+  return { courseId: shot.courseId, board: shot.board, course: detail.course, island: detail.island, lesson };
+}
+
 let scene: WorldScene = { world: null, detail: null, shot: { kind: "world" }, lit: null, chest: null, onSelectPost: null, lesson: null };
 const listeners = new Set<() => void>();
 
