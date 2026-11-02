@@ -103,8 +103,12 @@ function InstancedPart({ part, items, scale }: { part: Part; items: Placed[]; sc
 
 const NO_HOUSES: string[] = [];
 
-/** Trees, rocks, hills and houses on the free tiles of an island, from its seed. */
-export function Decor({ tiles, seed, houses = NO_HOUSES }: { tiles: Tile[]; seed: number; houses?: string[] }) {
+/**
+ * Trees, rocks, hills and houses on the free tiles of an island, from its seed.
+ * `share` splits the same placement for detail levels: "far" is every third
+ * tree and rock plus the houses, "rest" the others, "all" both.
+ */
+export function Decor({ tiles, seed, houses = NO_HOUSES, share = "all" }: { tiles: Tile[]; seed: number; houses?: string[]; share?: "all" | "far" | "rest" }) {
   const layout = useMemo(() => {
     const rand = rng(seed);
     const groups: Record<string, Placed[]> = { trees: [], treesB: [], tree: [], rock: [], rockB: [], hills: [], mountain: [] };
@@ -127,10 +131,14 @@ export function Decor({ tiles, seed, houses = NO_HOUSES }: { tiles: Tile[]; seed
     }
     return { groups, singles };
   }, [tiles, seed, houses]);
+  const groups = useMemo(
+    () => Object.entries(layout.groups).map(([name, items]) => [name, share === "all" ? items : items.filter((_, i) => (i % 3 === 0) === (share === "far"))] as const),
+    [layout, share],
+  );
   return (
     <>
-      {Object.entries(layout.groups).map(([name, items]) => <Instanced key={name} name={name} items={items} />)}
-      {layout.singles.map((single, index) => <Piece key={index} name={single.name} position={single.p} ry={single.ry} />)}
+      {groups.map(([name, items]) => <Instanced key={name} name={name} items={items} />)}
+      {share !== "rest" && layout.singles.map((single, index) => <Piece key={index} name={single.name} position={single.p} ry={single.ry} />)}
     </>
   );
 }

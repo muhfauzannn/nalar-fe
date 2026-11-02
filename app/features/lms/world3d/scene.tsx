@@ -1,6 +1,6 @@
 import { Html } from "@react-three/drei";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useNavigation } from "react-router";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -10,10 +10,10 @@ import { announcePoints, awardChip, flyCoin, gameGsap, HAPTIC, haptic, playSound
 import { cn } from "~/lib/utils";
 import { prefetchStudentPage } from "../api/student";
 import { pointCopy, postNames } from "../lib/game";
-import type { PostStatus } from "../types";
-import { HexBoard } from "./ground";
+import type { IslandSketch, PostStatus } from "../types";
+import { HexBoard, STILL } from "./ground";
 import { Decor, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit";
-import { hex, islandLayout, ring, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
+import { hex, islandLayout, ring, sketchOf, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
 import { cameraView, MidClouds, Sky } from "./sky";
 import { shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
@@ -187,6 +187,7 @@ function Pad({ position, index, state, label, onTap, register }: { position: Vec
     if (crystal.current) crystal.current.visible = state === "done";
   }, [state, glowMat]);
   useFrame(({ clock }) => {
+    if (STILL) return;
     if (state === "current" && glow.current) glow.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 2.6) * 0.06);
     if (crystal.current?.visible) {
       crystal.current.rotation.y = clock.elapsedTime * 0.8 + index;
@@ -257,7 +258,7 @@ function Chest({ position, toward, state, onTap }: { position: Vec3; toward: Vec
     if (state === "locked") lid.rotation.x = 0;
   }, [state, lid]);
   useFrame(({ clock }) => {
-    if (state !== "ready" || !group.current || opening.current) return;
+    if (STILL || state !== "ready" || !group.current || opening.current) return;
     // A chest that is ready nudges every two seconds.
     const t = clock.elapsedTime % 2;
     group.current.rotation.z = t > 1.5 ? Math.sin((t - 1.5) * 25) * 0.06 : 0;
@@ -357,7 +358,7 @@ const HOUSES = ["homeA", "well", "homeB"];
 function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout; focused: boolean; scene: WorldScene; showSign: boolean; onGo: (href: string) => void }) {
   const navigate = useNavigate();
   const center = hex(hall.center);
-  const posts = hall.building?.posts ?? STAGE_ORDER.map((stage) => ({ stage, status: "locked" as PostStatus, points: 0, earned: [] }));
+  const posts = hall.posts ?? STAGE_ORDER.map((stage) => ({ stage, status: "locked" as PostStatus }));
   const lit = focused && scene.lit?.assignmentId === hall.assignmentId ? scene.lit : null;
   const litIndex = lit ? padIndexOf(lit.stage) : -1;
   const padPositions = hall.pads.map((tile) => hex(tile, 0.1));
@@ -366,7 +367,7 @@ function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout;
   const currentIndex = posts.findIndex((post) => post.status === "current");
   // While the lit moment waits, the cat still stands on the post just finished.
   const catIndex = lit ? litIndex : currentIndex;
-  const chestState: ChestState = scene.chest?.assignmentId === hall.assignmentId ? scene.chest.state : hall.building?.chestOpen ? "open" : "locked";
+  const chestState: ChestState = scene.chest?.assignmentId === hall.assignmentId ? scene.chest.state : hall.chestOpen ? "open" : "locked";
   const done = posts.filter((post) => post.status === "done").length;
   return (
     <group>
@@ -417,7 +418,7 @@ function Windmill({ scale }: { scale: number }) {
   const object = useMemo(() => kit("windmill").clone(true), [kit]);
   const fan = useMemo(() => object.getObjectByName("fan"), [object]);
   useFrame((_, delta) => {
-    if (fan) fan.rotation.z -= delta * 0.9;
+    if (fan && !STILL) fan.rotation.z -= delta * 0.9;
   });
   return (
     <group scale={scale}>
@@ -459,8 +460,7 @@ function pathCurves(layout: IslandLayout, seed: number) {
   return curves;
 }
 
-function CobblePaths({ curves, seed }: { curves: THREE.CatmullRomCurve3[]; seed: number }) {
-  const stones = useRef<THREE.InstancedMesh>(null);
+function CobblePaths({ curves, seed, near }: { curves: THREE.CatmullRomCurve3[]; seed: number; near: boolean }) {
   const { strip, placements } = useMemo(() => {
     const rand = rng(seed);
     const positions: number[] = [];
@@ -493,6 +493,20 @@ function CobblePaths({ curves, seed }: { curves: THREE.CatmullRomCurve3[]; seed:
     geometry.computeVertexNormals();
     return { strip: geometry, placements: placed };
   }, [curves, seed]);
+  const groundMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c7bcdc", roughness: 0.95 }), []);
+  return (
+    <>
+      <mesh geometry={strip} material={groundMat} receiveShadow />
+      <Grow show={near}>
+        <CobbleStones placements={placements} seed={seed} />
+      </Grow>
+    </>
+  );
+}
+
+/** The path's stones; mounted only up close, so they place themselves when they mount. */
+function CobbleStones({ placements, seed }: { placements: { p: THREE.Vector3; s: number; r: number }[]; seed: number }) {
+  const stones = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
     const mesh = stones.current;
     if (!mesh) return;
@@ -515,16 +529,31 @@ function CobblePaths({ curves, seed }: { curves: THREE.CatmullRomCurve3[]; seed:
     return mergeGeometries([side.toNonIndexed(), top.toNonIndexed()])!;
   }, []);
   const stoneMat = useMemo(() => new THREE.MeshStandardMaterial({ roughness: 0.9 }), []);
-  const groundMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c7bcdc", roughness: 0.95 }), []);
-  return (
-    <>
-      <mesh geometry={strip} material={groundMat} receiveShadow />
-      <instancedMesh key={placements.length} ref={stones} args={[cobble, stoneMat, placements.length]} receiveShadow />
-    </>
-  );
+  return <instancedMesh key={placements.length} ref={stones} args={[cobble, stoneMat, placements.length]} receiveShadow />;
 }
 
-function DetailIsland({ layout, position, scene }: { layout: IslandLayout; position: Vec3; scene: WorldScene }) {
+/**
+ * Detail that only matters up close grows out of the ground when the camera
+ * heads for the island, and sinks back when it leaves: the island itself (its
+ * shape, buildings, posts and signs) never changes with distance.
+ */
+function Grow({ show, children }: { show: boolean; children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  const [mounted, setMounted] = useState(show);
+  if (show && !mounted) setMounted(true);
+  useFrame((_, delta) => {
+    const g = ref.current;
+    if (!g) return;
+    const target = show ? 1 : 0;
+    const y = STILL ? target : THREE.MathUtils.damp(g.scale.y, target, 5, delta);
+    g.scale.set(1, Math.max(y, 0.001), 1);
+    g.visible = y > 0.01;
+  });
+  if (!mounted) return null;
+  return <group ref={ref} scale={[1, show && STILL ? 1 : 0.001, 1]}>{children}</group>;
+}
+
+function DetailIsland({ layout, position, scene, near }: { layout: IslandLayout; position: Vec3; scene: WorldScene; near: boolean }) {
   const navigate = useNavigate();
   const shot = scene.shot;
   const seed = seedOf(layout.courseId);
@@ -542,14 +571,17 @@ function DetailIsland({ layout, position, scene }: { layout: IslandLayout; posit
   }, [curves, layout.free]);
   return (
     <group position={position}>
-      <HexBoard tiles={layout.tiles} seed={seed} dressing="full" />
-      <CobblePaths curves={curves} seed={seed} />
-      <Decor tiles={free} seed={seed + 1} houses={HOUSES} />
+      <HexBoard tiles={layout.tiles} seed={seed} dressing={near ? "full" : "light"} />
+      <CobblePaths curves={curves} seed={seed} near={near} />
+      <Decor tiles={free} seed={seed + 1} houses={HOUSES} share="far" />
+      <Grow show={near}>
+        <Decor tiles={free} seed={seed + 1} houses={HOUSES} share="rest" />
+      </Grow>
       {layout.places.map((place) => {
         const at = hex(place.tile);
         const piece = PLACE_PIECE[place.place];
         const href = `/courses/${layout.courseId}?tempat=${place.place}`;
-        const done = place.stops.filter((stop) => stop.done).length;
+        const { done, total } = place;
         return (
           <group key={place.place}>
             <group position={at} rotation={[0, place.tile[0] === 0 && place.tile[1] === 0 ? 0 : facing(at, [0, 0, 0]), 0]}>
@@ -557,8 +589,8 @@ function DetailIsland({ layout, position, scene }: { layout: IslandLayout; posit
                 {place.place === "lab" ? <Windmill scale={piece.scale} /> : <Piece name={piece.name} scale={piece.scale} />}
               </Clickable>
             </group>
-            <Sign position={[at[0], place.place === "library" ? 4 : 3.6, at[2]]} show={onIsland} minor onClick={() => go(href)} label={`${piece.label}, ${done} dari ${place.stops.length} selesai`}>
-              <SignText small={piece.label} strong={`${done}/${place.stops.length} selesai`} />
+            <Sign position={[at[0], place.place === "library" ? 4 : 3.6, at[2]]} show={onIsland} minor onClick={() => go(href)} label={`${piece.label}, ${done} dari ${total} selesai`}>
+              <SignText small={piece.label} strong={`${done}/${total} selesai`} />
             </Sign>
           </group>
         );
@@ -661,6 +693,20 @@ function StaticShadows({ version }: { version: string }) {
 
 // ---- the whole world ----------------------------------------------------------------------
 
+// One layout object per distinct sketch: the island from Dunia and the island
+// from its loaded course are the same object when their sketches agree.
+const layoutCache = new Map<string, IslandLayout>();
+function layoutOf(course: { id: string; name: string; subjectName: string }, sketch: IslandSketch) {
+  const key = JSON.stringify([course, sketch]);
+  let layout = layoutCache.get(key);
+  if (!layout) {
+    if (layoutCache.size > 40) layoutCache.clear();
+    layout = islandLayout(course, sketch);
+    layoutCache.set(key, layout);
+  }
+  return layout;
+}
+
 export function WorldScene3D() {
   const staged = useWorldScene();
   const navigate = useNavigate();
@@ -669,22 +715,47 @@ export function WorldScene3D() {
   const next = pending ? shotForUrl(pending.pathname, pending.search) : null;
   const scene = useMemo(() => (next ? { ...staged, shot: next } : staged), [staged, JSON.stringify(next)]); // eslint-disable-line react-hooks/exhaustive-deps
   const { shot } = scene;
-  const detailLayout = useMemo(() => (scene.detail ? islandLayout(scene.detail.course, scene.detail.island) : null), [scene.detail]);
-  const focus = detailLayout ? { courseId: detailLayout.courseId, name: detailLayout.name, subject: detailLayout.subject } : null;
+  // The open course's own data is the freshest sketch of its island; the others
+  // come with Dunia. Equal sketches give the very same layout object (layoutOf),
+  // so nothing is rebuilt when the course's data arrives.
+  const detail = scene.detail;
+  const detailSketch = useMemo(() => (detail ? sketchOf(detail.course, detail.island) : null), [detail]);
+  const focus = detail ? { courseId: detail.course.course.id, name: detail.course.course.name, subject: detail.course.course.subjectName } : null;
   const { islands, join } = useMemo(() => worldLayout(scene.world, focus), [scene.world, focus?.courseId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const camera = cameraFor(shot, islands, detailLayout);
+  const layouts = islands.map((island) => {
+    const sketch = island.courseId === focus?.courseId ? detailSketch : island.sketch;
+    return sketch ? layoutOf({ id: island.courseId, name: island.name, subjectName: island.subject }, sketch) : null;
+  });
+  // Dev only: Dunia's sketch must match the one from the loaded course, or the
+  // island changes on landing (nalar-be world.service.ts mirrors districtsOf).
+  const worldSketch = islands.find((island) => island.courseId === focus?.courseId)?.sketch;
+  useEffect(() => {
+    if (import.meta.env.DEV && worldSketch && detailSketch && JSON.stringify(worldSketch) !== JSON.stringify(detailSketch)) {
+      console.warn("[world3d] Dunia's island sketch differs from the course's", { world: worldSketch, course: detailSketch });
+    }
+  }, [worldSketch, detailSketch]);
+  const shotCourse = shot.kind === "world" ? null : shot.courseId;
+  const shotLayout = layouts[islands.findIndex((island) => island.courseId === shotCourse)] ?? null;
+  const camera = cameraFor(shot, islands, shotLayout);
   const atWorld = shot.kind === "world";
   const activeId = scene.world?.islands.find((island) => island.current?.post)?.course.id ?? scene.world?.islands.find((island) => island.current)?.course.id ?? null;
   const narrow = useThree((t) => t.size.width < 600);
   const center = islands[0]?.position ?? [0, 0, 0];
-  // From Dunia every island is one tap away: warm their data while the student looks.
+  // Dunia already draws every island; the course data only fills the cards on
+  // landing. Warm it when the browser is idle, so landing waits for nothing.
   const worldIds = scene.world?.islands.map((island) => island.course.id).join() ?? "";
   useEffect(() => {
     if (!atWorld || !worldIds) return;
-    const id = window.setTimeout(() => worldIds.split(",").forEach((courseId) => prefetchStudentPage(`/courses/${courseId}`)), 600);
-    return () => window.clearTimeout(id);
+    const warm = () => worldIds.split(",").forEach((courseId) => prefetchStudentPage(`/courses/${courseId}`));
+    // Safari has no requestIdleCallback: a short timeout instead.
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(warm, 600);
+    return () => clearTimeout(id);
   }, [atWorld, worldIds]);
-  const shadowVersion = `${shot.kind}-${detailLayout?.courseId}-${detailLayout?.halls.map((h) => h.building?.posts.map((p) => p.status).join()).join()}-${scene.chest?.state}`;
+  const shadowVersion = `${shot.kind}-${shotCourse}-${shotLayout?.halls.map((h) => h.posts?.map((p) => p.status).join()).join()}-${scene.chest?.state}`;
 
   return (
     <>
@@ -692,7 +763,7 @@ export function WorldScene3D() {
       <hemisphereLight args={["#fbf7ff", "#7f75c9", 1.15]} />
       <directionalLight
         castShadow
-        position={add(islands.find((i) => i.courseId === detailLayout?.courseId)?.position ?? center, [16, 26, 12])}
+        position={add(islands.find((i) => i.courseId === shotCourse)?.position ?? center, [16, 26, 12])}
         intensity={2.4}
         color="#fff4e3"
         shadow-mapSize={narrow ? [1024, 1024] : [2048, 2048]}
@@ -705,23 +776,24 @@ export function WorldScene3D() {
         shadow-bias={-0.0004}
         shadow-normalBias={0.04}
       >
-        <object3D attach="target" position={islands.find((i) => i.courseId === detailLayout?.courseId)?.position ?? center} />
+        <object3D attach="target" position={islands.find((i) => i.courseId === shotCourse)?.position ?? center} />
       </directionalLight>
       <ambientLight intensity={0.3} />
       <StaticShadows version={shadowVersion} />
       <Sky />
       <MidClouds anchors={islands.map((island) => island.position)} />
 
-      {islands.map((island, index) =>
-        detailLayout && island.courseId === detailLayout.courseId ? (
+      {islands.map((island, index) => {
+        const layout = layouts[index];
+        // An older API sends no sketch: a stand-in until the course loads.
+        if (!layout) return <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld} active={island.courseId === activeId} />;
+        return (
           <group key={island.courseId}>
-            <DetailIsland layout={detailLayout} position={island.position} scene={scene} />
+            <DetailIsland layout={layout} position={island.position} scene={scene} near={island.courseId === shotCourse} />
             <WorldSign island={island} show={atWorld} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} />
           </group>
-        ) : (
-          <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld} active={island.courseId === activeId} />
-        ),
-      )}
+        );
+      })}
       {scene.world && <JoinIsland position={join} show={atWorld} />}
       {islands.slice(1).map((island) => <Bridge key={island.courseId} from={center} to={island.position} />)}
     </>

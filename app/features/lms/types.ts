@@ -394,9 +394,22 @@ export type PointsData = {
   recent: PointEvent[];
 };
 
+/**
+ * Just enough of an island to draw it as it really is (world3d/layout.ts): its
+ * places with done/total, and its halls in order with their post states. Dunia
+ * gets one per island from /api/student/world; up close the same is derived
+ * from the course and island data, so both give the same island.
+ */
+export type IslandSketch = {
+  places: Array<{ place: "library" | "lab" | "arena"; done: number; total: number }>;
+  halls: Array<{ assignmentId: string; title: string; chestOpen: boolean; posts: PostStatus[] | null }>;
+};
+
 export type WorldData = PointsData & {
   islands: Array<{
     course: { id: string; name: string; subjectName: string };
+    /** Missing from an older API: the island is then drawn as a stand-in until its course loads. */
+    sketch?: IslandSketch;
     halls: number;
     hallsDone: number;
     points: number;
