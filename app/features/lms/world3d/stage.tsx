@@ -3,6 +3,9 @@ import { Canvas } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useState } from "react";
 import * as THREE from "three";
 import { usePageReadiness } from "~/features/loading/context";
+import { useLocation } from "react-router";
+import { useWorldScene } from "./store";
+import { useWorldSwipe } from "./carousel";
 
 import { preloadKit } from "./kit";
 import { maxWorldDpr, minWorldDpr } from "./render-quality";
@@ -16,6 +19,9 @@ preloadKit();
 // camera flying. Loaded lazily: pages outside the world never download three.js.
 export default function WorldStage() {
   const { active } = useProgress();
+  const location = useLocation();
+  const scene = useWorldScene();
+  const swipe = useWorldSwipe(location.pathname === "/dunia", scene.world ? scene.world.islands.length + 1 : 0);
   const readiness = usePageReadiness();
   useLayoutEffect(() => { readiness?.setSceneLoading(active); }, [readiness, active]);
   const [dpr, setDpr] = useState(() => maxWorldDpr(window.devicePixelRatio, window.innerWidth, window.innerHeight));
@@ -25,7 +31,7 @@ export default function WorldStage() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return (
-    <div className="isolate absolute inset-0 bg-[radial-gradient(circle_at_86%_6%,rgba(255,238,206,.9),rgba(255,224,222,.35)_16%,transparent_38%),linear-gradient(180deg,#b7a7ee,#d9cff9_48%,#efe9fe_78%,#f6f2ff)] [color-scheme:light]">
+    <div {...swipe} className="isolate absolute inset-0 bg-[radial-gradient(circle_at_86%_6%,rgba(255,238,206,.9),rgba(255,224,222,.35)_16%,transparent_38%),linear-gradient(180deg,#b7a7ee,#d9cff9_48%,#efe9fe_78%,#f6f2ff)] [color-scheme:light]">
       <Canvas
         orthographic
         shadows="percentage"

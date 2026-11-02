@@ -20,6 +20,7 @@ import { hex, islandLayout, ring, sketchOf, TILE, tilesWithin, worldLayout, type
 import { cameraView, MidClouds, Sky } from "./sky";
 import { fadeVeil } from "./veil";
 import { frameWorld, type WorldExtent } from "./world-camera";
+import { useWorldCarousel } from "./carousel";
 import { classroomForScene, sceneMatchesRoute, shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
@@ -31,10 +32,10 @@ type CameraShot = { target: Vec3; from: Vec3; zoom: number; phone?: { zoom: numb
 
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
-function cameraFor(shot: WorldShot, islands: WorldIsland[], detail: IslandLayout | null, overview: WorldExtent[], size: { width: number; height: number }, coarsePointer: boolean): CameraShot {
+function cameraFor(shot: WorldShot, islands: WorldIsland[], detail: IslandLayout | null, overview: WorldExtent[], size: { width: number; height: number }, mobile: boolean): CameraShot {
   const at = (courseId: string) => islands.find((island) => island.courseId === courseId)?.position ?? [0, 0, 0];
   if (shot.kind === "world") {
-    if (size.width < 768 || (size.width <= 1024 && (size.height < 500 || coarsePointer))) {
+    if (mobile) {
       const frame = frameWorld(overview, size.width, size.height);
       if (frame) {
         const scale = Math.max(0.42, Math.min(size.width, size.height) / 800);
@@ -710,6 +711,7 @@ export function WorldScene3D() {
   const shotLayout = layouts[islands.findIndex((island) => island.courseId === shotCourse)] ?? null;
   const size = useThree((state) => state.size);
   const coarsePointer = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const mobile = (typeof window !== "undefined" ? window.innerWidth < 768 : size.width < 768) || coarsePointer;
   const overview: WorldExtent[] = islands.map((island, index) => {
     const layout = layouts[index];
     const radius = layout ? Math.max(10, ...layout.tiles.map((tile) => {
@@ -718,12 +720,14 @@ export function WorldScene3D() {
     })) : 10;
     return { position: island.position, radius };
   });
-  if (scene.world) overview.push({ position: join, radius: 10 });
-  const camera = cameraFor(shot, islands, shotLayout, overview, size, coarsePointer);
+  const carouselCount = scene.world ? scene.world.islands.length + 1 : 0;
+  const carousel = useWorldCarousel(carouselCount);
+  const selectedCourseId = scene.world?.islands[carousel]?.course.id;
+  const selectedExtent = selectedCourseId ? overview[islands.findIndex((item) => item.courseId === selectedCourseId)] : scene.world ? { position: join, radius: 10 } : undefined;
+  const camera = cameraFor(shot, islands, shotLayout, selectedExtent ? [selectedExtent] : [], size, mobile);
   const atWorld = shot.kind === "world";
   const activeId = scene.world?.islands.find((island) => island.current?.post)?.course.id ?? scene.world?.islands.find((island) => island.current)?.course.id ?? null;
   const narrow = useThree((t) => t.size.width < 600);
-  const mobile = size.width < 768 || coarsePointer;
   const center = islands[0]?.position ?? [0, 0, 0];
   // Dunia already draws every island; the course data only fills the cards on
   // landing. Warm it when the browser is idle, so landing waits for nothing.
@@ -813,15 +817,15 @@ export function WorldScene3D() {
       {islands.map((island, index) => {
         const layout = layouts[index];
         // An older API sends no sketch: a stand-in until the course loads.
-        if (!layout) return <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld && !mobile} active={island.courseId === activeId} />;
+        if (!layout) return <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} />;
         return (
           <group key={island.courseId}>
             <DetailIsland layout={layout} position={island.position} scene={scene} near={island.courseId === shotCourse} />
-            <WorldSign island={island} show={atWorld && !mobile} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} />
+            <WorldSign island={island} show={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} />
           </group>
         );
       })}
-      {scene.world && <JoinIsland position={join} show={atWorld} />}
+      {scene.world && <JoinIsland position={join} show={atWorld && (!mobile || carousel === scene.world.islands.length)} />}
       {islands.slice(1).map((island) => <Bridge key={island.courseId} from={center} to={island.position} />)}
       </group>
     </>

@@ -7,7 +7,8 @@ import { finished, gameGsap, gameToast, playSound, prefersReducedMotion } from "
 import { cn } from "~/lib/utils";
 import { LevelBar, LevelUpMoment, Missions, StreakChip } from "../components/progress-widgets";
 import { useStudentId } from "../hooks/use-student-id";
-import { WorldIslandPicker } from "../components/world-island-picker";
+import { WorldIslandCarousel } from "../components/world-island-carousel";
+import { useWorldCarousel, useWorldSwipe } from "../world3d/carousel";
 import { missionCopy, postNames } from "../lib/game";
 import { missionsJustDone } from "../components/game-moments";
 import type { WorldData } from "../types";
@@ -41,6 +42,10 @@ const placed = "left-[var(--mx)] top-[var(--my)] md:left-[var(--x)] md:top-[var(
 export function WorldPage({ data, name }: { data: WorldData; name: string }) {
   const studentId = useStudentId();
   const ready = usePageReady();
+  const count = data.islands.length ? data.islands.length + 1 : 0;
+  const selectedIndex = useWorldCarousel(count);
+  const swipe = useWorldSwipe(true, count);
+  const selectedIsland = data.islands[selectedIndex];
   const shown = data.islands.slice(0, anchors.length);
   const more = data.islands.slice(anchors.length);
   const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? null;
@@ -73,7 +78,7 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
     <div className="flex flex-col gap-4 text-[#18153a] [color-scheme:light] max-md:-mx-4 max-md:-mt-8 sm:max-md:-mx-6">
       {studentId && <LevelUpMoment userId={studentId} points={data} />}
 
-      <div className="relative isolate overflow-hidden bg-[#d6ccf4] md:rounded-[2rem]">
+      <div {...swipe} className="relative isolate overflow-hidden bg-[#d6ccf4] max-md:[touch-action:pan-y] md:rounded-[2rem] [@media(pointer:coarse)]:[touch-action:pan-y]">
         <div ref={map}>
         <picture>
           <source media="(max-width: 767px)" srcSet="/game/world-map-portrait.webp" width={768} height={1152} />
@@ -109,8 +114,14 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         </header>
 
         {shown.map((island, index) => (
-          <IslandSign key={island.course.id} island={island} anchor={anchors[index]!} highlighted={island === active} onFly={flyTo} />
+          <IslandSign key={island.course.id} island={island} anchor={anchors[index]!} highlighted={island === active} onFly={flyTo} className="hidden [@media(min-width:768px)_and_(pointer:fine)]:block" />
         ))}
+
+        {selectedIsland && <IslandSign island={selectedIsland} anchor={{ x: 0.5, y: 0.38, mx: 0.5, my: 0.38 }} highlighted={selectedIsland === active} onFly={flyTo} className="[@media(min-width:768px)_and_(pointer:fine)]:hidden" />}
+        {count > 0 && !selectedIsland && (
+          <Link to="/courses/join" className="absolute left-1/2 top-[38%] -translate-x-1/2 rounded-2xl bg-[#18153a]/90 px-4 py-3 text-sm font-semibold text-white [@media(min-width:768px)_and_(pointer:fine)]:hidden">Gabung course</Link>
+        )}
+        <WorldIslandCarousel islands={data.islands} className="absolute bottom-20 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2" />
 
         <Link
           to="/courses/join"
@@ -143,14 +154,12 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         {active && <Bridge island={active} />}
       </div>
 
-      <WorldIslandPicker islands={data.islands} className="mx-3 w-[calc(100%-1.5rem)]" />
-
       <section aria-label="Pulau lainnya" className="flex flex-wrap items-center gap-2 max-md:px-3">
           {more.map((island) => (
             <Link
               key={island.course.id}
               to={`/courses/${island.course.id}`}
-              className="flex items-center gap-2 rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-card-foreground shadow-card ring-1 ring-border"
+              className="hidden items-center gap-2 rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-card-foreground shadow-card ring-1 ring-border [@media(min-width:768px)_and_(pointer:fine)]:flex"
             >
               Pulau {island.course.subjectName}
               <ChevronRight className="size-4" aria-hidden="true" />
@@ -187,11 +196,13 @@ function IslandSign({
   anchor,
   highlighted,
   onFly,
+  className,
 }: {
   island: Island;
   anchor: (typeof anchors)[number];
   highlighted: boolean;
   onFly: Fly;
+  className?: string;
 }) {
   const current = island.current;
   const lit = current?.postsDone ?? 0;
@@ -204,6 +215,7 @@ function IslandSign({
         "absolute max-w-[46%] -translate-x-1/2 rounded-2xl px-3 py-1.5 shadow-md max-md:max-w-[40%] transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] sm:max-w-[16rem] sm:px-4 sm:py-2.5",
         placed,
         highlighted ? "bg-[#18153a] text-white" : "bg-white/95",
+        className,
       )}
       style={at(anchor)}
     >
