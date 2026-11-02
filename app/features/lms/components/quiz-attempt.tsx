@@ -58,6 +58,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { AiTutorPanel } from "./ai-tutor-panel";
 import { QuizAttemptBlocked, QuizAttemptExpired } from "./quiz-unavailable";
 import type { QuizData } from "../types";
+import { clearActivityDraft, quizDraftKey, readActivityDraft, writeActivityDraft } from "../lib/activity-drafts";
 
 gsap.registerPlugin(useGSAP);
 
@@ -97,7 +98,7 @@ function normalizedAnswerValue(question: QuizQuestion, value: string) {
 
 function initialAnswerMap(data: QuizData) {
   return Object.fromEntries(
-    data.questions.map((question) => [question.id, savedAnswerValue(data, question)]),
+    data.questions.map((question) => [question.id, data.attempt ? (readActivityDraft(quizDraftKey(data.attempt.id, question.id)) ?? savedAnswerValue(data, question)) : savedAnswerValue(data, question)]),
   );
 }
 
@@ -133,7 +134,7 @@ function useAttemptRemainingSeconds(initialSeconds: number | null) {
   return remainingSeconds;
 }
 
-export function QuizAttempt({ data, working }: { data: QuizData; working: boolean }) {
+export function QuizAttempt({ data, working, embedded = false }: { data: QuizData; working: boolean; embedded?: boolean }) {
   const attempt = data.attempt;
   const stepMotionTarget = useRef<HTMLDivElement>(null);
   const revalidator = useRevalidator();
@@ -232,6 +233,7 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
   const hasSaveError = Object.values(saveStatuses).includes("error");
 
   function updateAnswer(questionId: string, value: string) {
+    if (attempt) writeActivityDraft(quizDraftKey(attempt.id, questionId), value);
     setAnswers((current) => ({ ...current, [questionId]: value }));
     updateSaveStatus(questionId, "pending");
   }
@@ -279,7 +281,13 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
         />
       ))}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem] xl:gap-6">
+      {embedded && (
+        <div className="sticky top-0 z-10 mb-4 flex items-center justify-between gap-3 border-b bg-background py-3 text-sm">
+          <span className="tabular-nums">{answeredCount}/{questionCount} terjawab</span>
+          {remainingSeconds !== null && <Badge role="timer" aria-label="Sisa waktu kuis" variant={remainingSeconds <= 60 ? "destructive" : "outline"}><Clock3 data-icon="inline-start" />{formatRemainingTime(remainingSeconds)}</Badge>}
+        </div>
+      )}
+      <div className="grid items-start gap-5 @7xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem] @7xl:gap-6">
         <QuizNavigator
           questions={data.questions}
           answers={answers}
@@ -293,8 +301,8 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
 
         <section
           id="quiz-workspace"
-          className={`order-1 min-w-0 xl:order-2 ${
-            reviewing || !activeQuestion ? "xl:col-span-2" : ""
+          className={`order-1 min-w-0 @7xl:order-2 ${
+            reviewing || !activeQuestion ? "@7xl:col-span-2" : ""
           }`}
           aria-label="Ruang kerja quiz"
         >
@@ -357,7 +365,7 @@ export function QuizAttempt({ data, working }: { data: QuizData; working: boolea
 
         {!reviewing && activeQuestion && (
           <aside
-            className="order-3 min-w-0 xl:sticky xl:top-24"
+            className="order-3 min-w-0 @7xl:sticky @7xl:top-24"
             aria-label="Tutor untuk soal aktif"
           >
             <AiTutorPanel
@@ -427,11 +435,13 @@ function QuizAnswerAutosave({
       return;
     }
     if (fetcher.data?.saved || fetcher.data?.deleted) {
+      // A newer edit may already be waiting behind the request that finished.
+      if (normalizedAnswer === submittedValue) clearActivityDraft(quizDraftKey(attemptId, question.id));
       lastSavedValue.current = submittedValue;
       failedValue.current = null;
       onStatusChange(question.id, "saved");
     }
-  }, [fetcher.data, fetcher.state, onBlocked, onStatusChange, question.id]);
+  }, [fetcher.data, fetcher.state, onBlocked, onStatusChange, question.id, attemptId, normalizedAnswer]);
 
   useEffect(() => {
     if (
@@ -655,7 +665,7 @@ function QuizNavigator({
         : "idle";
   const questionButtons = (
     <div
-      className="grid grid-cols-6 gap-2 sm:grid-cols-10 xl:grid-cols-3"
+      className="grid grid-cols-6 gap-2 sm:grid-cols-10 @7xl:grid-cols-3"
       aria-label="Daftar soal"
     >
       {questions.map((question, index) => {
@@ -682,7 +692,7 @@ function QuizNavigator({
 
   return (
     <aside
-      className="order-2 min-w-0 xl:order-1 xl:sticky xl:top-24"
+      className="order-2 min-w-0 @7xl:order-1 @7xl:sticky @7xl:top-24"
       aria-label="Navigasi quiz"
     >
       <Card size="sm">
@@ -691,7 +701,7 @@ function QuizNavigator({
           <CardDescription>Pindah soal tanpa kehilangan jawaban.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          <div className="flex flex-wrap gap-2 xl:flex-col xl:items-start">
+          <div className="flex flex-wrap gap-2 @7xl:flex-col @7xl:items-start">
             {remainingSeconds !== null && (
               <Badge variant={remainingSeconds <= 60 ? "destructive" : "outline"}>
                 <Clock3 data-icon="inline-start" />
@@ -709,7 +719,7 @@ function QuizNavigator({
           </Progress>
 
           {questions.length > 18 ? (
-            <ScrollArea className="h-36 pr-3 xl:h-72">
+            <ScrollArea className="h-36 pr-3 @7xl:h-72">
               {questionButtons}
             </ScrollArea>
           ) : (

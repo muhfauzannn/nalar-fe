@@ -57,6 +57,7 @@ import type { AssignmentData, EarnedPoint, OffloadingLevel, OffloadingResult, Wo
 import { AccessNotice, contactTeacher, datedFact, noticeFacts, type Notice } from "../components/access-notice";
 import { AiTutorPanel } from "../components/ai-tutor-panel";
 import { useWritingSignals, writingSignalsKey } from "../hooks/use-writing-signals";
+import { assignmentDraftKey, readActivityDraft, writeActivityDraft } from "../lib/activity-drafts";
 
 const stageCopy: Record<
   WorkflowStage,
@@ -119,8 +120,12 @@ export function AssignmentPage({
   actionDraft,
   actionStage,
   earned = [],
+  embedded = false,
+  returnTo,
 }: {
   data: AssignmentData;
+  embedded?: boolean;
+  returnTo?: string;
   earned?: EarnedPoint[];
   actionError?: string;
   actionCode?: string;
@@ -141,16 +146,22 @@ export function AssignmentPage({
   const completedStages = submission?.stages.filter((stage) => stage.status === "completed").length ?? 0;
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden">
-      <div className="flex flex-col gap-8 lg:gap-10">
-        <AssignmentHeader
+    <div className="@container w-full max-w-full overflow-x-hidden">
+      <div className="flex flex-col gap-8 @5xl:gap-10">
+        {embedded ? (
+          <header className="flex flex-col gap-2">
+            <h2 className="font-heading text-xl font-semibold">{loaderData.title}</h2>
+            <div className="text-sm leading-relaxed"><MathText>{loaderData.instructions}</MathText></div>
+            <p className="text-xs text-muted-foreground">{completedStages} dari 5 tahap selesai</p>
+          </header>
+        ) : <AssignmentHeader
           data={loaderData}
           working={Boolean(activeStage)}
           finished={finished}
           completedStages={completedStages}
-        />
+        />}
 
-        {earned.length > 0 && <EarnedPoints earned={earned} courseId={loaderData.courseId} assignmentId={loaderData.id} />}
+        {earned.length > 0 && <EarnedPoints earned={earned} courseId={loaderData.courseId} assignmentId={loaderData.id} returnTo={returnTo} />}
 
         {actionError && !terminalActionError && (
           <Alert variant="destructive">
@@ -166,7 +177,7 @@ export function AssignmentPage({
             <AssignmentUnavailable data={loaderData} message={actionError} />
           )
         ) : finished ? (
-          <SubmissionResult assignment={loaderData} />
+          <SubmissionResult assignment={loaderData} returnTo={returnTo} />
         ) : canContinue ? (
           <AssignmentWorkspace
             assignment={loaderData}
@@ -182,7 +193,7 @@ export function AssignmentPage({
 }
 
 // What the stage just completed earned, shown once after the redirect.
-function EarnedPoints({ earned, courseId, assignmentId }: { earned: EarnedPoint[]; courseId: string; assignmentId: string }) {
+function EarnedPoints({ earned, courseId, assignmentId, returnTo }: { earned: EarnedPoint[]; courseId: string; assignmentId: string; returnTo?: string }) {
   const total = earned.reduce((sum, item) => sum + item.points, 0);
   return (
     <section
@@ -194,8 +205,8 @@ function EarnedPoints({ earned, courseId, assignmentId }: { earned: EarnedPoint[
         <p className="font-heading font-semibold tabular-nums">+{total} Poin Nalar</p>
         <p className="text-sm opacity-85">{earned.map((item) => pointCopy[item.kind].title).join(" · ")}</p>
       </div>
-      <Button variant="outline" size="sm" render={<Link to={`/courses/${courseId}/balai/${assignmentId}`} />}>
-        Lihat balai
+      <Button variant="outline" size="sm" render={<Link to={returnTo ?? `/courses/${courseId}/balai/${assignmentId}`} />}>
+        {returnTo ? "Kembali ke kelas" : "Lihat balai"}
       </Button>
     </section>
   );
@@ -263,8 +274,8 @@ function AssignmentHeader({
 
 function AssignmentStartPanel({ data, working }: { data: AssignmentData; working: boolean }) {
   return (
-    <section className="grid grid-flow-dense items-start gap-5 lg:grid-cols-12">
-      <Card className="lg:col-span-8">
+    <section className="grid grid-flow-dense items-start gap-5 @5xl:grid-cols-12">
+      <Card className="@5xl:col-span-8">
         <CardHeader>
           <CardTitle>Lima tahap</CardTitle>
         </CardHeader>
@@ -289,7 +300,7 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
         </CardContent>
       </Card>
 
-      <Card className="lg:col-span-4">
+      <Card className="@5xl:col-span-4">
         <CardHeader>
           <CardTitle>Rubrik</CardTitle>
         </CardHeader>
@@ -330,12 +341,12 @@ function AssignmentWorkspace({
   const guidedQuestioning = submission.currentStage === "2_guided_questioning";
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem]">
+    <div className="grid items-start gap-6 @7xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem]">
       <StageNavigator assignment={assignment} completedCount={completedCount} />
-      <div className="order-1 min-w-0 xl:order-2">
+      <div className="order-1 min-w-0 @7xl:order-2">
         <ActiveStage assignment={assignment} working={working} actionDraft={actionDraft} />
       </div>
-      <aside className="order-3 flex min-w-0 flex-col gap-5 xl:sticky xl:top-24">
+      <aside className="order-3 flex min-w-0 flex-col gap-5 @7xl:sticky @7xl:top-24">
         {guidedQuestioning && (
           <AiTutorPanel
             target={{ targetType: "assignment", targetId: submission.id }}
@@ -368,7 +379,7 @@ function StageNavigator({
 
   return (
     <aside
-      className="order-2 min-w-0 xl:order-1 xl:sticky xl:top-24"
+      className="order-2 min-w-0 @7xl:order-1 @7xl:sticky @7xl:top-24"
       aria-label="Tahapan assignment"
     >
       <Card size="sm">
@@ -502,7 +513,8 @@ function ActiveStage({
                   required
                   minLength={10}
                   rows={stage === "4_revision_finalization" ? 15 : 10}
-                  defaultValue={actionDraft}
+                  defaultValue={actionDraft ?? readActivityDraft(assignmentDraftKey(submission.id, stage))}
+                  onChange={(event) => writeActivityDraft(assignmentDraftKey(submission.id, stage), event.currentTarget.value)}
                   placeholder="Tulis jawabanmu…"
                   className="min-h-56 resize-y bg-background text-base leading-relaxed sm:min-h-64"
                   {...(recorded ? writing.bind : {})}
@@ -823,13 +835,13 @@ function AssignmentUnavailable({
   return <AccessNotice notice={notice} courseId={data.courseId} />;
 }
 
-function SubmissionResult({ assignment }: { assignment: AssignmentData }) {
+function SubmissionResult({ assignment, returnTo }: { assignment: AssignmentData; returnTo?: string }) {
   const submission = assignment.submission;
   if (!submission) return null;
   const returned = submission.status === "returned";
 
   return (
-    <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-8">
+    <section className="grid items-start gap-6 @7xl:grid-cols-[minmax(0,1fr)_22rem] @7xl:gap-8">
       <div className="flex min-w-0 flex-col gap-5">
         <Alert className="border-brand-mint bg-brand-mint-soft/45">
           <CheckCircle2 />
@@ -890,7 +902,7 @@ function SubmissionResult({ assignment }: { assignment: AssignmentData }) {
         </Card>
       </div>
 
-      <aside className="xl:sticky xl:top-24">
+      <aside className="@7xl:sticky @7xl:top-24">
         <Card>
           <CardHeader>
             <CardTitle>Ringkasan submission</CardTitle>
@@ -913,8 +925,8 @@ function SubmissionResult({ assignment }: { assignment: AssignmentData }) {
             ))}
           </CardContent>
           <CardFooter>
-            <Button type="button" variant="outline" className="w-full" render={<Link to={`/courses/${assignment.courseId}`} />}>
-              Kembali ke pulau
+            <Button type="button" variant="outline" className="w-full" render={<Link to={returnTo ?? `/courses/${assignment.courseId}`} />}>
+              {returnTo ? "Kembali ke kelas" : "Kembali ke pulau"}
             </Button>
           </CardFooter>
         </Card>

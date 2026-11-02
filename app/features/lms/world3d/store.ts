@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 import type { CourseData, EarnedPoint, IslandData, LessonData, WorkflowStage, WorldData } from "../types";
+import { classroomFocus, type ClassroomFocus } from "./classroom-focus";
 
 // What the persistent 3D world shows. The world routes (Dunia, Pulau, Balai)
 // write their loader data and their shot here; the canvas in the student shell
@@ -12,8 +13,8 @@ export type WorldShot =
   | { kind: "island"; courseId: string }
   | { kind: "place"; courseId: string; place: "library" | "lab" | "arena" }
   | { kind: "hall"; courseId: string; assignmentId: string }
-  /** Inside the course's classroom; `board` when the student reads at the blackboard. */
-  | { kind: "classroom"; courseId: string; board: boolean };
+  /** The focused station stays inside the course's classroom. */
+  | { kind: "classroom"; courseId: string; focus: ClassroomFocus | null };
 
 export type ChestState = "locked" | "ready" | "open";
 
@@ -35,7 +36,7 @@ export function classroomForScene(scene: WorldScene) {
   if (shot.kind !== "classroom" || !detail) return null;
   if (detail.course.course.id !== shot.courseId || detail.island.course.id !== shot.courseId) return null;
   if (lesson && lesson.courseId !== shot.courseId) return null;
-  return { courseId: shot.courseId, board: shot.board, course: detail.course, island: detail.island, lesson };
+  return { courseId: shot.courseId, focus: shot.focus, course: detail.course, island: detail.island, lesson };
 }
 
 let scene: WorldScene = { world: null, detail: null, shot: { kind: "world" }, lit: null, chest: null, onSelectPost: null, lesson: null };
@@ -66,7 +67,7 @@ export function shotForUrl(pathname: string, search: string): WorldShot | null {
   const [first, courseId, third, assignmentId, ...rest] = pathname.split("/").filter(Boolean);
   if (first !== "courses" || !courseId || courseId === "join" || rest.length) return null;
   if (third === "balai" && assignmentId) return { kind: "hall", courseId, assignmentId };
-  if (third === "kelas" && !assignmentId) return { kind: "classroom", courseId, board: new URLSearchParams(search).get("fokus") === "papan" };
+  if (third === "kelas" && !assignmentId) return { kind: "classroom", courseId, focus: classroomFocus(new URLSearchParams(search)) };
   if (third) return null;
   const place = new URLSearchParams(search).get("tempat");
   return PLACES.find((item) => item === place) ? { kind: "place", courseId, place: place as (typeof PLACES)[number] } : { kind: "island", courseId };

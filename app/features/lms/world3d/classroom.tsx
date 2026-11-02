@@ -10,7 +10,9 @@ import { studentResourceFileUrl } from "~/lib/files";
 import { loadPdfjs } from "../lib/pdfjs";
 import type { CourseData, IslandData, LessonData } from "../types";
 import ROOM from "./classroom-layout.json";
-import { setBoardRect } from "./board-rect";
+import { setSurfaceRect } from "./board-rect";
+import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
+import { classroomSurface, stationAspect, stationPose, stationRect } from "./surface-projection";
 import { STILL } from "./ground";
 import { sketchOf, type Vec3 } from "./layout";
 import { Clickable, Sign, SignText } from "./signs";
@@ -36,56 +38,41 @@ const HOME: Pose = { p: ROOM.camera.position as Vec3, t: ROOM.camera.target as V
 /** Just outside the door: the dolly into the room starts here. */
 const DOOR: Pose = { p: [HOME.p[0] * 0.4, HOME.p[1] + 0.3, HOME.p[2] + 3.2], t: HOME.t };
 
-/** Square to the board, as close as the screen allows with a small margin. */
-function boardPose(aspect: number, narrow: boolean): Pose {
-  const [x, y, z] = ROOM.board.center as Vec3;
-  const half = Math.tan(THREE.MathUtils.degToRad(ROOM.camera.fov) / 2);
-  const fill = narrow ? 0.98 : 0.9;
-  const byHeight = ROOM.board.height / 2 / half / fill;
-  const byWidth = ROOM.board.width / 2 / (half * aspect) / fill;
-  return { p: [x, y, z + Math.max(byHeight, byWidth)], t: [x, y, z] };
-}
-
-function RoomCamera({ board }: { board: boolean }) {
+function RoomCamera({ focus }: { focus: ClassroomFocus | null }) {
   const ref = useRef<THREE.PerspectiveCamera>(null);
   const { size, setFrameloop, invalidate } = useThree();
   const state = useRef({ px: DOOR.p[0], py: DOOR.p[1], pz: DOOR.p[2], tx: DOOR.t[0], ty: DOOR.t[1], tz: DOOR.t[2] });
-  const settled = useRef(false);
-  const aspect = size.width / size.height;
-  const narrow = size.width < 768;
   useEffect(() => {
-    const pose = board ? boardPose(aspect, narrow) : HOME;
+    const pose = focus ? stationPose(focus, size.width, size.height) : HOME;
     const to = { px: pose.p[0], py: pose.p[1], pz: pose.p[2], tx: pose.t[0], ty: pose.t[1], tz: pose.t[2] };
     const g = gameGsap();
+    let frame = 0;
+    let live = true;
     g.killTweensOf(state.current);
-    settled.current = false;
-    setBoardRect(null);
+    setSurfaceRect(null);
     setFrameloop("always");
     const done = () => {
-      settled.current = true;
-      if (!board) return;
-      // Reading at the board: the reader is laid over it and the room stops rendering.
+      if (!live || !focus || !ref.current) return;
       place();
-      setBoardRect(rectOf(ref.current!, size.width, size.height));
+      setSurfaceRect(focus, stationRect(ref.current, focus, size.width, size.height));
       invalidate();
-      requestAnimationFrame(() => setFrameloop("demand"));
+      frame = requestAnimationFrame(() => { if (live) setFrameloop("demand"); });
     };
     if (STILL) {
       Object.assign(state.current, to);
       done();
-      return;
+    } else {
+      playSound("whoosh");
+      g.to(state.current, { ...to, duration: focus ? 0.85 : 1.1, ease: "power2.inOut", onComplete: done });
     }
-    playSound("whoosh");
-    g.to(state.current, { ...to, duration: board ? 0.85 : 1.1, ease: "power2.inOut", onComplete: done });
     return () => {
+      live = false;
+      cancelAnimationFrame(frame);
       g.killTweensOf(state.current);
+      setSurfaceRect(null);
+      setFrameloop("always");
     };
-  }, [board, aspect, narrow, setFrameloop]);
-  // Leaving the room renders the world again.
-  useEffect(() => () => {
-    setBoardRect(null);
-    setFrameloop("always");
-  }, [setFrameloop]);
+  }, [focus, size.width, size.height, setFrameloop, invalidate]);
   function place() {
     const camera = ref.current;
     if (!camera) return;
@@ -97,19 +84,27 @@ function RoomCamera({ board }: { board: boolean }) {
     camera.updateMatrixWorld();
   }
   useFrame(place);
-  useEffect(() => invalidate(), [size, invalidate]);
   return <PerspectiveCamera ref={ref} makeDefault fov={ROOM.camera.fov} near={0.05} far={60} position={DOOR.p} />;
 }
 
-/** The board surface's corners on screen: the reader is laid exactly over them. */
-function rectOf(camera: THREE.PerspectiveCamera, width: number, height: number) {
-  const [cx, cy, cz] = ROOM.board.center as Vec3;
-  const w = ROOM.board.width / 2, h = ROOM.board.height / 2;
-  const a = new THREE.Vector3(cx - w, cy + h, cz).project(camera);
-  const b = new THREE.Vector3(cx + w, cy - h, cz).project(camera);
-  const left = ((a.x + 1) / 2) * width, top = ((1 - a.y) / 2) * height;
-  const right = ((b.x + 1) / 2) * width, bottom = ((1 - b.y) / 2) * height;
-  return { left: Math.round(left), top: Math.round(top), width: Math.round(right - left), height: Math.round(bottom - top) };
+/** Physical screens on the bench, quiz stand, and the opened assignment book. */
+function StationSurface({ station, active, onOpen }: { station: Exclude<ClassroomFocus, "papan">; active: boolean; onOpen?: () => void }) {
+  const { width, height } = useThree((state) => state.size);
+  const surface = classroomSurface(station, active ? stationAspect(width, height) : undefined);
+  const frame = station === "lab" ? "#256b59" : station === "tugas" ? "#8a614a" : "#5e4ac4";
+  return (
+    <group position={surface.center} rotation={[surface.tilt, 0, 0]} onClick={(event) => { event.stopPropagation(); onOpen?.(); }}>
+      <mesh position={[0, 0, -0.045]} castShadow receiveShadow>
+        <boxGeometry args={[surface.width + 0.16, surface.height + 0.16, 0.08]} />
+        <meshStandardMaterial color={frame} roughness={0.8} />
+      </mesh>
+      <mesh>
+        <planeGeometry args={[surface.width, surface.height]} />
+        <meshBasicMaterial color={station === "lab" ? "#edf8f4" : "#fffaf0"} toneMapped={false} />
+      </mesh>
+      {station === "tugas" && !active && <mesh position={[0, 0, 0.005]}><planeGeometry args={[0.025, surface.height]} /><meshBasicMaterial color="#d6c8b5" /></mesh>}
+    </group>
+  );
 }
 
 // ---- the blackboard's face: the lesson's PDF pinned on chalk green --------------------------
@@ -303,7 +298,7 @@ function Books({ course, island, onOpen }: { course: CourseData; island: IslandD
   );
 }
 
-export function Classroom({ courseId, board, lesson, course, island }: { courseId: string; board: boolean; lesson: LessonData | null; course: CourseData | null; island: IslandData | null }) {
+export function Classroom({ courseId, focus, lesson, course, island }: { courseId: string; focus: ClassroomFocus | null; lesson: LessonData | null; course: CourseData | null; island: IslandData | null }) {
   const { scene } = useGLTF(CLASSROOM_URL, false, true);
   const navigate = useNavigate();
   const gl = useThree((state) => state.gl);
@@ -337,15 +332,15 @@ export function Classroom({ courseId, board, lesson, course, island }: { courseI
   const labLesson = island?.labs[0]?.lessonId ?? null;
   const quiz = course?.quizzes[0]?.id ?? null;
   const go = {
-    board: () => navigate(`/courses/${courseId}/kelas?${new URLSearchParams({ ...(lessonId ? { materi: lessonId } : {}), fokus: "papan" })}`),
-    lab: () => labLesson && navigate(`/lessons/${labLesson}?ruang=lab`),
-    book: (assignmentId: string) => navigate(`/courses/${courseId}/balai/${assignmentId}`),
-    quiz: () => quiz && navigate(`/quizzes/${quiz}`),
+    board: () => navigate(classroomUrl(courseId, { lessonId, focus: "papan" })),
+    lab: () => labLesson && navigate(classroomUrl(courseId, { lessonId, focus: "lab", labId: island?.labs[0]?.id })),
+    book: (assignmentId: string) => { if (!focus) navigate(classroomUrl(courseId, { lessonId, focus: "tugas", assignmentId })); },
+    quiz: () => quiz && navigate(classroomUrl(courseId, { lessonId, focus: "kuis", quizId: quiz })),
   };
-  const show = !board;
+  const show = focus === null;
   return (
     <group>
-      <RoomCamera board={board} />
+      <RoomCamera focus={focus} />
       <hemisphereLight args={["#fff7ee", "#8b7fd0", 1.15]} />
       <directionalLight
         castShadow
@@ -367,11 +362,17 @@ export function Classroom({ courseId, board, lesson, course, island }: { courseI
 
       <primitive object={room} />
       <BoardFace lesson={lesson} />
+      <StationSurface station="lab" active={focus === "lab"} onOpen={show ? go.lab : undefined} />
+      <StationSurface station="kuis" active={focus === "kuis"} onOpen={show ? go.quiz : undefined} />
+      <StationSurface station="tugas" active={focus === "tugas"} onOpen={show ? () => course?.assignments[0] && go.book(course.assignments[0].id) : undefined} />
       {course && island && <Books course={course} island={island} onOpen={go.book} />}
 
+      {show && <>
       <Hit at={ROOM.board.center as Vec3} size={[ROOM.board.width, ROOM.board.height, 0.1]} label="Papan tulis" onClick={go.board} />
       <Hit at={s.lab.look as Vec3} size={[1.4, 1.6, 3.4]} label="Meja lab" onClick={go.lab} />
       <Hit at={s.quiz.look as Vec3} size={[1.4, 1.4, 1.4]} label="Target quiz" onClick={go.quiz} />
+      <Hit at={classroomSurface("tugas").center} size={[2.4, 1.5, 0.2]} label="Buku tugas" onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} />
+      </>}
 
       <Sign position={s.materi.sign as Vec3} show={show} onClick={go.board} label="Materi: baca di papan">
         <SignText small="Materi" strong={lesson?.title ?? "Papan tulis"} />
@@ -379,7 +380,7 @@ export function Classroom({ courseId, board, lesson, course, island }: { courseI
       <Sign position={s.lab.sign as Vec3} show={show && Boolean(labLesson)} onClick={go.lab} label="Lab">
         <SignText small="Lab" strong="Meja percobaan" />
       </Sign>
-      <Sign position={s.tugas.sign as Vec3} show={show && Boolean(course?.assignments.length)} label="Tugas">
+      <Sign position={s.tugas.sign as Vec3} show={show && Boolean(course?.assignments.length)} onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} label="Tugas">
         <SignText small="Tugas" strong={`${course?.assignments.length ?? 0} buku`} />
       </Sign>
       <Sign position={s.quiz.sign as Vec3} show={show && Boolean(quiz)} onClick={go.quiz} label="Quiz">

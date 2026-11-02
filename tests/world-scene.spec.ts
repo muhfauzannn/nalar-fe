@@ -19,15 +19,15 @@ const lesson: LessonData = {
 const world: WorldScene = {
   world: null, detail: null, shot: { kind: "world" }, lesson: null, lit: null, chest: null, onSelectPost: null,
 };
-const loaded: WorldScene = { ...world, detail: { course, island }, lesson, shot: { kind: "classroom", courseId: "course-a", board: false } };
+const loaded: WorldScene = { ...world, detail: { course, island }, lesson, shot: { kind: "classroom", courseId: "course-a", focus: null } };
 
 test("a cold world cannot open the room before the classroom loader commits", () => {
   const target = shotForUrl("/courses/course-a/kelas", "?fokus=papan");
-  expect(target).toEqual({ kind: "classroom", courseId: "course-a", board: true });
+  expect(target).toEqual({ kind: "classroom", courseId: "course-a", focus: "papan" });
   expect(classroomForScene(world)).toBeNull();
   // Even a premature shot without its data must not mount Classroom.
   expect(classroomForScene({ ...world, shot: target! })).toBeNull();
-  expect(classroomForScene(loaded)).toMatchObject({ courseId: "course-a", lesson, board: false });
+  expect(classroomForScene(loaded)).toMatchObject({ courseId: "course-a", lesson, focus: null });
 });
 
 test("prefetched course data alone does not open the classroom", () => {
@@ -35,14 +35,14 @@ test("prefetched course data alone does not open the classroom", () => {
 });
 
 test("a classroom never consumes a previously visited course's data", () => {
-  expect(classroomForScene({ ...loaded, shot: { kind: "classroom", courseId: "course-b", board: false } })).toBeNull();
+  expect(classroomForScene({ ...loaded, shot: { kind: "classroom", courseId: "course-b", focus: null } })).toBeNull();
   expect(classroomForScene({ ...loaded, detail: { course, island: { ...island, course: { ...island.course, id: "course-b" } } } })).toBeNull();
   expect(classroomForScene({ ...loaded, lesson: { ...lesson, courseId: "course-b" } })).toBeNull();
 });
 
 test("refreshing directly into the classroom and changing board focus use the loaded lesson", () => {
   expect(classroomForScene(loaded)).toMatchObject({ courseId: "course-a", course, island, lesson });
-  expect(classroomForScene({ ...loaded, shot: { kind: "classroom", courseId: "course-a", board: true } })).toMatchObject({ board: true, lesson });
+  expect(classroomForScene({ ...loaded, shot: { kind: "classroom", courseId: "course-a", focus: "papan" } })).toMatchObject({ focus: "papan", lesson });
 });
 
 test("a loaded classroom with no lessons is still ready", () => {

@@ -29,12 +29,13 @@ export function Overlay({ children }: { children: ReactNode }) {
 export const card = "pointer-events-auto rounded-[22px] bg-white shadow-[0_12px_30px_-10px_rgba(24,21,58,.35)]";
 export const press = "transition-transform duration-150 active:scale-[0.97]";
 
-export function TopBar({ back, crumbs }: { back?: string; crumbs: { label: string; to?: string }[] }) {
+export function TopBar({ back, backLabel, crumbs }: { back?: string; backLabel?: string; crumbs: { label: string; to?: string }[] }) {
   return (
     <div className="absolute left-3 right-3 top-3 flex items-center gap-2 sm:left-4 sm:top-4">
       {back && (
-        <Link to={back} aria-label="Kembali" className={cn("pointer-events-auto grid size-11 place-items-center rounded-[14px] bg-white/93 shadow-sm", press)}>
+        <Link to={back} aria-label={backLabel ?? "Kembali"} className={cn("pointer-events-auto flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-white/93 px-3 shadow-sm", press)}>
           <ChevronLeft className="size-5" aria-hidden="true" />
+          {backLabel && <span className="text-sm font-semibold max-sm:sr-only">{backLabel}</span>}
         </Link>
       )}
       <nav aria-label="Lokasi" className="pointer-events-auto flex min-w-0 items-center gap-0.5 rounded-[14px] bg-white/90 px-2.5 py-1.5 text-[13px] shadow-sm">

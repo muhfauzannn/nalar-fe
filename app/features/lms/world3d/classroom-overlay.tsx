@@ -1,82 +1,278 @@
-import { BookOpen, Check, FlaskConical, NotebookPen, Target } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import {
+  BookOpen,
+  Check,
+  FlaskConical,
+  NotebookPen,
+  Target,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Link,
+  useNavigate,
+  useRevalidator,
+  useSearchParams,
+} from "react-router";
 
 import { MathText } from "~/components/math-text";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { LABS } from "~/features/labs";
 import { cn } from "~/lib/utils";
-
+import type { loadClassroom } from "../api/classroom";
+import { LessonLabs } from "../components/lesson-labs";
 import { PdfReader } from "../components/pdf-reader";
-import type { CourseData, IslandData, LessonData } from "../types";
-import { useBoardRect } from "./board-rect";
-import { sketchOf } from "./layout";
+import { AssignmentPage } from "../pages/assignment-page";
+import { QuizPage } from "../pages/quiz-page";
+import { useSurfaceRect } from "./board-rect";
+import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { card, Dock, Overlay, press, TopBar } from "./overlays";
 import { useStageScene } from "./store";
 
-// The buttons and cards over the classroom. In the room: which lesson is on
-// the board and the four stations. At the board: only the lesson's PDF (or its
-// text), laid exactly over the blackboard the 3D camera has squared up to.
+type Props = Awaited<ReturnType<typeof loadClassroom>> & {
+  focus: ClassroomFocus | null;
+  actionError?: string;
+  actionCode?: string;
+  actionDraft?: string;
+  actionStage?: string;
+};
 
-const kelas = (courseId: string, lessonId: string | null, board = false) =>
-  `/courses/${courseId}/kelas?${new URLSearchParams({ ...(lessonId ? { materi: lessonId } : {}), ...(board ? { fokus: "papan" } : {}) })}`;
+const labels = {
+  papan: "Papan materi",
+  lab: "Meja percobaan",
+  kuis: "Papan kuis",
+  tugas: "Buku tugas",
+};
 
-export function ClassroomOverlay({ course, island, lesson, board }: { course: CourseData; island: IslandData; lesson: LessonData | null; board: boolean }) {
+export function ClassroomOverlay({
+  course,
+  island,
+  lesson,
+  labLesson,
+  quiz,
+  assignment,
+  earned,
+  focus,
+  ...action
+}: Props) {
   const courseId = course.course.id;
   const detail = useMemo(() => ({ course, island }), [course, island]);
-  useStageScene({ detail, shot: { kind: "classroom", courseId, board }, lesson }, [detail, courseId, board, lesson]);
-  const lessons = useMemo(() => course.modules.slice().sort((a, b) => a.position - b.position).flatMap((module) => module.lessons), [course]);
-  // The book to open: the first unfinished one, or the first when all are done.
-  const nextHall = useMemo(() => {
-    const halls = sketchOf(course, island).halls;
-    return halls.find((hall) => !hall.chestOpen) ?? halls[0] ?? null;
-  }, [course, island]);
-  const labLesson = island.labs[0]?.lessonId ?? null;
-  const quiz = course.quizzes[0] ?? null;
+  useStageScene(
+    { detail, shot: { kind: "classroom", courseId, focus }, lesson },
+    [detail, courseId, focus, lesson],
+  );
+  const [search] = useSearchParams();
+  const revalidator = useRevalidator();
+  const lessons = useMemo(
+    () =>
+      course.modules
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .flatMap((module) => module.lessons),
+    [course],
+  );
   const lessonId = lesson?.id ?? null;
+  const selectedLab =
+    island.labs.find((lab) => lab.id === search.get("lab")) ?? island.labs[0];
+  const nextAssignment =
+    course.assignments.find(
+      (item) =>
+        item.submissionStatus !== "submitted" &&
+        item.submissionStatus !== "returned",
+    ) ?? course.assignments[0];
+  const at = (
+    station: ClassroomFocus | null,
+    changes: {
+      lessonId?: string;
+      labId?: string;
+      quizId?: string;
+      assignmentId?: string;
+    } = {},
+  ) =>
+    classroomUrl(courseId, {
+      lessonId,
+      focus: station,
+      labId: search.get("lab"),
+      quizId: search.get("kuis"),
+      assignmentId: search.get("tugas"),
+      ...changes,
+    });
+  const closeTo = at(null);
+  const labOptions = island.labs.map((lab) => ({
+    id: lab.id,
+    title: LABS[lab.labKey]?.title ?? lab.labKey,
+  }));
+  const activeLabs =
+    labLesson?.labs.filter(
+      (lab) => lab.id === selectedLab?.id && LABS[lab.labKey],
+    ) ?? [];
+
   return (
     <Overlay>
       <TopBar
-        back={board ? kelas(courseId, lessonId) : `/courses/${courseId}?tempat=library`}
-        crumbs={[{ label: "Dunia", to: "/dunia" }, { label: `Pulau ${course.course.subjectName}`, to: `/courses/${courseId}` }, board ? { label: "Kelas", to: kelas(courseId, lessonId) } : { label: "Kelas" }, ...(board && lesson ? [{ label: lesson.title }] : [])]}
+        back={focus ? closeTo : `/courses/${courseId}?tempat=library`}
+        backLabel={focus ? "Kembali melihat kelas" : undefined}
+        crumbs={[
+          { label: "Dunia", to: "/dunia" },
+          {
+            label: `Pulau ${course.course.subjectName}`,
+            to: `/courses/${courseId}`,
+          },
+          focus ? { label: "Kelas", to: closeTo } : { label: "Kelas" },
+          ...(focus ? [{ label: labels[focus] }] : []),
+        ]}
       />
-      {board ? (
-        lesson && <BoardReader lesson={lesson} closeTo={kelas(courseId, lessonId)} />
+      {focus ? (
+        <StationWorkspace key={focus} focus={focus} closeTo={closeTo}>
+          {focus === "papan" ? (
+            lesson ? (
+              <BoardReader lesson={lesson} />
+            ) : (
+              <Unavailable title="Belum ada materi" />
+            )
+          ) : focus === "lab" ? (
+            <div className="flex flex-col gap-4 p-4 sm:p-6">
+              <ActivityChoices
+                label="Pilih percobaan"
+                items={labOptions}
+                selected={selectedLab?.id}
+                href={(id) => at("lab", { labId: id })}
+              />
+              {activeLabs.length ? (
+                <LessonLabs
+                  key={selectedLab?.id}
+                  labs={activeLabs}
+                  onSolved={() => void revalidator.revalidate()}
+                />
+              ) : (
+                <Unavailable title="Belum ada percobaan" />
+              )}
+            </div>
+          ) : focus === "kuis" ? (
+            <div className="flex flex-col gap-4 p-4 sm:p-6">
+              <ActivityChoices
+                label="Pilih kuis"
+                items={course.quizzes}
+                selected={quiz?.quiz.id}
+                href={(id) => at("kuis", { quizId: id })}
+              />
+              {quiz ? (
+                <QuizPage
+                  key={quiz.quiz.id}
+                  data={quiz}
+                  embedded
+                  returnTo={closeTo}
+                  {...action}
+                />
+              ) : (
+                <Unavailable title="Belum ada kuis" />
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 p-4 sm:p-6">
+              <ActivityChoices
+                label="Pilih buku tugas"
+                items={course.assignments}
+                selected={assignment?.id}
+                href={(id) => at("tugas", { assignmentId: id })}
+              />
+              {assignment ? (
+                <AssignmentPage
+                  key={assignment.id}
+                  data={assignment}
+                  earned={earned}
+                  embedded
+                  returnTo={closeTo}
+                  {...action}
+                />
+              ) : (
+                <Unavailable title="Belum ada tugas" />
+              )}
+            </div>
+          )}
+        </StationWorkspace>
       ) : (
         <Dock>
           {lessons.length > 0 && (
-            <section aria-label="Materi di papan" className={cn(card, "flex w-full max-w-[34rem] flex-col gap-2 p-3")}>
+            <section
+              aria-label="Materi di papan"
+              className={cn(
+                card,
+                "flex w-full max-w-[34rem] flex-col gap-2 p-3",
+              )}
+            >
               <div className="flex items-center gap-2 px-1">
-                <BookOpen className="size-4 text-[#5e4ac4]" aria-hidden="true" />
+                <BookOpen
+                  className="size-4 text-[#5e4ac4]"
+                  aria-hidden="true"
+                />
                 <h2 className="text-sm font-bold">Di papan</h2>
-                <span className="text-xs text-[#5e5e72]">Pilih materi, lalu baca di papan</span>
+                <span className="text-xs text-[#5e5e72]">
+                  Pilih materi, lalu baca di papan
+                </span>
               </div>
               <div className="flex gap-1.5 overflow-x-auto pb-0.5">
                 {lessons.map((item) => (
                   <Link
                     key={item.id}
-                    to={kelas(courseId, item.id)}
+                    to={at(null, { lessonId: item.id })}
                     replace
                     preventScrollReset
                     aria-current={item.id === lessonId ? "true" : undefined}
                     className={cn(
                       "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold",
-                      item.id === lessonId ? "border-[#18153a] bg-[#18153a] text-white" : "border-[#e4def8] bg-white hover:bg-[#f6f3fd]",
+                      item.id === lessonId
+                        ? "border-[#18153a] bg-[#18153a] text-white"
+                        : "border-[#e4def8] bg-white hover:bg-[#f6f3fd]",
                       press,
                     )}
                   >
-                    {item.status === "completed" && <Check className="size-3.5 text-[#4bd29f]" aria-label="Selesai" />}
+                    {item.status === "completed" && (
+                      <Check
+                        className="size-3.5 text-[#4bd29f]"
+                        aria-label="Selesai"
+                      />
+                    )}
                     <span className="max-w-[14rem] truncate">{item.title}</span>
                   </Link>
                 ))}
               </div>
-              <Link to={kelas(courseId, lessonId, true)} className={cn("flex items-center justify-center gap-2 rounded-[14px] bg-[#18153a] px-4 py-3 text-sm font-bold text-white", press)}>
+              <Link
+                to={at("papan")}
+                className={cn(
+                  "flex items-center justify-center gap-2 rounded-[14px] bg-[#18153a] px-4 py-3 text-sm font-bold text-white",
+                  press,
+                )}
+              >
                 <BookOpen className="size-4" aria-hidden="true" /> Baca di papan
               </Link>
             </section>
           )}
-          <nav aria-label="Stasiun kelas" className={cn(card, "grid w-full max-w-[34rem] grid-cols-3 p-1.5")}>
-            <Station to={labLesson ? `/lessons/${labLesson}?ruang=lab` : null} icon={<FlaskConical className="size-5" aria-hidden="true" />} label="Lab" />
-            <Station to={nextHall ? `/courses/${courseId}/balai/${nextHall.assignmentId}` : null} icon={<NotebookPen className="size-5" aria-hidden="true" />} label="Tugas" />
-            <Station to={quiz ? `/quizzes/${quiz.id}` : null} icon={<Target className="size-5" aria-hidden="true" />} label="Quiz" />
+          <nav
+            aria-label="Stasiun kelas"
+            className={cn(card, "grid w-full max-w-[34rem] grid-cols-3 p-1.5")}
+          >
+            <Station
+              to={selectedLab ? at("lab", { labId: selectedLab.id }) : null}
+              icon={<FlaskConical className="size-5" aria-hidden="true" />}
+              label="Lab"
+            />
+            <Station
+              to={
+                nextAssignment
+                  ? at("tugas", { assignmentId: nextAssignment.id })
+                  : null
+              }
+              icon={<NotebookPen className="size-5" aria-hidden="true" />}
+              label="Tugas"
+            />
+            <Station
+              to={
+                course.quizzes[0]
+                  ? at("kuis", { quizId: course.quizzes[0].id })
+                  : null
+              }
+              icon={<Target className="size-5" aria-hidden="true" />}
+              label="Kuis"
+            />
           </nav>
         </Dock>
       )}
@@ -84,67 +280,170 @@ export function ClassroomOverlay({ course, island, lesson, board }: { course: Co
   );
 }
 
-function Station({ to, icon, label }: { to: string | null; icon: React.ReactNode; label: string }) {
-  if (!to) {
-    return (
-      <span className="flex flex-col items-center gap-1 rounded-2xl py-2 text-[13px] font-semibold text-[#a6a3bd]" aria-disabled="true">
-        {icon}
-        {label}
-      </span>
-    );
-  }
+function ActivityChoices({
+  label,
+  items,
+  selected,
+  href,
+}: {
+  label: string;
+  items: { id: string; title: string }[];
+  selected?: string;
+  href: (id: string) => string;
+}) {
+  if (items.length < 2) return null;
   return (
-    <Link to={to} className={cn("pointer-events-auto flex flex-col items-center gap-1 rounded-2xl py-2 text-[13px] font-semibold hover:bg-[#f6f3fd]", press)}>
-      {icon}
-      {label}
-    </Link>
+    <nav aria-label={label} className="flex flex-wrap gap-2">
+      {items.map((item) => (
+        <Link
+          key={item.id}
+          to={href(item.id)}
+          replace
+          preventScrollReset
+          aria-current={selected === item.id ? "true" : undefined}
+          className={cn(
+            "rounded-lg border px-3 py-2 text-sm",
+            selected === item.id
+              ? "bg-primary text-primary-foreground"
+              : "bg-background text-foreground",
+          )}
+        >
+          {item.title}
+        </Link>
+      ))}
+    </nav>
   );
 }
 
-/**
- * The board, opened: only the lesson's PDF, laid exactly over the blackboard
- * once the camera has settled (full width under the top bar on a phone). The
- * back button or Esc returns to the room.
- */
-function BoardReader({ lesson, closeTo }: { lesson: LessonData; closeTo: string }) {
-  const rect = useBoardRect();
+function Station({
+  to,
+  icon,
+  label,
+}: {
+  to: string | null;
+  icon: ReactNode;
+  label: string;
+}) {
+  const content = (
+    <>
+      {icon}
+      {label}
+    </>
+  );
+  return to ? (
+    <Link
+      to={to}
+      className={cn(
+        "pointer-events-auto flex flex-col items-center gap-1 rounded-2xl py-2 text-[13px] font-semibold hover:bg-[#f6f3fd]",
+        press,
+      )}
+    >
+      {content}
+    </Link>
+  ) : (
+    <span
+      className="flex flex-col items-center gap-1 rounded-2xl py-2 text-[13px] font-semibold text-[#a6a3bd]"
+      aria-disabled="true"
+    >
+      {content}
+    </span>
+  );
+}
+
+function StationWorkspace({
+  focus,
+  closeTo,
+  children,
+}: {
+  focus: ClassroomFocus;
+  closeTo: string;
+  children: ReactNode;
+}) {
+  const rect = useSurfaceRect(focus);
+  const [lastRect, setLastRect] = useState(rect);
   const navigate = useNavigate();
-  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
+  const panel = useRef<HTMLElement>(null);
+  const entered = useRef(false);
   useEffect(() => {
-    const query = window.matchMedia("(max-width: 767px)");
-    const onChange = () => setNarrow(query.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
+    if (rect) setLastRect(rect);
+  }, [rect]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") navigate(closeTo);
+      if (
+        event.key === "Escape" &&
+        !event.isComposing &&
+        !event.defaultPrevented
+      )
+        navigate(closeTo);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate, closeTo]);
-  const file = lesson.resources.find((resource) => resource.file);
-
-  if (!rect) return null;
-  const style = narrow ? undefined : { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  useEffect(() => {
+    if (rect && !entered.current) {
+      panel.current?.focus({ preventScroll: true });
+      entered.current = true;
+    }
+  }, [rect]);
+  // Resizing (including a mobile keyboard opening) reframes the camera. Keep
+  // the form mounted so its text, focus, timer and pending autosaves survive.
+  const position = rect ?? lastRect;
+  if (!position)
+    return (
+      <p
+        role="status"
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm shadow-sm"
+      >
+        Mendekati {labels[focus].toLowerCase()}…
+      </p>
+    );
   return (
     <section
-      aria-label={`Papan: ${lesson.title}`}
-      style={style}
+      ref={panel}
+      tabIndex={-1}
+      aria-label={labels[focus]}
+      data-classroom-surface={focus}
+      style={position}
+      aria-busy={!rect}
       className={cn(
-        "pointer-events-auto absolute overflow-y-auto overscroll-contain bg-white transition-opacity duration-200 ease-out starting:opacity-0",
-        narrow ? "inset-x-0 bottom-0 top-[4.25rem]" : "rounded-[6px]",
+        "pointer-events-auto absolute overflow-y-auto overscroll-contain rounded-[4px] bg-background text-foreground shadow-sm outline-none [color-scheme:light] [touch-action:pan-y] [&_input]:text-base [&_textarea]:text-base",
+        !rect && "pointer-events-none opacity-0",
+        focus === "papan" && "bg-white text-[#18153a]",
       )}
     >
-      {file ? (
-        <PdfReader resourceId={file.id} title={file.title} guidance={null} onContext={ignore} />
-      ) : (
-        <article className="mx-auto max-w-[44rem] px-5 py-6 leading-8">
-          {lesson.content ? <MathText>{lesson.content}</MathText> : <p className="text-[#5e5e72]">Materi ini belum berisi teks atau PDF.</p>}
-        </article>
-      )}
+      {children}
     </section>
   );
 }
 
+function BoardReader({ lesson }: { lesson: NonNullable<Props["lesson"]> }) {
+  const file = lesson.resources.find((resource) => resource.file);
+  return file ? (
+    <PdfReader
+      resourceId={file.id}
+      title={file.title}
+      guidance={null}
+      onContext={ignore}
+    />
+  ) : (
+    <article className="mx-auto max-w-[44rem] px-5 py-6 leading-8">
+      {lesson.content ? (
+        <MathText>{lesson.content}</MathText>
+      ) : (
+        <p className="text-[#5e5e72]">Materi ini belum berisi teks atau PDF.</p>
+      )}
+    </article>
+  );
+}
+
+function Unavailable({ title }: { title: string }) {
+  return (
+    <Alert>
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>
+        Aktivitas akan muncul di stasiun ini setelah ditambahkan oleh pengajar.
+      </AlertDescription>
+    </Alert>
+  );
+}
 const ignore = () => {};

@@ -52,8 +52,12 @@ export function QuizPage({
   data: loaderData,
   actionError,
   actionCode,
+  embedded = false,
+  returnTo,
 }: {
   data: QuizData;
+  embedded?: boolean;
+  returnTo?: string;
   actionError?: string;
   actionCode?: string;
 }) {
@@ -105,10 +109,15 @@ export function QuizPage({
   );
 
   return (
-    <div ref={scope} className="w-full max-w-full overflow-x-hidden">
+    <div ref={scope} className="@container w-full min-w-0 max-w-full">
       <div className="flex flex-col gap-8 lg:gap-10">
         <div data-quiz-reveal>
-          <PageHeader
+          {embedded ? (
+            <header className="flex flex-col gap-2">
+              <h2 className="font-heading text-xl font-semibold">{loaderData.quiz.title}</h2>
+              {loaderData.quiz.instructions && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{loaderData.quiz.instructions}</p>}
+            </header>
+          ) : <PageHeader
             crumbs={[
               { label: "Dunia", to: "/dunia" },
               { label: loaderData.quiz.courseName, to: `/courses/${loaderData.quiz.courseId}` },
@@ -138,7 +147,7 @@ export function QuizPage({
                 </>
               )
             }
-          />
+          />}
         </div>
 
         {actionError && !terminalActionError && (
@@ -152,13 +161,13 @@ export function QuizPage({
           {!loaderData.attempt ? (
             <QuizStartPanel data={loaderData} working={working} />
           ) : submitted ? (
-            <QuizReview data={loaderData} />
+            <QuizReview data={loaderData} returnTo={returnTo} />
           ) : expired ? (
             <QuizAttemptExpired data={loaderData} message={actionError} />
           ) : !loaderData.attempt.canContinue ? (
             <QuizAttemptLocked data={loaderData} message={actionError} />
           ) : (
-            <QuizAttempt data={loaderData} working={working} />
+            <QuizAttempt data={loaderData} working={working} embedded={embedded} />
           )}
         </div>
       </div>
@@ -345,7 +354,7 @@ function AiUsageReflection({
   );
 }
 
-function QuizReview({ data }: { data: QuizData }) {
+function QuizReview({ data, returnTo }: { data: QuizData; returnTo?: string }) {
   const attempt = data.attempt;
   if (!attempt) return null;
 
@@ -456,7 +465,7 @@ function QuizReview({ data }: { data: QuizData }) {
         <CardFooter>
           <Button
             variant="outline"
-            render={<Link to={`/courses/${data.quiz.courseId}`} />}
+            render={<Link to={returnTo ?? `/courses/${data.quiz.courseId}`} />}
           >
             <ArrowLeft data-icon="inline-start" />
             Kembali ke pulau

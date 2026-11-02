@@ -6,15 +6,18 @@ import type { LessonData } from "../types";
 
 // The labs attached to a lesson (PRD §5.10): a tool to understand the idea by
 // applying it, never graded. Each solved challenge is recorded once.
-export function LessonLabs({ labs }: { labs: LessonData["labs"] }) {
+export function LessonLabs({ labs, onSolved }: { labs: LessonData["labs"]; onSolved?: () => void }) {
   const shown = labs.filter((lab) => LABS[lab.labKey]);
   if (shown.length === 0) return null;
   return (
     <section aria-label="Lab interaktif" className="flex flex-col gap-4">
       {shown.map((lab) => {
         const entry = LABS[lab.labKey]!;
-        const solve = async (challenge: string) =>
-          (await http.post<{ points: number }>(`/api/student/labs/${lab.id}/challenges/${challenge}`, {})).points;
+        const solve = async (challenge: string) => {
+          const result = await http.post<{ points: number }>(`/api/student/labs/${lab.id}/challenges/${challenge}`, {});
+          onSolved?.();
+          return result.points;
+        };
         return (
           <div key={lab.id} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

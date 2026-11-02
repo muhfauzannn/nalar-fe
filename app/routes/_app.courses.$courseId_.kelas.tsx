@@ -1,30 +1,32 @@
-import { Navigate, useSearchParams, type ShouldRevalidateFunctionArgs } from "react-router";
+import { Navigate, useActionData, useSearchParams, type ShouldRevalidateFunctionArgs } from "react-router";
 
 import type { Route } from "./+types/_app.courses.$courseId_.kelas";
-import { ClassroomOverlay, CourseDetailPageSkeleton, LessonPage, studentApi, useWorld3d } from "~/features/lms";
+import { ClassroomOverlay, CourseDetailPageSkeleton, LessonPage, QuizPage, AssignmentPage, useWorld3d } from "~/features/lms";
 
-// The course's classroom in the 3D world: the lesson on the blackboard
-// (?materi=<lessonId>, the first unfinished one by default), read at the board
-// with ?fokus=papan. Without the 3D world it is the lesson page itself.
+import { loadClassroom, actInClassroom } from "~/features/lms/api/classroom";
+import { classroomFocus } from "~/features/lms/world3d/classroom-focus";
+import { LessonLabs } from "~/features/lms/components/lesson-labs";
+
+// All classroom stations share this route and canvas. Focus changes move the
+// camera to the material board, lab bench, quiz board, or assignment book.
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
   if (!params.courseId) throw new Response("Course tidak ditemukan", { status: 404 });
-  const asked = new URL(request.url).searchParams.get("materi");
-  // A lesson named in the URL loads alongside the course instead of after it.
-  const early = asked ? studentApi.lesson(request, asked).catch(() => null) : null;
-  const [course, island] = await Promise.all([
-    studentApi.course(request, params.courseId),
-    studentApi.island(request, params.courseId),
-  ]);
-  const lessons = course.modules.slice().sort((a, b) => a.position - b.position).flatMap((module) => module.lessons);
-  const chosen = lessons.find((item) => item.id === asked) ?? lessons.find((item) => item.status !== "completed") ?? lessons[0] ?? null;
-  const lesson = !chosen ? null : chosen.id === asked && early ? await early : await studentApi.lesson(request, chosen.id);
-  return { course, island, lesson };
+  return loadClassroom(request, params.courseId);
 }
 
-// Stepping up to the board (?fokus=papan) only moves the camera.
-export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
-  const same = currentUrl.pathname === nextUrl.pathname && currentUrl.searchParams.get("materi") === nextUrl.searchParams.get("materi");
-  if (!formMethod && same && currentUrl.search !== nextUrl.search) return false;
+export async function clientAction({ request, params }: Route.ClientActionArgs) {
+  if (!params.courseId) throw new Response("Course tidak ditemukan", { status: 404 });
+  return actInClassroom(request, params.courseId);
+}
+
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, formData, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  const intent = formData?.get("intent");
+  if (intent === "save-answer" || intent === "delete-answer") return false;
+  const sameData = ["materi", "lab", "kuis", "tugas"].every((key) => currentUrl.searchParams.get(key) === nextUrl.searchParams.get(key));
+  const nextFocus = classroomFocus(nextUrl.searchParams);
+  // Entering an activity reads its latest attempt/progress. Leaving it or
+  // moving to the material board only changes the camera.
+  if (!formMethod && currentUrl.pathname === nextUrl.pathname && sameData && (!nextFocus || nextFocus === "papan")) return false;
   return defaultShouldRevalidate;
 }
 
@@ -39,7 +41,17 @@ export function meta() {
 export default function ClassroomRoute({ loaderData, params }: Route.ComponentProps) {
   const world3d = useWorld3d();
   const [search] = useSearchParams();
-  const board = search.get("fokus") === "papan";
-  if (world3d) return <ClassroomOverlay course={loaderData.course} island={loaderData.island} lesson={loaderData.lesson} board={board} />;
+  const focus = classroomFocus(search);
+  const action = useActionData<typeof clientAction>();
+  const actionProps = {
+    actionError: action?.error,
+    actionCode: action?.code,
+    actionDraft: action && "draft" in action ? action.draft : undefined,
+    actionStage: action && "stage" in action ? action.stage : undefined,
+  };
+  if (world3d) return <ClassroomOverlay {...loaderData} focus={focus} {...actionProps} />;
+  if (focus === "lab") return <LessonLabs labs={loaderData.labLesson?.labs ?? []} />;
+  if (focus === "kuis" && loaderData.quiz) return <QuizPage data={loaderData.quiz} {...actionProps} />;
+  if (focus === "tugas" && loaderData.assignment) return <AssignmentPage data={loaderData.assignment} earned={loaderData.earned} {...actionProps} />;
   return loaderData.lesson ? <LessonPage data={loaderData.lesson} /> : <Navigate to={`/courses/${params.courseId}/daftar`} replace />;
 }
