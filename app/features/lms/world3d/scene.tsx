@@ -335,7 +335,7 @@ function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout;
               index={index}
               state={index === litIndex ? "current" : post.status}
               label={`Pos ${index + 1}: ${postNames[post.stage]}`}
-              onTap={() => (scene.onSelectPost ? scene.onSelectPost(post.stage) : navigate(hall.href))}
+              onTap={() => (scene.shot.kind === "world" ? onGo(hall.href) : scene.onSelectPost ? scene.onSelectPost(post.stage) : navigate(hall.href))}
               register={(i, handles) => { pads.current[i] = handles; }}
             />
           ))}
@@ -507,10 +507,16 @@ function Grow({ show, children }: { show: boolean; children: ReactNode }) {
 function DetailIsland({ layout, position, scene, near }: { layout: IslandLayout; position: Vec3; scene: WorldScene; near: boolean }) {
   const navigate = useNavigate();
   const shot = scene.shot;
+  const atWorld = shot.kind === "world";
+  useEffect(() => {
+    if (atWorld) return () => { document.body.style.cursor = ""; };
+  }, [atWorld]);
   const seed = seedOf(layout.courseId);
   const onIsland = shot.kind === "island" && shot.courseId === layout.courseId;
   const focusHall = shot.kind === "hall" && shot.courseId === layout.courseId ? shot.assignmentId : layout.nextHall;
-  const go = (href: string) => navigate(href);
+  // On the world map the whole island opens its course first. Once focused,
+  // its buildings and posts resume their own destinations.
+  const go = (href: string) => navigate(atWorld ? `/courses/${layout.courseId}` : href);
   const curves = useMemo(() => pathCurves(layout, seed), [layout, seed]);
   // Nothing grows on the paths.
   const free = useMemo(() => {
@@ -521,7 +527,12 @@ function DetailIsland({ layout, position, scene, near }: { layout: IslandLayout;
     });
   }, [curves, layout.free]);
   return (
-    <group position={position}>
+    <group
+      position={position}
+      onClick={atWorld ? (event) => { event.stopPropagation(); go(`/courses/${layout.courseId}`); } : undefined}
+      onPointerOver={atWorld ? (event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; } : undefined}
+      onPointerOut={atWorld ? () => { document.body.style.cursor = ""; } : undefined}
+    >
       <HexBoard tiles={layout.tiles} seed={seed} dressing={near ? "full" : "light"} />
       <CobblePaths curves={curves} seed={seed} near={near} />
       <Decor tiles={free} seed={seed + 1} houses={HOUSES} share="far" />
