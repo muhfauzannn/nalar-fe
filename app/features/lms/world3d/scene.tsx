@@ -3,6 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { useNavigate, useNavigation } from "react-router";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import { announcePoints, awardChip, flyCoin, gameGsap, HAPTIC, haptic, playSound } from "~/features/game-feel";
 
@@ -10,8 +11,10 @@ import { cn } from "~/lib/utils";
 import { prefetchStudentPage } from "../api/student";
 import { pointCopy, postNames } from "../lib/game";
 import type { PostStatus } from "../types";
-import { Decor, HexBoard, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit";
+import { HexBoard } from "./ground";
+import { Decor, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit";
 import { hex, islandLayout, ring, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
+import { cameraView, MidClouds, Sky } from "./sky";
 import { shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
@@ -79,6 +82,8 @@ function CameraRig({ shot }: { shot: CameraShot }) {
   useFrame(({ clock }) => {
     const s = state.current;
     const drift = shot.calm || reduced ? 0 : Math.sin(clock.elapsedTime * 0.25) * 0.15;
+    cameraView.target.set(s.tx, s.ty, s.tz);
+    cameraView.zoom = s.zoom;
     camera.position.set(s.px + drift, s.py, s.pz - drift);
     camera.lookAt(s.tx + drift, s.ty, s.tz - drift);
     (camera as THREE.OrthographicCamera).zoom = s.zoom;
@@ -475,8 +480,8 @@ function CobblePaths({ curves, seed }: { curves: THREE.CatmullRomCurve3[]; seed:
           const a = base + i * 2;
           index.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
         }
-        // cobbles: two or three per step, scattered across the path
-        for (let k = 0, n = 2 + Math.floor(rand() * 2); k < n; k++) {
+        // cobbles: one or two per step, scattered across the path
+        for (let k = 0, n = 1 + Math.floor(rand() * 2); k < n; k++) {
           const across = (rand() - 0.5) * 1.7;
           placed.push({ p: p.clone().add(side.clone().multiplyScalar(across)), s: 0.75 + rand() * 0.5, r: rand() * Math.PI });
         }
@@ -503,7 +508,12 @@ function CobblePaths({ curves, seed }: { curves: THREE.CatmullRomCurve3[]; seed:
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
   }, [placements, seed]);
-  const cobble = useMemo(() => new THREE.CylinderGeometry(0.12, 0.14, 0.05, 7), []);
+  // A six-sided stone with no underside: 18 triangles, read from above only.
+  const cobble = useMemo(() => {
+    const side = new THREE.CylinderGeometry(0.12, 0.14, 0.05, 6, 1, true);
+    const top = new THREE.CircleGeometry(0.12, 6).rotateX(-Math.PI / 2).translate(0, 0.025, 0);
+    return mergeGeometries([side.toNonIndexed(), top.toNonIndexed()])!;
+  }, []);
   const stoneMat = useMemo(() => new THREE.MeshStandardMaterial({ roughness: 0.9 }), []);
   const groundMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c7bcdc", roughness: 0.95 }), []);
   return (
@@ -532,7 +542,7 @@ function DetailIsland({ layout, position, scene }: { layout: IslandLayout; posit
   }, [curves, layout.free]);
   return (
     <group position={position}>
-      <HexBoard tiles={layout.tiles} seed={seed} />
+      <HexBoard tiles={layout.tiles} seed={seed} dressing="full" />
       <CobblePaths curves={curves} seed={seed} />
       <Decor tiles={free} seed={seed + 1} houses={HOUSES} />
       {layout.places.map((place) => {
@@ -578,7 +588,7 @@ function SimpleIsland({ island, index, showSign, active }: { island: WorldIsland
   return (
     <group position={island.position}>
       <Clickable onClick={go} label={`Pulau ${island.subject}`}>
-        <HexBoard tiles={SMALL_TILES} seed={seed} />
+        <HexBoard tiles={SMALL_TILES} seed={seed} dressing="light" />
         <Decor tiles={SMALL_FREE} seed={seed + 1} houses={HOUSES.slice(0, 1)} />
         <Piece name={LANDMARKS[index % LANDMARKS.length]!} ry={0.6} scale={TILE * 1.25} />
       </Clickable>
@@ -613,28 +623,6 @@ function JoinIsland({ position, show }: { position: Vec3; show: boolean }) {
 }
 
 // ---- sky ----------------------------------------------------------------------------------
-
-function Clouds() {
-  const items = useMemo(() => {
-    const rand = rng(99);
-    const big: Placed[] = [], small: Placed[] = [];
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 + rand() * 0.5, d = 22 + rand() * 26;
-      (i % 3 ? small : big).push({ p: [Math.cos(a) * d, -15 - rand() * 6, Math.sin(a) * d], ry: rand() * 6, s: 0.9 + rand() * 0.6 });
-    }
-    return { big, small };
-  }, []);
-  const ref = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (ref.current) ref.current.position.x = Math.sin(clock.elapsedTime * 0.05) * 2;
-  });
-  return (
-    <group ref={ref}>
-      <Instanced name="cloud" items={items.big} scale={1.6} />
-      <Instanced name="cloudS" items={items.small} scale={1.6} />
-    </group>
-  );
-}
 
 function Bridge({ from, to }: { from: Vec3; to: Vec3 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
@@ -721,7 +709,8 @@ export function WorldScene3D() {
       </directionalLight>
       <ambientLight intensity={0.3} />
       <StaticShadows version={shadowVersion} />
-      <Clouds />
+      <Sky />
+      <MidClouds anchors={islands.map((island) => island.position)} />
 
       {islands.map((island, index) =>
         detailLayout && island.courseId === detailLayout.courseId ? (

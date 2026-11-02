@@ -537,8 +537,6 @@ const nodes = [
   K.node("rockB", [part(K.rock(0.16, 92), { ramp: PAL.stone }), part(K.rock(0.1, 93), { ramp: PAL.stoneDark, at: [0.18, 0, 0.08] })]),
   hills(),
   mountain(),
-  K.node("cloud", K.cloud(2.1, 6), { ground: -20 }),
-  K.node("cloudS", K.cloud(1.35, 7), { ground: -20 }),
   chest(),
 ];
 

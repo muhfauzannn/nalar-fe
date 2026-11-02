@@ -60,7 +60,7 @@ export function rng(seed = 1) {
 // ---- primitives (origin at the base centre, y up) -----------------------------------------
 
 /** A chunky box with soft edges. Radius defaults to 12% of the smallest side. */
-export function box(w, h, d, r = Math.min(w, h, d) * 0.12, seg = Math.max(w, h, d) > 0.6 ? 2 : 1) {
+export function box(w, h, d, r = Math.min(w, h, d) * 0.12, seg = Math.max(w, h, d) > 1.4 ? 2 : 1) {
   // Parts this small never show a bevel at a game camera: a plain box is 12 triangles, not 100+.
   // Thin slats (planks, sills, bands) the same: their bevel is narrower than a pixel.
   if (Math.max(w, h, d) < 0.2 || Math.min(w, h, d) < 0.08) return new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0);
@@ -300,7 +300,8 @@ export function pine(h = 1.6, seed = 1) {
   tiers.forEach((t, i) => {
     const r = h * t.r, th = h * t.th;
     // a soft skirt: the rim rolls under, then the tier rises in a gentle concave curve
-    const g = lathe([[0, -th * 0.16], [r * 0.62, -th * 0.17], [r * 0.9, -th * 0.13], [r * 1.0, -th * 0.04], [r * 0.97, th * 0.05], [r * 0.82, th * 0.14], [r * 0.6, th * 0.34], [r * 0.38, th * 0.58], [r * 0.18, th * 0.82], [0, th]], 14);
+    // Seven knots and 12 sides: the same soft skirt at about half the triangles.
+    const g = lathe([[0, -th * 0.16], [r * 0.75, -th * 0.16], [r * 1.0, -th * 0.06], [r * 0.9, th * 0.1], [r * 0.6, th * 0.34], [r * 0.28, th * 0.7], [0, th]], 12);
     parts.push(part(g, { ramp: i % 2 ? PAL.leaf : PAL.leafDark, at: [0, h * t.y + trunkH * 0.5, 0], rot: [(rand() - 0.5) * 0.06, rand() * 6, (rand() - 0.5) * 0.06] }));
   });
   return parts;

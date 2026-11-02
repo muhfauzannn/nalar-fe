@@ -17,15 +17,17 @@ export default function WorldStage() {
   const [dpr, setDpr] = useState(() => Math.min(1.5, window.devicePixelRatio || 1));
   const wide = typeof window !== "undefined" && window.innerWidth >= 768;
   return (
-    <div className="absolute inset-0 bg-[linear-gradient(180deg,#c9bdf2,#e7e1fb_55%,#f6f2ff)] [color-scheme:light]">
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_86%_6%,rgba(255,238,206,.9),rgba(255,224,222,.35)_16%,transparent_38%),linear-gradient(180deg,#b7a7ee,#d9cff9_48%,#efe9fe_78%,#f6f2ff)] [color-scheme:light]">
       <Canvas
         orthographic
         shadows="percentage"
         dpr={dpr}
         gl={{ antialias: wide, powerPreference: "high-performance" }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene }) => {
           gl.toneMapping = THREE.NeutralToneMapping;
           gl.toneMappingExposure = 1.05;
+          // Dev only: lets the e2e scripts measure what the world draws.
+          if (import.meta.env.DEV) Object.assign(window, { __world: { gl, scene } });
         }}
         camera={{ position: [40, 34, 40], zoom: 15, near: -200, far: 400 }}
         className="!absolute inset-0 touch-none"
