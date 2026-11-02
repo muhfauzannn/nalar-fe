@@ -14,6 +14,24 @@ const surfaces: Record<ClassroomFocus, Surface> = {
   tugas: { center: [4, 1.3, 0.95], width: 2.2, height: 1.65, tilt: -0.75 },
 };
 
+/** Widen the entrance view on portrait screens while preserving the desktop shot. */
+export function classroomHomeFov(width: number, height: number) {
+  const aspect = Math.max(0.1, width / Math.max(1, height));
+  const base = THREE.MathUtils.degToRad(ROOM.camera.fov) / 2;
+  return Math.min(80, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(base) * Math.max(1, 1.35 / aspect))));
+}
+
+/** Step back slightly as the screen narrows so the side stations remain visible. */
+export function classroomHomePose(width: number, height: number) {
+  const aspect = Math.max(0.1, width / Math.max(1, height));
+  const stepBack = Math.min(4, Math.max(0, (1.35 - aspect) * 3));
+  const [x, y, z] = ROOM.camera.position;
+  return {
+    p: [x!, y!, z! + stepBack] as [number, number, number],
+    t: ROOM.camera.target as [number, number, number],
+  };
+}
+
 /** Open station work surfaces also fit portrait screens, like an unfolded sheet. */
 export function classroomSurface(
   focus: ClassroomFocus,

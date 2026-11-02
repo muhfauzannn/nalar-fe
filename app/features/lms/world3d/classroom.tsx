@@ -16,7 +16,7 @@ import { setSurfaceRect, useSurfaceRect } from "./board-rect";
 import { boardPreviewScale } from "./board-preview";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { createClassroomInstance } from "./classroom-model";
-import { classroomSurface, stationAspect, stationPose, stationRect } from "./surface-projection";
+import { classroomHomeFov, classroomHomePose, classroomSurface, stationAspect, stationPose, stationRect } from "./surface-projection";
 import { STILL } from "./ground";
 import { sketchOf, type Vec3 } from "./layout";
 import { Clickable, Sign, SignText } from "./signs";
@@ -47,7 +47,7 @@ function RoomCamera({ focus }: { focus: ClassroomFocus | null }) {
   const { size, setFrameloop, invalidate } = useThree();
   const state = useRef({ px: DOOR.p[0], py: DOOR.p[1], pz: DOOR.p[2], tx: DOOR.t[0], ty: DOOR.t[1], tz: DOOR.t[2] });
   useEffect(() => {
-    const pose = focus ? stationPose(focus, size.width, size.height) : HOME;
+    const pose = focus ? stationPose(focus, size.width, size.height) : classroomHomePose(size.width, size.height);
     const to = { px: pose.p[0], py: pose.p[1], pz: pose.p[2], tx: pose.t[0], ty: pose.t[1], tz: pose.t[2] };
     const g = gameGsap();
     let frame = 0;
@@ -84,6 +84,7 @@ function RoomCamera({ focus }: { focus: ClassroomFocus | null }) {
     camera.position.set(s.px, s.py, s.pz);
     camera.lookAt(s.tx, s.ty, s.tz);
     camera.aspect = size.width / size.height;
+    camera.fov = focus ? ROOM.camera.fov : classroomHomeFov(size.width, size.height);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
   }
@@ -300,6 +301,7 @@ export function Classroom({ courseId, focus, lesson, course, island, ready = fal
   const surface = useSurfaceRect(focus ?? "papan");
   const navigate = useNavigate();
   const gl = useThree((state) => state.gl);
+  const narrow = useThree((state) => state.size.width < 600);
   const room = useMemo(() => createClassroomInstance(scene), [scene]);
   // The world's fog would wash the room out; it comes back when the student leaves.
   const three = useThree((state) => state.scene);
@@ -364,16 +366,16 @@ export function Classroom({ courseId, focus, lesson, course, island, ready = fal
       <Hit at={classroomSurface("tugas").center} size={[2.4, 1.5, 0.2]} label="Buku tugas" onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} />
       </>}
 
-      <Sign position={s.materi.sign as Vec3} show={show} onClick={go.board} label="Materi: baca di papan">
+      <Sign position={s.materi.sign as Vec3} show={show && !narrow} onClick={go.board} label="Materi: baca di papan">
         <SignText small="Materi" strong={lesson?.title ?? "Papan tulis"} />
       </Sign>
-      <Sign position={s.lab.sign as Vec3} show={show && Boolean(labLesson)} onClick={go.lab} label="Lab">
+      <Sign position={s.lab.sign as Vec3} show={show && !narrow && Boolean(labLesson)} onClick={go.lab} label="Lab">
         <SignText small="Lab" strong="Meja percobaan" />
       </Sign>
-      <Sign position={s.tugas.sign as Vec3} show={show && Boolean(course?.assignments.length)} onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} label="Tugas">
+      <Sign position={s.tugas.sign as Vec3} show={show && !narrow && Boolean(course?.assignments.length)} onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} label="Tugas">
         <SignText small="Tugas" strong={`${course?.assignments.length ?? 0} buku`} />
       </Sign>
-      <Sign position={s.quiz.sign as Vec3} show={show && Boolean(quiz)} onClick={go.quiz} label="Quiz">
+      <Sign position={s.quiz.sign as Vec3} show={show && !narrow && Boolean(quiz)} onClick={go.quiz} label="Quiz">
         <SignText small="Quiz" strong={course?.quizzes[0]?.title ?? "Target"} />
       </Sign>
       {show && (

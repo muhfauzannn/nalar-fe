@@ -6,6 +6,8 @@ import {
   type ClassroomFocus,
 } from "../app/features/lms/world3d/classroom-focus";
 import { createServer } from "vite";
+let classroomHomeFov: typeof import("../app/features/lms/world3d/surface-projection").classroomHomeFov;
+let classroomHomePose: typeof import("../app/features/lms/world3d/surface-projection").classroomHomePose;
 let stationPose: typeof import("../app/features/lms/world3d/surface-projection").stationPose;
 let stationRect: typeof import("../app/features/lms/world3d/surface-projection").stationRect;
 test.describe.configure({ mode: "serial" });
@@ -15,7 +17,7 @@ test.beforeAll(async () => {
     server: { middlewareMode: true, hmr: false },
   });
   try {
-    ({ stationPose, stationRect } = await server.ssrLoadModule(
+    ({ classroomHomeFov, classroomHomePose, stationPose, stationRect } = await server.ssrLoadModule(
       "/app/features/lms/world3d/surface-projection.ts",
     ));
   } finally {
@@ -123,4 +125,22 @@ test("unfinished writing survives leaving a station and is cleared after confirm
     if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
     else Reflect.deleteProperty(globalThis, "sessionStorage");
   }
+});
+
+
+test("the classroom entrance widens on phones and keeps the side stations in view", () => {
+  for (const [width, height] of [[320, 520], [390, 650], [800, 300]]) {
+    const pose = classroomHomePose(width!, height!);
+    const camera = new THREE.PerspectiveCamera(classroomHomeFov(width!, height!), width! / height!, 0.05, 60);
+    camera.position.fromArray(pose.p);
+    camera.lookAt(...pose.t);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    for (const station of [[0, 2.75, -3.94], [-4.55, 1.2, -1], [4, 0.92, 0.9], [4.7, 2, -3.5]]) {
+      const point = new THREE.Vector3(...station as [number, number, number]).project(camera);
+      expect(Math.abs(point.x)).toBeLessThan(1);
+    }
+  }
+  expect(classroomHomeFov(1280, 800)).toBe(46);
+  expect(classroomHomePose(1280, 800).p).toEqual([0.6, 2.9, 7.4]);
 });

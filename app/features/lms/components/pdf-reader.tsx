@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { studentResourceFileUrl } from "~/lib/files";
+import { cn } from "~/lib/utils";
 import {
   clampUnit,
   rotateRect,
@@ -36,6 +37,7 @@ type Evidence = {
 type Props = {
   resourceId: string;
   title: string;
+  fitContainer?: boolean;
   guidance: PdfGuidance | null;
   revealedSteps?: number | null;
   cursorCue?: PdfCursorCue | null;
@@ -44,7 +46,7 @@ type Props = {
   onContext: (context: PdfViewContext | null) => void;
 };
 
-export function PdfReader({ resourceId, title, guidance, revealedSteps = null, cursorCue, pointerVisible = true, onContext, onPresentationTiming }: Props) {
+export function PdfReader({ resourceId, title, fitContainer = false, guidance, revealedSteps = null, cursorCue, pointerVisible = true, onContext, onPresentationTiming }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -120,7 +122,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
     const host = scrollHost.current;
     if (!host) return;
     const observer = new ResizeObserver(() =>
-      setHostWidth(Math.max(240, host.clientWidth - 40)),
+      setHostWidth(Math.max(1, host.clientWidth - 40)),
     );
     observer.observe(host);
     return () => observer.disconnect();
@@ -422,9 +424,9 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
   };
 
   return (
-    <div className="flex min-w-0 flex-col">
+    <div className={cn("flex min-w-0 flex-col", fitContainer && "h-full")}>
       <div
-        className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2"
+        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2"
         role="toolbar"
         aria-label="Navigasi PDF"
       >
@@ -432,6 +434,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
           <Button
             variant="ghost"
             size="icon-sm"
+            className={fitContainer ? "size-11" : undefined}
             aria-label="Halaman sebelumnya"
             disabled={!pdf || page <= 1 || loading}
             onClick={() => changePage(page - 1)}
@@ -447,6 +450,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
           <Button
             variant="ghost"
             size="icon-sm"
+            className={fitContainer ? "size-11" : undefined}
             aria-label="Halaman berikutnya"
             disabled={!pdf || page >= pdf.numPages || loading}
             onClick={() => changePage(page + 1)}
@@ -458,6 +462,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
           <Button
             variant="ghost"
             size="icon-sm"
+            className={fitContainer ? "size-11" : undefined}
             aria-label="Perkecil PDF"
             disabled={zoom <= 0.75 || loading}
             onClick={() => {
@@ -473,6 +478,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
           <Button
             variant="ghost"
             size="icon-sm"
+            className={fitContainer ? "size-11" : undefined}
             aria-label="Perbesar PDF"
             disabled={zoom >= 2 || loading}
             onClick={() => {
@@ -485,6 +491,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
           <Button
             variant="ghost"
             size="icon-sm"
+            className={fitContainer ? "size-11" : undefined}
             aria-label="Putar PDF"
             disabled={loading}
             onClick={() => {
@@ -497,6 +504,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
           <Button
             variant="ghost"
             size="icon-sm"
+            className={fitContainer ? "size-11" : undefined}
             aria-label="Unduh PDF"
             nativeButton={false}
             render={<a href={studentResourceFileUrl(resourceId, true)} />}
@@ -508,7 +516,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
       <div
         ref={scrollHost}
         onScroll={publishContext}
-        className="relative h-[65svh] min-h-80 overflow-auto bg-muted/50 overscroll-contain"
+        className={cn("relative overflow-auto bg-muted/50 overscroll-contain", fitContainer ? "min-h-0 flex-1" : "h-[65svh] min-h-80")}
         data-testid="pdf-scroll-host"
       >
         {error ? (
@@ -577,7 +585,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
         </div>
       </div>
       {selection ? (
-        <div className="flex min-h-12 items-center justify-between gap-3 border-t px-4 py-3 text-xs text-muted-foreground">
+        <div className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-t px-4 py-3 text-xs text-muted-foreground">
           <p className="min-w-0 truncate">Dipilih: {selection.text}</p>
           <Button
             variant="ghost"

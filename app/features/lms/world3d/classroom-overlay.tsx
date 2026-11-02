@@ -5,7 +5,7 @@ import {
   NotebookPen,
   Target,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Link,
   useNavigate,
@@ -121,7 +121,7 @@ export function ClassroomOverlay({
         ]}
       />
       {focus ? (
-        <StationWorkspace key={focus} focus={focus} closeTo={closeTo}>
+        <StationWorkspace key={focus} focus={focus} closeTo={closeTo} pdf={focus === "papan" && Boolean(lesson?.resources.some((resource) => resource.file))}>
           {focus === "papan" ? (
             lesson ? (
               <BoardReader lesson={lesson} />
@@ -190,7 +190,7 @@ export function ClassroomOverlay({
           )}
         </StationWorkspace>
       ) : (
-        <Dock>
+        <Dock className="pointer-events-auto max-h-[calc(100%-5rem)] overflow-y-auto overscroll-contain [&>nav]:shrink-0 [&>section]:shrink-0">
           {lessons.length > 0 && (
             <section
               aria-label="Materi di papan"
@@ -205,7 +205,7 @@ export function ClassroomOverlay({
                   aria-hidden="true"
                 />
                 <h2 className="text-sm font-bold">Di papan</h2>
-                <span className="text-xs text-[#5e5e72]">
+                <span className="text-xs text-[#5e5e72] max-sm:hidden">
                   Pilih materi, lalu baca di papan
                 </span>
               </div>
@@ -218,7 +218,7 @@ export function ClassroomOverlay({
                     preventScrollReset
                     aria-current={item.id === lessonId ? "true" : undefined}
                     className={cn(
-                      "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold",
+                      "flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold",
                       item.id === lessonId
                         ? "border-[#18153a] bg-[#18153a] text-white"
                         : "border-[#e4def8] bg-white hover:bg-[#f6f3fd]",
@@ -302,7 +302,7 @@ function ActivityChoices({
           preventScrollReset
           aria-current={selected === item.id ? "true" : undefined}
           className={cn(
-            "rounded-lg border px-3 py-2 text-sm",
+            "inline-flex min-h-11 items-center rounded-lg border px-3 py-2 text-sm",
             selected === item.id
               ? "bg-primary text-primary-foreground"
               : "bg-background text-foreground",
@@ -354,10 +354,12 @@ function StationWorkspace({
   focus,
   closeTo,
   children,
+  pdf,
 }: {
   focus: ClassroomFocus;
   closeTo: string;
   children: ReactNode;
+  pdf: boolean;
 }) {
   const rect = useSurfaceRect(focus);
   const [lastRect, setLastRect] = useState(rect);
@@ -403,12 +405,17 @@ function StationWorkspace({
       tabIndex={-1}
       aria-label={labels[focus]}
       data-classroom-surface={focus}
-      style={position}
+      style={{
+        "--surface-left": `${position.left}px`,
+        "--surface-top": `${position.top}px`,
+        "--surface-width": `${position.width}px`,
+        "--surface-height": `${position.height}px`,
+      } as CSSProperties}
       aria-busy={!rect}
       className={cn(
-        "pointer-events-auto absolute overflow-y-auto overscroll-contain rounded-[4px] bg-background text-foreground shadow-sm outline-none [color-scheme:light] [touch-action:pan-y] [&_input]:text-base [&_textarea]:text-base",
-        !rect && "pointer-events-none opacity-0",
+        "classroom-surface pointer-events-auto absolute overscroll-contain rounded-[4px] bg-background text-foreground shadow-sm outline-none [color-scheme:light] [&_input]:text-base [&_select]:text-base [&_textarea]:text-base",
         focus === "papan" && "bg-white text-[#18153a]",
+        pdf ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden",
       )}
     >
       {children}
@@ -422,6 +429,7 @@ function BoardReader({ lesson }: { lesson: NonNullable<Props["lesson"]> }) {
     <PdfReader
       resourceId={file.id}
       title={file.title}
+      fitContainer
       guidance={null}
       onContext={ignore}
     />
