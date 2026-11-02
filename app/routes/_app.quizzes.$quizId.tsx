@@ -1,3 +1,5 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import {
   useActionData,
   type ShouldRevalidateFunctionArgs,
@@ -6,7 +8,6 @@ import {
 import type { Route } from "./+types/_app.quizzes.$quizId";
 import {
   QuizPage,
-  QuizPageSkeleton,
   studentApi,
 } from "~/features/lms";
 import { quizAction } from "~/features/lms/api/quiz-action";
@@ -30,7 +31,8 @@ export function shouldRevalidate({
 }
 
 export function HydrateFallback() {
-  return <QuizPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta(_: Route.MetaArgs) {

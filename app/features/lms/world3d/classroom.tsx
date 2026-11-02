@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import * as THREE from "three";
 
+import { SceneReady } from "~/features/loading/scene-ready";
+
 import { gameGsap, playSound } from "~/features/game-feel";
 import { studentResourceFileUrl } from "~/lib/files";
 
@@ -299,7 +301,7 @@ function Books({ course, island, onOpen }: { course: CourseData; island: IslandD
   );
 }
 
-export function Classroom({ courseId, focus, lesson, course, island }: { courseId: string; focus: ClassroomFocus | null; lesson: LessonData | null; course: CourseData | null; island: IslandData | null }) {
+export function Classroom({ courseId, focus, lesson, course, island, ready = false }: { ready?: boolean; courseId: string; focus: ClassroomFocus | null; lesson: LessonData | null; course: CourseData | null; island: IslandData | null }) {
   const { scene } = useGLTF(CLASSROOM_URL, false, true);
   const navigate = useNavigate();
   const gl = useThree((state) => state.gl);
@@ -333,6 +335,7 @@ export function Classroom({ courseId, focus, lesson, course, island }: { courseI
   return (
     <group>
       <RoomCamera focus={focus} />
+      <SceneReady enabled={ready} />
       <hemisphereLight args={["#fff7ee", "#8b7fd0", 1.15]} />
       <directionalLight
         castShadow

@@ -1,9 +1,10 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import { redirect } from "react-router";
 
 import type { Route } from "./+types/_app.lessons.$lessonId";
 import {
   LessonPage,
-  LessonPageSkeleton,
   studentApi,
 } from "~/features/lms";
 
@@ -24,7 +25,8 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
 }
 
 export function HydrateFallback() {
-  return <LessonPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta(_: Route.MetaArgs) {

@@ -1,5 +1,7 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import type { Route } from "./+types/_app.courses.$courseId_.balai.$assignmentId";
-import { BalaiOverlay, BalaiPage, CourseDetailPageSkeleton, studentApi, takeEarned, useWorld3d, type WorkflowStage } from "~/features/lms";
+import { BalaiOverlay, BalaiPage, studentApi, takeEarned, useWorld3d, type WorkflowStage } from "~/features/lms";
 
 const STAGES: WorkflowStage[] = [
   "1_independent_effort",
@@ -23,7 +25,8 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 }
 
 export function HydrateFallback() {
-  return <CourseDetailPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta() {

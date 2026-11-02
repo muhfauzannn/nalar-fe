@@ -1,9 +1,11 @@
-import { useLocation, type ShouldRevalidateFunctionArgs } from "react-router";
+import { ApplicationLoadingBoundary } from "~/features/loading/application-boundary";
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation, useRouteError, type ShouldRevalidateFunctionArgs } from "react-router";
+import { useEffect } from "react";
 
 import type { Route } from "./+types/_app";
 import {
   StudentAppShell,
-  StudentAppShellSkeleton,
   studentApi,
 } from "~/features/lms";
 import { clearRecentReads } from "~/lib/http";
@@ -31,11 +33,17 @@ export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShoul
 }
 
 export function HydrateFallback() {
-  // The first paint shows the skeleton of the page being opened, not always the dashboard's.
   const { pathname } = useLocation();
-  return <StudentAppShellSkeleton pathname={pathname} />;
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export default function StudentAppLayout({ loaderData }: Route.ComponentProps) {
-  return <StudentAppShell data={loaderData} />;
+  return <ApplicationLoadingBoundary><StudentAppShell data={loaderData} /></ApplicationLoadingBoundary>;
+}
+
+export function ErrorBoundary() {
+  const { pathname } = useLocation();
+  const error = useRouteError();
+  useEffect(() => { console.error("[loading] Route data failed", error); }, [error]);
+  return <ApplicationLoader pathname={pathname} error="Data halaman belum dapat dimuat. Periksa koneksi lalu coba lagi." />;
 }

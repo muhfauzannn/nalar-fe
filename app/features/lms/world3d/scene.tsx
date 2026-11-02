@@ -1,13 +1,14 @@
 import { Html } from "@react-three/drei";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate, useNavigation } from "react-router";
+import { useLocation, useNavigate, useNavigation } from "react-router";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import { announcePoints, awardChip, flyCoin, gameGsap, HAPTIC, haptic, playSound } from "~/features/game-feel";
 
 import { cn } from "~/lib/utils";
+import { SceneReady } from "~/features/loading/scene-ready";
 import { prefetchStudentPage } from "../api/student";
 import { pointCopy, postNames } from "../lib/game";
 import type { IslandSketch, PostStatus } from "../types";
@@ -18,7 +19,7 @@ import { Decor, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit
 import { hex, islandLayout, ring, sketchOf, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
 import { cameraView, MidClouds, Sky } from "./sky";
 import { fadeVeil } from "./veil";
-import { classroomForScene, shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
+import { classroomForScene, sceneMatchesRoute, shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
 const ISO: Vec3 = [40, 34, 40];
@@ -659,6 +660,9 @@ function layoutOf(course: { id: string; name: string; subjectName: string }, ske
 
 export function WorldScene3D() {
   const scene = useWorldScene();
+  const location = useLocation();
+  const expected = shotForUrl(location.pathname, location.search);
+  const stagedForRoute = sceneMatchesRoute(scene.shot, expected);
   const navigate = useNavigate();
   // Only the camera anticipates navigation. Scene contents keep the committed
   // route's data until the destination loader stages its complete snapshot.
@@ -746,9 +750,11 @@ export function WorldScene3D() {
           <Classroom
             key={roomData.courseId}
             {...roomData}
+            ready={stagedForRoute && wantRoom}
           />
         </Suspense>
       )}
+      {!room && stagedForRoute && <SceneReady />}
       <group visible={!room}>
       <CameraRig shot={camera} />
       <hemisphereLight args={["#fbf7ff", "#7f75c9", 1.15]} />

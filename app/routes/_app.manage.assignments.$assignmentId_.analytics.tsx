@@ -1,5 +1,6 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import type { Route } from "./+types/_app.manage.assignments.$assignmentId_.analytics";
-import { ActivityPageSkeleton } from "~/features/lms";
 import { AssignmentAnalyticsPage, manageApi } from "~/features/authoring";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
@@ -8,7 +9,8 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 }
 
 export function HydrateFallback() {
-  return <ActivityPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta() {

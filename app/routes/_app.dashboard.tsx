@@ -1,7 +1,8 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import type { Route } from "./+types/_app.dashboard";
 import {
   DashboardPage,
-  DashboardPageSkeleton,
   studentApi,
 } from "~/features/lms";
 
@@ -15,7 +16,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export function HydrateFallback() {
-  return <DashboardPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta() {

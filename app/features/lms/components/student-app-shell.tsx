@@ -49,7 +49,7 @@ import { onStaleRefreshed } from "~/lib/http";
 import { forgetSignedIn } from "~/lib/session-hint";
 import { prefetchStudentPage } from "../api/student";
 import { isWorldPath, useWorld3d, WorldModeToggle, WorldOverlayContext } from "../world3d";
-import { StudentRouteSkeleton } from "./loading-skeletons";
+import { SceneAssetBoundary } from "~/features/loading/application-boundary";
 import type { StudentShellData } from "../types";
 
 // three.js and the world model load only when a world route opens in 3D.
@@ -87,22 +87,8 @@ function isAppPath(pathname: string) {
   );
 }
 
-// The page being left stays on screen while the next one loads, so a fast load
-// swaps straight to the new page. Only a load still running after this delay
-// shows the next page's skeleton.
-const SKELETON_DELAY_MS = 300;
 // Hover shorter than this (the pointer passing over a link) does not prefetch.
 const HOVER_INTENT_MS = 80;
-
-function useDelayed(value: string | null, ms: number) {
-  const [shown, setShown] = useState<string | null>(null);
-  useEffect(() => {
-    if (!value) return setShown(null);
-    const timer = window.setTimeout(() => setShown(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return shown === value ? value : null;
-}
 
 /** Prefetches the code and data of an app page as soon as its link is hovered, focused or touched. */
 function usePrefetchOnIntent(currentPathname: string) {
@@ -174,14 +160,6 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
   // The sidebar follows the page being opened, so a click is acknowledged before it loads.
   const section = sectionFor(navigation.location?.pathname ?? location.pathname);
   const sectionLabel = studentNav.find((item) => item.href === section)?.label;
-  // A load on the same page (a form on it, a refresh) never unmounts it.
-  const leavingFor =
-    navigation.state === "loading" &&
-    navigation.location.pathname !== location.pathname &&
-    isAppPath(navigation.location.pathname)
-      ? navigation.location.pathname
-      : null;
-  const skeletonPathname = useDelayed(leavingFor, SKELETON_DELAY_MS);
   const prefetchPathname = usePrefetchOnIntent(location.pathname);
   // Dunia, an island and its halls share one 3D canvas that stays mounted
   // between them; each route draws its buttons into the layer over it.
@@ -309,9 +287,9 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
         </header>
         {inWorld ? (
           <main className="relative h-[calc(100dvh-3.5rem-4rem-env(safe-area-inset-bottom))] overflow-hidden md:h-[calc(100dvh-3.5rem)] lg:h-[calc(100dvh-3.5rem-1rem)] lg:rounded-b-xl">
-            <Suspense fallback={null}>
-              <WorldStage />
-            </Suspense>
+            <SceneAssetBoundary>
+              <Suspense fallback={null}><WorldStage /></Suspense>
+            </SceneAssetBoundary>
             <div
               ref={setOverlay}
               className={cn(
@@ -326,11 +304,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
         ) : (
           <main className="flex-1 px-4 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-8 lg:px-10 lg:py-10">
             <div className="mx-auto w-full max-w-7xl">
-              {skeletonPathname ? (
-                <StudentRouteSkeleton pathname={skeletonPathname} />
-              ) : (
-                <Outlet />
-              )}
+              <Outlet />
             </div>
           </main>
         )}

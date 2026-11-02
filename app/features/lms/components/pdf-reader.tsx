@@ -1,3 +1,4 @@
+import { useRequiredPageAsset } from "~/features/loading/context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask, TextLayer } from "pdfjs-dist";
 import {
@@ -54,6 +55,9 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [firstRendered, setFirstRendered] = useState<string | null>(null);
+  useRequiredPageAsset(`pdf:${resourceId}`, firstRendered === resourceId, firstRendered !== resourceId && Boolean(error));
+  useEffect(() => { if (!loading && !error && pdf) setFirstRendered(resourceId); }, [loading, error, pdf, resourceId]);
   const [selection, setSelection] = useState<PdfSelection | null>(null);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const scrollHost = useRef<HTMLDivElement>(null);

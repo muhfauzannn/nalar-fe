@@ -18,6 +18,19 @@ export type WorldShot =
 
 export type ChestState = "locked" | "ready" | "open";
 
+/** A missing place intentionally falls back to its island; it must not stall loading. */
+export function sceneMatchesRoute(actual: WorldShot, expected: WorldShot | null) {
+  if (!expected) return false;
+  if (actual.kind === "world" || expected.kind === "world") return actual.kind === expected.kind;
+  if (actual.courseId !== expected.courseId) return false;
+  if (expected.kind === "place" && actual.kind === "island") return true;
+  if (actual.kind !== expected.kind) return false;
+  if (actual.kind === "classroom" && expected.kind === "classroom") return actual.focus === expected.focus;
+  if (actual.kind === "hall" && expected.kind === "hall") return actual.assignmentId === expected.assignmentId;
+  if (actual.kind === "place" && expected.kind === "place") return actual.place === expected.place;
+  return true;
+}
+
 export type WorldScene = {
   world: WorldData | null;
   detail: { course: CourseData; island: IslandData } | null;

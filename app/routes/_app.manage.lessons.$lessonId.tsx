@@ -1,5 +1,6 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import type { Route } from "./+types/_app.manage.lessons.$lessonId";
-import { ActivityPageSkeleton } from "~/features/lms";
 import { lessonEditorAction, LessonEditorPage, manageApi } from "~/features/authoring";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
@@ -12,7 +13,8 @@ export async function clientAction(args: Route.ClientActionArgs) {
 }
 
 export function HydrateFallback() {
-  return <ActivityPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta() {

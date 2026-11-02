@@ -1,5 +1,6 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import type { Route } from "./+types/_app.manage._index";
-import { ManageCoursesPageSkeleton } from "~/features/lms";
 import { manageApi, MyCoursesPage } from "~/features/authoring";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -7,7 +8,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export function HydrateFallback() {
-  return <ManageCoursesPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta() {

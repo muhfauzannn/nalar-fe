@@ -1,7 +1,9 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import { Navigate, useActionData, useSearchParams, type ShouldRevalidateFunctionArgs } from "react-router";
 
 import type { Route } from "./+types/_app.courses.$courseId_.kelas";
-import { ClassroomOverlay, CourseDetailPageSkeleton, LessonPage, QuizPage, AssignmentPage, useWorld3d } from "~/features/lms";
+import { ClassroomOverlay, LessonPage, QuizPage, AssignmentPage, useWorld3d } from "~/features/lms";
 
 import { loadClassroom, actInClassroom } from "~/features/lms/api/classroom";
 import { classroomFocus } from "~/features/lms/world3d/classroom-focus";
@@ -31,7 +33,8 @@ export function shouldRevalidate({ currentUrl, nextUrl, formMethod, formData, de
 }
 
 export function HydrateFallback() {
-  return <CourseDetailPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta() {

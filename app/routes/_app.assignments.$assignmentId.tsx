@@ -1,8 +1,9 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import { useActionData } from "react-router";
 
 import type { Route } from "./+types/_app.assignments.$assignmentId";
 import {
-  AssignmentPageSkeleton,
   AssignmentPage,
   studentApi,
   takeEarned,
@@ -20,7 +21,8 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
 }
 
 export function HydrateFallback() {
-  return <AssignmentPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta(_: Route.MetaArgs) {

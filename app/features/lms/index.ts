@@ -2,17 +2,7 @@ export { prefetchStudentPage, studentApi } from "./api/student";
 export { StudentAppShell } from "./components/student-app-shell";
 export { clearWritingSignals, writingSignalsKey } from "./hooks/use-writing-signals";
 export { rememberEarned, takeEarned } from "./lib/game";
-export {
-  ActivityPageSkeleton,
-  AssignmentPageSkeleton,
-  CourseDetailPageSkeleton,
-  CoursesPageSkeleton,
-  DashboardPageSkeleton,
-  LessonPageSkeleton,
-  ManageCoursesPageSkeleton,
-  QuizPageSkeleton,
-  StudentAppShellSkeleton,
-} from "./components/loading-skeletons";
+
 export { DashboardPage } from "./pages/dashboard-page";
 export { CoursesPage } from "./pages/courses-page";
 export { CourseDetailPage } from "./pages/course-detail-page";

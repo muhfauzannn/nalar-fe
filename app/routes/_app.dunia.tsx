@@ -1,14 +1,17 @@
+import { ApplicationLoader } from "~/features/loading/application-loader";
+import { useLocation } from "react-router";
 import { useRouteLoaderData } from "react-router";
 
 import type { Route } from "./+types/_app.dunia";
-import { CourseDetailPageSkeleton, studentApi, useWorld3d, WorldOverlay, WorldPage, type StudentShellData } from "~/features/lms";
+import { studentApi, useWorld3d, WorldOverlay, WorldPage, type StudentShellData } from "~/features/lms";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   return studentApi.world(request);
 }
 
 export function HydrateFallback() {
-  return <CourseDetailPageSkeleton />;
+  const { pathname } = useLocation();
+  return <ApplicationLoader pathname={pathname} initial />;
 }
 
 export function meta() {
