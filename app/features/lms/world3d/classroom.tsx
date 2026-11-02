@@ -12,7 +12,7 @@ import { studentResourceFileUrl } from "~/lib/files";
 import { loadPdfjs } from "../lib/pdfjs";
 import type { CourseData, IslandData, LessonData } from "../types";
 import ROOM from "./classroom-layout.json";
-import { setSurfaceRect } from "./board-rect";
+import { setSurfaceRect, useSurfaceRect } from "./board-rect";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { createClassroomInstance } from "./classroom-model";
 import { classroomSurface, stationAspect, stationPose, stationRect } from "./surface-projection";
@@ -303,6 +303,7 @@ function Books({ course, island, onOpen }: { course: CourseData; island: IslandD
 
 export function Classroom({ courseId, focus, lesson, course, island, ready = false }: { ready?: boolean; courseId: string; focus: ClassroomFocus | null; lesson: LessonData | null; course: CourseData | null; island: IslandData | null }) {
   const { scene } = useGLTF(CLASSROOM_URL, false, true);
+  const surface = useSurfaceRect(focus ?? "papan");
   const navigate = useNavigate();
   const gl = useThree((state) => state.gl);
   const room = useMemo(() => createClassroomInstance(scene), [scene]);
@@ -335,7 +336,7 @@ export function Classroom({ courseId, focus, lesson, course, island, ready = fal
   return (
     <group>
       <RoomCamera focus={focus} />
-      <SceneReady enabled={ready} />
+      <SceneReady enabled={ready && (!focus || Boolean(surface))} />
       <hemisphereLight args={["#fff7ee", "#8b7fd0", 1.15]} />
       <directionalLight
         castShadow

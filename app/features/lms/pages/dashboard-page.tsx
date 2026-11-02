@@ -29,19 +29,21 @@ import { missionCopy } from "../lib/game";
 import { gameToast } from "~/features/game-feel";
 import { useEffect } from "react";
 import type { DashboardData, PointsData } from "../types";
+import { usePageReady } from "~/features/loading/context";
 
 export function DashboardPage({ data, points }: { data: DashboardData; points: PointsData | null }) {
   const firstName = data.user.name.split(/\s+/)[0] || "Siswa";
   const studentId = useStudentId();
+  const ready = usePageReady();
   useEffect(() => {
-    if (!studentId || !points) return;
+    if (!ready || !studentId || !points) return;
     missionsJustDone(studentId, points.missions).forEach((item, index) =>
       window.setTimeout(
         () => gameToast({ title: "Misi selesai", sub: missionCopy[item.id], points: `${item.target}/${item.target}`, sound: "ding" }),
         600 + index * 900,
       ),
     );
-  }, [studentId, points]);
+  }, [ready, studentId, points]);
   const continueCourse =
     data.courses.find((course) => course.status === "published") ??
     data.courses[0];
@@ -81,6 +83,8 @@ export function DashboardPage({ data, points }: { data: DashboardData; points: P
         >
           <img
             src="/illustration/decoration2.svg"
+            loading="lazy"
+            decoding="async"
             alt=""
             width={1402}
             height={1122}

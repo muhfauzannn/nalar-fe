@@ -14,8 +14,9 @@ image/font pass catches DOM content attached by Drei after model loading. Cached
 camera/veil transitions keep playing without a redundant loading screen. PDF
 readers register their first rendered page as an additional required resource.
 
-Progress counts completed image/font tasks, not bytes or an invented overall
-percentage. Thirty seconds without readiness produces a retry state; image/decode
+The visible loader is only the animated sticker, without text or a card. Image/font
+completion counters remain internal. On failure the still sticker is a keyboard-accessible
+retry control, with its explanation available to screen readers. Thirty seconds without readiness produces a retry state; image/decode
 failures, required 3D failures, and route errors do likewise. Retry reloads the
 current URL, clearing rejected in-memory GLTF/module caches. Existing activity
 drafts remain in sessionStorage. Previous sessions are aborted and cannot finish

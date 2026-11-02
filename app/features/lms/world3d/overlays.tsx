@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { gameToast } from "~/features/game-feel";
 import { http } from "~/lib/http";
 import { cn } from "~/lib/utils";
+import { usePageReady } from "~/features/loading/context";
 
 import { BadgeMoment, ChestMoment, chestSeen, markBadgeSeen, markChestSeen, missionsJustDone, newBadges } from "../components/game-moments";
 import { PostSheet } from "../components/post-sheet";
@@ -62,14 +63,15 @@ export function Dock({ children, className }: { children: ReactNode; className?:
 
 export function WorldOverlay({ data, name }: { data: WorldData; name: string }) {
   const studentId = useStudentId();
+  const ready = usePageReady();
   const [missionsOpen, setMissionsOpen] = useState(false);
   useStageScene({ world: data, shot: { kind: "world" } }, [data]);
   useEffect(() => {
-    if (!studentId) return;
+    if (!ready || !studentId) return;
     missionsJustDone(studentId, data.missions).forEach((item, index) =>
       window.setTimeout(() => gameToast({ title: "Misi selesai", sub: missionCopy[item.id], points: `${item.target}/${item.target}`, sound: "ding" }), 600 + index * 900),
     );
-  }, [studentId, data.missions]);
+  }, [ready, studentId, data.missions]);
   // With every hall finished there is no current post, but the island is still there to visit.
   const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? data.islands[0] ?? null;
   const current = active?.current ?? null;

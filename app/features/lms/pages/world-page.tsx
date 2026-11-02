@@ -10,6 +10,7 @@ import { useStudentId } from "../hooks/use-student-id";
 import { missionCopy, postNames } from "../lib/game";
 import { missionsJustDone } from "../components/game-moments";
 import type { WorldData } from "../types";
+import { usePageReady } from "~/features/loading/context";
 
 type Island = WorldData["islands"][number];
 
@@ -38,6 +39,7 @@ const placed = "left-[var(--mx)] top-[var(--my)] md:left-[var(--x)] md:top-[var(
 // below. Nothing on it comes from the AI Offloading Index.
 export function WorldPage({ data, name }: { data: WorldData; name: string }) {
   const studentId = useStudentId();
+  const ready = usePageReady();
   const shown = data.islands.slice(0, anchors.length);
   const more = data.islands.slice(anchors.length);
   const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? null;
@@ -46,14 +48,14 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
   const map = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!studentId) return;
+    if (!ready || !studentId) return;
     missionsJustDone(studentId, data.missions).forEach((item, index) =>
       window.setTimeout(
         () => gameToast({ title: "Misi selesai", sub: missionCopy[item.id], points: `${item.target}/${item.target}`, sound: "ding" }),
         600 + index * 900,
       ),
     );
-  }, [studentId, data.missions]);
+  }, [ready, studentId, data.missions]);
 
   // Meso "terbang": the map zooms toward the island before the island opens.
   function flyTo(event: React.MouseEvent<HTMLAnchorElement>, href: string) {

@@ -56,8 +56,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [firstRendered, setFirstRendered] = useState<string | null>(null);
-  useRequiredPageAsset(`pdf:${resourceId}`, firstRendered === resourceId, firstRendered !== resourceId && Boolean(error));
-  useEffect(() => { if (!loading && !error && pdf) setFirstRendered(resourceId); }, [loading, error, pdf, resourceId]);
+  useRequiredPageAsset(`pdf:${resourceId}`, firstRendered === resourceId, firstRendered !== resourceId ? error : null);
   const [selection, setSelection] = useState<PdfSelection | null>(null);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const scrollHost = useRef<HTMLDivElement>(null);
@@ -255,6 +254,7 @@ export function PdfReader({ resourceId, title, guidance, revealedSteps = null, c
         image: imageCanvas.toDataURL("image/jpeg", 0.75).split(",")[1],
         totalPages: pdf.numPages,
       });
+      setFirstRendered(resourceId);
       setLoading(false);
     })().catch((caught) => {
       if (disposed || caught?.name === "RenderingCancelledException") return;

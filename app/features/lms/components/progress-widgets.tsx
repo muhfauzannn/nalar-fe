@@ -1,3 +1,4 @@
+import { usePageReady } from "~/features/loading/context";
 import { Check, Flame } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -139,12 +140,14 @@ export function Missions({ missions, className }: { missions: PointsData["missio
 // The canvas "Naik level" moment, shown once per new level. The first visit
 // only records the level, so nobody is greeted with a level-up for old work.
 export function LevelUpMoment({ userId, points }: { userId: string; points: PointsData }) {
+  const ready = usePageReady();
   const [before, setBefore] = useState<number | null>(null);
   useEffect(() => {
+    if (!ready) return;
     const seen = lastSeenLevel(userId);
     if (seen !== null && points.level.level > seen) setBefore(seen);
     else markLevelSeen(userId, points.level.level);
-  }, [userId, points.level.level]);
+  }, [ready, userId, points.level.level]);
   if (before === null) return null;
   return (
     <LevelMoment
