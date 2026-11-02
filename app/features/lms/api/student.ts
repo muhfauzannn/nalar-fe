@@ -32,23 +32,31 @@ async function studentRequest<T>(request: Request, operation: () => Promise<T>) 
   }
 }
 
-// Pages whose data may come from `http.getRecent`. Quizzes and assignments always
-// load fresh: their attempt and stage state changes while the student works.
-const prefetchable: [RegExp, (id: string) => string[]][] = [
-  [/^\/dashboard$/, () => ["/api/student/dashboard"]],
-  [/^\/dunia$/, () => ["/api/student/world"]],
-  [/^\/courses$/, () => ["/api/student/courses"]],
-  // An island and its halls read the same two.
-  [/^\/courses\/(?!join$)([^/]+)(?:\/balai\/[^/]+)?$/, (id) => [`/api/student/courses/${id}`, `/api/student/courses/${id}/island`]],
-  [/^\/lessons\/([^/]+)$/, (id) => [`/api/student/lessons/${id}`]],
+// The data each student page reads, so it can be warmed before the click.
+// Most pages read through `http.getRecent` (stale-while-revalidate). Quizzes and
+// assignments never show stale data, since their attempt and stage state changes
+// while the student works: only a prefetch made moments ago is reused (`fresh`).
+const prefetchable: [RegExp, (id: string) => string[], "recent" | "fresh"][] = [
+  [/^\/dashboard$/, () => ["/api/student/dashboard", "/api/student/points"], "recent"],
+  [/^\/dunia$/, () => ["/api/student/world"], "recent"],
+  [/^\/lencana$/, () => ["/api/student/points"], "recent"],
+  [/^\/courses$/, () => ["/api/student/courses"], "recent"],
+  // An island, its classroom and its halls read the same two.
+  [/^\/courses\/(?!join$)([^/]+)(?:\/kelas|\/balai\/[^/]+)?$/, (id) => [`/api/student/courses/${id}`, `/api/student/courses/${id}/island`], "recent"],
+  [/^\/lessons\/([^/]+)$/, (id) => [`/api/student/lessons/${id}`], "recent"],
+  [/^\/assignments\/([^/]+)$/, (id) => [`/api/student/assignments/${id}`], "fresh"],
+  [/^\/quizzes\/([^/]+)$/, (id) => [`/api/student/quizzes/${id}`], "fresh"],
 ];
 
-/** Warms the data of a student page the user is about to open (hover, focus, touch). */
+/** Warms the data of a student page the user is about to open (hover, focus, touch, idle). */
 export function prefetchStudentPage(pathname: string) {
-  for (const [pattern, apiPath] of prefetchable) {
+  for (const [pattern, apiPath, kind] of prefetchable) {
     const match = pattern.exec(pathname);
     if (match) {
-      for (const path of apiPath(match[1] ?? "")) http.getRecent(path).catch(() => {});
+      for (const path of apiPath(match[1] ?? "")) {
+        if (kind === "fresh") http.prefetch(path);
+        else http.getRecent(path).catch(() => {});
+      }
       return;
     }
   }
@@ -69,7 +77,7 @@ export const studentApi = {
     ),
   points: (request: Request) =>
     studentRequest(request, () =>
-      http.get<PointsData>("/api/student/points", forwardedRequestInit(request)),
+      http.getRecent<PointsData>("/api/student/points", forwardedRequestInit(request)),
     ),
   dashboard: (request: Request) =>
     studentRequest(request, () =>
@@ -104,7 +112,7 @@ export const studentApi = {
     ),
   assignment: (request: Request, assignmentId: string) =>
     studentRequest(request, () =>
-      http.get<AssignmentData>(
+      http.getPrefetched<AssignmentData>(
         `/api/student/assignments/${assignmentId}`,
         forwardedRequestInit(request),
       ),
@@ -141,7 +149,7 @@ export const studentApi = {
     ),
   quiz: (request: Request, quizId: string) =>
     studentRequest(request, () =>
-      http.get<QuizData>(`/api/student/quizzes/${quizId}`, forwardedRequestInit(request)),
+      http.getPrefetched<QuizData>(`/api/student/quizzes/${quizId}`, forwardedRequestInit(request)),
     ),
   startQuiz: (request: Request, quizId: string) =>
     studentRequest(request, () =>

@@ -14,7 +14,7 @@ import {
   Link2,
   RotateCcw,
 } from "lucide-react";
-import { Form, Link, useSearchParams } from "react-router";
+import { Form, Link, useNavigation, useSearchParams } from "react-router";
 import { LABS } from "~/features/labs";
 import { gameToast, useOnBecomeTrue } from "~/features/game-feel";
 import { cn } from "~/lib/utils";
@@ -50,7 +50,11 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
   const [params] = useSearchParams();
   const labs = (loaderData.labs ?? []).filter((lab) => LABS[lab.labKey]);
   const room = labs.length > 0 && params.get("ruang") === "lab" ? "lab" : "baca";
-  const completed = loaderData.progressStatus === "completed";
+  // Optimistic: the button's new state shows while it is being saved; a failed
+  // save leaves the loader's state, which is shown again.
+  const navigation = useNavigation();
+  const pending = navigation.formData?.get("status");
+  const completed = typeof pending === "string" ? pending === "completed" : loaderData.progressStatus === "completed";
   useOnBecomeTrue(completed, () =>
     gameToast({ title: "Perpustakaan tuntas", sub: `${loaderData.title} selesai dibaca`, sound: "small" }),
   );

@@ -7,6 +7,7 @@ import {
   useLocation,
   useNavigate,
   useNavigation,
+  useRevalidator,
 } from "react-router";
 import {
   BookOpen,
@@ -44,6 +45,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { studentNav } from "~/config";
 import { authClient } from "~/lib/auth-client";
+import { onStaleRefreshed } from "~/lib/http";
 import { forgetSignedIn } from "~/lib/session-hint";
 import { prefetchStudentPage } from "../api/student";
 import { isWorldPath, useWorld3d, WorldModeToggle, WorldOverlayContext } from "../world3d";
@@ -140,6 +142,30 @@ function usePrefetchOnIntent(currentPathname: string) {
   return pathname && pathname !== currentPathname ? pathname : null;
 }
 
+// Once the browser is idle after the app has loaded: the pages a student opens
+// most get their code and data, and the other student pages their code (any id
+// matches the route), so no first visit waits for a download and then the data.
+const IDLE_PAGES = ["/dashboard", "/dunia", "/lencana"];
+const IDLE_CODE = ["/courses/_", "/courses/_/kelas", "/courses/_/balai/_", "/lessons/_", "/assignments/_", "/quizzes/_"];
+
+function useIdlePrefetch() {
+  const [pages, setPages] = useState<string[]>([]);
+  useEffect(() => {
+    const warm = () => {
+      setPages([...IDLE_PAGES, ...IDLE_CODE]);
+      IDLE_PAGES.forEach((page) => prefetchStudentPage(page));
+    };
+    // Safari has no requestIdleCallback: a short timeout instead.
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(warm, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(warm, 1500);
+    return () => clearTimeout(id);
+  }, []);
+  return pages;
+}
+
 export function StudentAppShell({ data }: { data: StudentShellData }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -164,6 +190,10 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
   // The camera already flies to the next world route; its old cards step aside.
   const flying = inWorld && navigation.state === "loading" && isWorldPath(navigation.location.pathname);
   const [overlay, setOverlay] = useState<HTMLElement | null>(null);
+  const idlePages = useIdlePrefetch();
+  // A page shown from a stale copy refreshes when the fresh copy differs.
+  const revalidator = useRevalidator();
+  useEffect(() => onStaleRefreshed(() => void revalidator.revalidate()), [revalidator]);
 
   async function signOut() {
     setSigningOut(true);
@@ -256,6 +286,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
       </Sidebar>
       <SidebarInset>
         {prefetchPathname && <PrefetchPageLinks page={prefetchPathname} />}
+        {idlePages.map((page) => <PrefetchPageLinks key={page} page={page} />)}
         <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background/90 px-4 backdrop-blur-sm sm:px-6 lg:rounded-t-xl lg:px-8">
           <div className="flex min-w-0 items-center gap-2">
             <SidebarTrigger aria-label="Buka navigasi" className="-ml-1" />

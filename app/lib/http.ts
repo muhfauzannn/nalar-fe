@@ -19,37 +19,111 @@ export class HttpError extends Error {
 }
 
 /**
- * Browser-only memory of recent GETs, so a page prefetched on hover (or opened
- * again with Back) renders without waiting on the network. Any write clears all
- * of it, so a page never shows data from before the user's own change.
+ * Browser-only memory of GETs, stale-while-revalidate:
+ *
+ * - fresh (under 30 s): used as is, no request;
+ * - stale (under 10 min): shown at once, refreshed in the background; when the
+ *   refresh differs, `onStaleRefreshed` listeners run (the shell revalidates
+ *   the open page, which then reads the fresh copy);
+ * - older, or never read: fetched, and the page waits for it.
+ *
+ * Any write clears all of it (`request`), so a page never shows data from
+ * before the user's own change; signing out clears it too.
  */
-const recentReads = new Map<string, { at: number; promise: Promise<unknown> }>();
-const RECENT_READ_MS = 30_000;
+type Entry = { at: number; promise: Promise<unknown>; value?: unknown; settled: boolean; refreshing?: boolean };
+const recentReads = new Map<string, Entry>();
+const FRESH_MS = 30_000;
+const STALE_MS = 10 * 60_000;
+const refreshedListeners = new Set<(path: string) => void>();
 
 export function clearRecentReads() {
   recentReads.clear();
 }
 
+/** Runs when a stale page's background refresh brought different data. */
+export function onStaleRefreshed(listener: (path: string) => void) {
+  refreshedListeners.add(listener);
+  return () => {
+    refreshedListeners.delete(listener);
+  };
+}
+
+function remember(path: string, promise: Promise<unknown>) {
+  const entry: Entry = { at: Date.now(), promise, settled: false };
+  recentReads.set(path, entry);
+  promise.then(
+    (value) => {
+      entry.value = value;
+      entry.settled = true;
+    },
+    () => {
+      if (recentReads.get(path) === entry) recentReads.delete(path);
+    },
+  );
+  return entry;
+}
+
 function getRecent<T>(path: string, init?: RequestInit): Promise<T> {
   if (typeof document === "undefined") return request<T>(path, { ...init, method: "GET" });
   const hit = recentReads.get(path);
-  if (hit && Date.now() - hit.at < RECENT_READ_MS) return hit.promise as Promise<T>;
-  const promise = request<T>(path, { ...init, method: "GET" });
-  recentReads.set(path, { at: Date.now(), promise });
-  promise.catch(() => {
-    if (recentReads.get(path)?.promise === promise) recentReads.delete(path);
-  });
-  return promise;
+  const age = hit ? Date.now() - hit.at : Infinity;
+  if (hit && age < FRESH_MS) return hit.promise as Promise<T>;
+  if (hit?.settled && age < STALE_MS) {
+    if (!hit.refreshing) {
+      hit.refreshing = true;
+      const before = JSON.stringify(hit.value);
+      const promise = request<T>(path, { ...init, method: "GET" });
+      promise.then(
+        (value) => {
+          // A write may have cleared the memory meanwhile: then this copy is not trusted.
+          if (recentReads.get(path) !== hit) return;
+          remember(path, Promise.resolve(value)).value = value;
+          if (JSON.stringify(value) !== before) refreshedListeners.forEach((listener) => listener(path));
+        },
+        () => {
+          hit.refreshing = false;
+        },
+      );
+    }
+    return Promise.resolve(hit.value as T);
+  }
+  return remember(path, request<T>(path, { ...init, method: "GET" })).promise as Promise<T>;
+}
+
+/**
+ * For data that changes while the user works (an assignment's stages, a quiz
+ * attempt): never served stale, but a prefetch made moments ago on the user's
+ * intent (hover, touch) is used instead of asking again.
+ */
+const prefetched = new Map<string, { at: number; promise: Promise<unknown> }>();
+const PREFETCH_MS = 10_000;
+
+function prefetch(path: string, init?: RequestInit) {
+  if (typeof document === "undefined") return;
+  const hit = prefetched.get(path);
+  if (hit && Date.now() - hit.at < PREFETCH_MS) return;
+  const promise = request(path, { ...init, method: "GET" });
+  prefetched.set(path, { at: Date.now(), promise });
+  promise.catch(() => prefetched.delete(path));
+}
+
+function getPrefetched<T>(path: string, init?: RequestInit): Promise<T> {
+  const hit = prefetched.get(path);
+  prefetched.delete(path);
+  if (hit && Date.now() - hit.at < PREFETCH_MS) return hit.promise as Promise<T>;
+  return request<T>(path, { ...init, method: "GET" });
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!init?.method || init.method === "GET") return send<T>(path, init);
   // Cleared again afterwards: a read that started during the write may hold the old data.
   clearRecentReads();
+  prefetched.clear();
   try {
     return await send<T>(path, init);
   } finally {
     clearRecentReads();
+    prefetched.clear();
   }
 }
 
@@ -97,6 +171,8 @@ export const http = {
     request<T>(path, { ...init, method: "GET" }),
   /** GET that reuses a response from the last 30 s (see `recentReads`). */
   getRecent,
+  getPrefetched,
+  prefetch,
   post: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, { ...init, method: "POST", body: JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown, init?: RequestInit) =>

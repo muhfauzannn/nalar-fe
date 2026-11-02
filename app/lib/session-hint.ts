@@ -1,3 +1,5 @@
+import { clearRecentReads } from "./http";
+
 /**
  * A cookie that says "this browser was signed in recently", set by the app
  * itself on its own origin.
@@ -32,6 +34,8 @@ export function rememberSignedIn() {
   write("1", MAX_AGE_SECONDS);
 }
 
+/** Signed out or the session ended: also forget every read made as that user. */
 export function forgetSignedIn() {
   write("", 0);
+  clearRecentReads();
 }

@@ -9,10 +9,15 @@ import {
 import { clearRecentReads } from "~/lib/http";
 import { rememberSignedIn } from "~/lib/session-hint";
 
+let signedInAs: string | null = null;
+
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  // Runs when the app is entered (after sign-in too): never reuse another account's reads.
-  clearRecentReads();
   const shell = await studentApi.shell(request);
+  // Another account than the last one in this tab: never reuse its reads. (A new
+  // tab starts empty, and signing out clears them; clearing on the first load
+  // would also drop what the page's own loaders just read.)
+  if (signedInAs && signedInAs !== shell.user.id) clearRecentReads();
+  signedInAs = shell.user.id;
   rememberSignedIn();
   return shell;
 }
