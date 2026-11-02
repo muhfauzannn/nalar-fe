@@ -32,7 +32,7 @@ export const press = "transition-transform duration-150 active:scale-[0.97]";
 
 export function TopBar({ back, backLabel, crumbs }: { back?: string; backLabel?: string; crumbs: { label: string; to?: string }[] }) {
   return (
-    <div className="absolute left-3 right-3 top-3 flex items-center gap-2 sm:left-4 sm:top-4">
+    <div className="absolute left-3 right-3 top-3 z-20 flex items-center gap-2 sm:left-4 sm:top-4">
       {back && (
         <Link to={back} aria-label={backLabel ?? "Kembali"} className={cn("pointer-events-auto flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-white/93 px-3 shadow-sm", press)}>
           <ChevronLeft className="size-5" aria-hidden="true" />

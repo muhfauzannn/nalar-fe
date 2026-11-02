@@ -13,6 +13,7 @@ import { loadPdfjs } from "../lib/pdfjs";
 import type { CourseData, IslandData, LessonData } from "../types";
 import ROOM from "./classroom-layout.json";
 import { setSurfaceRect, useSurfaceRect } from "./board-rect";
+import { boardPreviewScale } from "./board-preview";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { createClassroomInstance } from "./classroom-model";
 import { classroomSurface, stationAspect, stationPose, stationRect } from "./surface-projection";
@@ -131,54 +132,47 @@ async function paintBoard(lesson: LessonData | null): Promise<HTMLCanvasElement>
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   }
-  const pages: HTMLCanvasElement[] = [];
+  let preview: HTMLCanvasElement | null = null;
   const file = lesson?.resources.find((resource) => resource.file);
   if (file) {
     try {
       const pdfjs = await loadPdfjs();
       const task = pdfjs.getDocument({ url: studentResourceFileUrl(file.id), withCredentials: true });
-      const pdf = await task.promise;
-      for (let n = 1; n <= Math.min(2, pdf.numPages); n++) {
-        const page = await pdf.getPage(n);
+      try {
+        const pdf = await task.promise;
+        // A single complete slide remains legible from the classroom entrance.
+        const page = await pdf.getPage(1);
         const base = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({ scale: (H * 0.86) / base.height });
+        const viewport = page.getViewport({ scale: boardPreviewScale(W, H, base.width, base.height) });
         const c = document.createElement("canvas");
-        c.width = Math.round(viewport.width);
-        c.height = Math.round(viewport.height);
+        c.width = Math.max(1, Math.round(viewport.width));
+        c.height = Math.max(1, Math.round(viewport.height));
         await page.render({ canvas: c, canvasContext: c.getContext("2d")!, viewport }).promise;
-        pages.push(c);
+        preview = c;
+      } finally {
+        void task.destroy().catch(() => {});
       }
-      void task.destroy();
     } catch {
       // No PDF on the board: the paper below takes its place.
     }
   }
-  if (pages.length === 0) pages.push(paperOf(lesson, Math.round(H * 0.86 * 0.707), Math.round(H * 0.86)));
-  // pin the pages side by side, a little askew, with gold pins
-  const gap = W * 0.04;
-  const total = pages.reduce((sum, page) => sum + page.width, 0) + gap * (pages.length - 1);
-  let x = (W - total) / 2;
-  pages.forEach((page, i) => {
-    const y = (H - page.height) / 2;
-    ctx.save();
-    ctx.translate(x + page.width / 2, y + page.height / 2);
-    ctx.rotate((i % 2 ? 1 : -1) * 0.012);
-    ctx.shadowColor = "rgba(0,0,0,0.35)";
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 10;
-    ctx.fillStyle = "#fffdf8";
-    ctx.fillRect(-page.width / 2, -page.height / 2, page.width, page.height);
-    ctx.shadowColor = "transparent";
-    ctx.drawImage(page, -page.width / 2, -page.height / 2);
-    for (const px of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(px * (page.width / 2 - 26), -page.height / 2 + 26, 13, 0, Math.PI * 2);
-      ctx.fillStyle = "#e0a42c";
-      ctx.fill();
-    }
-    ctx.restore();
-    x += page.width + gap;
-  });
+  preview ??= paperOf(lesson, Math.round(H * 0.86 * 0.707), Math.round(H * 0.86));
+  const x = (W - preview.width) / 2, y = (H - preview.height) / 2;
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 10;
+  ctx.fillStyle = "#fffdf8";
+  ctx.fillRect(x, y, preview.width, preview.height);
+  ctx.shadowColor = "transparent";
+  ctx.drawImage(preview, x, y);
+  for (const px of [x + 26, x + preview.width - 26]) {
+    ctx.beginPath();
+    ctx.arc(px, y + 26, 13, 0, Math.PI * 2);
+    ctx.fillStyle = "#e0a42c";
+    ctx.fill();
+  }
+  ctx.restore();
   return canvas;
 }
 
