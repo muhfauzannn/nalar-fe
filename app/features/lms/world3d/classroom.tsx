@@ -12,6 +12,7 @@ import type { CourseData, IslandData, LessonData } from "../types";
 import ROOM from "./classroom-layout.json";
 import { setSurfaceRect } from "./board-rect";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
+import { createClassroomInstance } from "./classroom-model";
 import { classroomSurface, stationAspect, stationPose, stationRect } from "./surface-projection";
 import { STILL } from "./ground";
 import { sketchOf, type Vec3 } from "./layout";
@@ -302,16 +303,7 @@ export function Classroom({ courseId, focus, lesson, course, island }: { courseI
   const { scene } = useGLTF(CLASSROOM_URL, false, true);
   const navigate = useNavigate();
   const gl = useThree((state) => state.gl);
-  const room = useMemo(() => {
-    const node = scene.getObjectByName("classroom")!;
-    node.traverse((object) => {
-      if ((object as THREE.Mesh).isMesh) {
-        object.castShadow = true;
-        object.receiveShadow = true;
-      }
-    });
-    return node;
-  }, [scene]);
+  const room = useMemo(() => createClassroomInstance(scene), [scene]);
   // The world's fog would wash the room out; it comes back when the student leaves.
   const three = useThree((state) => state.scene);
   useLayoutEffect(() => {
