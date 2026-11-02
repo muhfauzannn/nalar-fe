@@ -7,6 +7,7 @@ import { finished, gameGsap, gameToast, playSound, prefersReducedMotion } from "
 import { cn } from "~/lib/utils";
 import { LevelBar, LevelUpMoment, Missions, StreakChip } from "../components/progress-widgets";
 import { useStudentId } from "../hooks/use-student-id";
+import { WorldIslandPicker } from "../components/world-island-picker";
 import { missionCopy, postNames } from "../lib/game";
 import { missionsJustDone } from "../components/game-moments";
 import type { WorldData } from "../types";
@@ -141,6 +142,8 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         </div>
         {active && <Bridge island={active} />}
       </div>
+
+      <WorldIslandPicker islands={data.islands} className="mx-3 w-[calc(100%-1.5rem)]" />
 
       <section aria-label="Pulau lainnya" className="flex flex-wrap items-center gap-2 max-md:px-3">
           {more.map((island) => (

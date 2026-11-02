@@ -10,6 +10,7 @@ import { usePageReady } from "~/features/loading/context";
 
 import { BadgeMoment, ChestMoment, chestSeen, markBadgeSeen, markChestSeen, missionsJustDone, newBadges } from "../components/game-moments";
 import { PostSheet } from "../components/post-sheet";
+import { WorldIslandPicker } from "../components/world-island-picker";
 import { LevelBar, LevelUpMoment, Missions, WeekTarget } from "../components/progress-widgets";
 import { useStudentId } from "../hooks/use-student-id";
 import { districtsOf, type Stop } from "../lib/districts";
@@ -99,6 +100,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
         )}
       </div>
       <Dock>
+        <WorldIslandPicker islands={data.islands} />
         <div className={cn(card, "flex w-full max-w-[26rem] items-center gap-3 p-3")}>
           <img src="/game/cat-avatar.webp" alt="" className="size-12 shrink-0 rounded-2xl bg-[#dff7ee] object-cover" />
           <div className="min-w-0 flex-1">

@@ -19,6 +19,7 @@ import { Decor, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit
 import { hex, islandLayout, ring, sketchOf, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
 import { cameraView, MidClouds, Sky } from "./sky";
 import { fadeVeil } from "./veil";
+import { frameWorld, type WorldExtent } from "./world-camera";
 import { classroomForScene, sceneMatchesRoute, shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
@@ -30,11 +31,17 @@ type CameraShot = { target: Vec3; from: Vec3; zoom: number; phone?: { zoom: numb
 
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
-function cameraFor(shot: WorldShot, islands: WorldIsland[], detail: IslandLayout | null): CameraShot {
+function cameraFor(shot: WorldShot, islands: WorldIsland[], detail: IslandLayout | null, overview: WorldExtent[], size: { width: number; height: number }, coarsePointer: boolean): CameraShot {
   const at = (courseId: string) => islands.find((island) => island.courseId === courseId)?.position ?? [0, 0, 0];
   if (shot.kind === "world") {
-    const first = islands[0]?.position ?? [0, 0, 0];
-    return { target: [0, -1, 0], from: ISO, zoom: 15, phone: { zoom: 20, target: add(first, [-1, -1, -2]) } };
+    if (size.width < 768 || (size.width <= 1024 && (size.height < 500 || coarsePointer))) {
+      const frame = frameWorld(overview, size.width, size.height);
+      if (frame) {
+        const scale = Math.max(0.42, Math.min(size.width, size.height) / 800);
+        return { target: frame.target, from: ISO, zoom: frame.zoom / scale, calm: true };
+      }
+    }
+    return { target: [0, -1, 0], from: ISO, zoom: 15 };
   }
   const base = at(shot.courseId);
   const radius = detail ? Math.max(...detail.tiles.map(ring)) : 3;
@@ -701,10 +708,22 @@ export function WorldScene3D() {
   }, [worldSketch, detailSketch]);
   const shotCourse = shot.kind === "world" ? null : shot.courseId;
   const shotLayout = layouts[islands.findIndex((island) => island.courseId === shotCourse)] ?? null;
-  const camera = cameraFor(shot, islands, shotLayout);
+  const size = useThree((state) => state.size);
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const overview: WorldExtent[] = islands.map((island, index) => {
+    const layout = layouts[index];
+    const radius = layout ? Math.max(10, ...layout.tiles.map((tile) => {
+      const [x, , z] = hex(tile);
+      return Math.hypot(x, z) + 4;
+    })) : 10;
+    return { position: island.position, radius };
+  });
+  if (scene.world) overview.push({ position: join, radius: 10 });
+  const camera = cameraFor(shot, islands, shotLayout, overview, size, coarsePointer);
   const atWorld = shot.kind === "world";
   const activeId = scene.world?.islands.find((island) => island.current?.post)?.course.id ?? scene.world?.islands.find((island) => island.current)?.course.id ?? null;
   const narrow = useThree((t) => t.size.width < 600);
+  const mobile = size.width < 768 || coarsePointer;
   const center = islands[0]?.position ?? [0, 0, 0];
   // Dunia already draws every island; the course data only fills the cards on
   // landing. Warm it when the browser is idle, so landing waits for nothing.
@@ -794,11 +813,11 @@ export function WorldScene3D() {
       {islands.map((island, index) => {
         const layout = layouts[index];
         // An older API sends no sketch: a stand-in until the course loads.
-        if (!layout) return <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld} active={island.courseId === activeId} />;
+        if (!layout) return <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld && !mobile} active={island.courseId === activeId} />;
         return (
           <group key={island.courseId}>
             <DetailIsland layout={layout} position={island.position} scene={scene} near={island.courseId === shotCourse} />
-            <WorldSign island={island} show={atWorld} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} />
+            <WorldSign island={island} show={atWorld && !mobile} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} />
           </group>
         );
       })}
