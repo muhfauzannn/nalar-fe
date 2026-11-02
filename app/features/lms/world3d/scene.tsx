@@ -1,17 +1,18 @@
 import { Html } from "@react-three/drei";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useNavigation } from "react-router";
 import * as THREE from "three";
 
 import { announcePoints, awardChip, flyCoin, gameGsap, HAPTIC, haptic, playSound } from "~/features/game-feel";
 
 import { cn } from "~/lib/utils";
+import { prefetchStudentPage } from "../api/student";
 import { pointCopy, postNames } from "../lib/game";
 import type { PostStatus } from "../types";
 import { Decor, HexBoard, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit";
 import { hex, islandLayout, ring, TILE, tilesWithin, worldLayout, type HallLayout, type IslandLayout, type Vec3, type WorldIsland } from "./layout";
-import { useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
+import { shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
 const ISO: Vec3 = [40, 34, 40];
@@ -47,6 +48,7 @@ function CameraRig({ shot }: { shot: CameraShot }) {
   const { camera, size } = useThree();
   const state = useRef({ tx: 0, ty: 0, tz: 0, px: 40, py: 34, pz: 40, zoom: 15 });
   const first = useRef(true);
+  const flight = useRef<ReturnType<ReturnType<typeof gameGsap>["to"]> | null>(null);
   const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const key = JSON.stringify(shot);
   useEffect(() => {
@@ -57,15 +59,21 @@ function CameraRig({ shot }: { shot: CameraShot }) {
     const zoom = (portrait && shot.phone?.zoom) || shot.zoom;
     const to = { tx: target[0], ty: target[1], tz: target[2], px: target[0] + shot.from[0], py: target[1] + shot.from[1], pz: target[2] + shot.from[2], zoom: zoom * Math.max(0.42, scale) };
     const g = gameGsap();
+    const left = flight.current?.isActive() ? flight.current.duration() - flight.current.time() : 0;
     g.killTweensOf(state.current);
     if (first.current || reduced) {
       Object.assign(state.current, to);
       first.current = false;
       return;
     }
+    // The route's data refined the shot mid-flight: land on it in the time left.
+    if (left > 0.05) {
+      flight.current = g.to(state.current, { ...to, duration: Math.max(0.45, left), ease: "power2.out" });
+      return;
+    }
     // Zooming out reads as taking off, zooming in as landing: one eased flight.
     playSound("whoosh");
-    g.to(state.current, { ...to, duration: 1.15, ease: "power2.inOut" });
+    flight.current = g.to(state.current, { ...to, duration: 1.15, ease: "power2.inOut" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, size.width, size.height]);
   useFrame(({ clock }) => {
@@ -666,8 +674,12 @@ function StaticShadows({ version }: { version: string }) {
 // ---- the whole world ----------------------------------------------------------------------
 
 export function WorldScene3D() {
-  const scene = useWorldScene();
+  const staged = useWorldScene();
   const navigate = useNavigate();
+  // While the next world route loads, the camera already flies to it.
+  const pending = useNavigation().location;
+  const next = pending ? shotForUrl(pending.pathname, pending.search) : null;
+  const scene = useMemo(() => (next ? { ...staged, shot: next } : staged), [staged, JSON.stringify(next)]); // eslint-disable-line react-hooks/exhaustive-deps
   const { shot } = scene;
   const detailLayout = useMemo(() => (scene.detail ? islandLayout(scene.detail.course, scene.detail.island) : null), [scene.detail]);
   const focus = detailLayout ? { courseId: detailLayout.courseId, name: detailLayout.name, subject: detailLayout.subject } : null;
@@ -677,6 +689,13 @@ export function WorldScene3D() {
   const activeId = scene.world?.islands.find((island) => island.current?.post)?.course.id ?? scene.world?.islands.find((island) => island.current)?.course.id ?? null;
   const narrow = useThree((t) => t.size.width < 600);
   const center = islands[0]?.position ?? [0, 0, 0];
+  // From Dunia every island is one tap away: warm their data while the student looks.
+  const worldIds = scene.world?.islands.map((island) => island.course.id).join() ?? "";
+  useEffect(() => {
+    if (!atWorld || !worldIds) return;
+    const id = window.setTimeout(() => worldIds.split(",").forEach((courseId) => prefetchStudentPage(`/courses/${courseId}`)), 600);
+    return () => window.clearTimeout(id);
+  }, [atWorld, worldIds]);
   const shadowVersion = `${shot.kind}-${detailLayout?.courseId}-${detailLayout?.halls.map((h) => h.building?.posts.map((p) => p.status).join()).join()}-${scene.chest?.state}`;
 
   return (

@@ -42,6 +42,22 @@ export function useWorldScene() {
   return useSyncExternalStore(subscribe, () => scene, () => scene);
 }
 
+const PLACES = ["library", "lab", "arena"] as const;
+
+/**
+ * The shot a world URL will show, read before its route has loaded, so the
+ * camera takes off on the click and the data arrives during the flight.
+ */
+export function shotForUrl(pathname: string, search: string): WorldShot | null {
+  if (pathname === "/dunia") return { kind: "world" };
+  const [first, courseId, third, assignmentId, ...rest] = pathname.split("/").filter(Boolean);
+  if (first !== "courses" || !courseId || courseId === "join" || rest.length) return null;
+  if (third === "balai" && assignmentId) return { kind: "hall", courseId, assignmentId };
+  if (third) return null;
+  const place = new URLSearchParams(search).get("tempat");
+  return PLACES.find((item) => item === place) ? { kind: "place", courseId, place: place as (typeof PLACES)[number] } : { kind: "island", courseId };
+}
+
 /** A world route puts its data and shot on stage while it is open. */
 export function useStageScene(patch: Partial<WorldScene>, deps: unknown[]) {
   useEffect(() => {

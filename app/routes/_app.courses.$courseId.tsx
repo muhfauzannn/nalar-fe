@@ -1,3 +1,5 @@
+import type { ShouldRevalidateFunctionArgs } from "react-router";
+
 import type { Route } from "./+types/_app.courses.$courseId";
 import {
   CourseDetailPageSkeleton,
@@ -15,6 +17,12 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
     studentApi.island(request, params.courseId),
   ]);
   return { course, island };
+}
+
+// Opening a place (?tempat=) only moves the camera; the island data stays.
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  if (!formMethod && currentUrl.pathname === nextUrl.pathname) return false;
+  return defaultShouldRevalidate;
 }
 
 export function HydrateFallback() {

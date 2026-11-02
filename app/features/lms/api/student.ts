@@ -34,11 +34,13 @@ async function studentRequest<T>(request: Request, operation: () => Promise<T>) 
 
 // Pages whose data may come from `http.getRecent`. Quizzes and assignments always
 // load fresh: their attempt and stage state changes while the student works.
-const prefetchable: [RegExp, (id: string) => string][] = [
-  [/^\/dashboard$/, () => "/api/student/dashboard"],
-  [/^\/courses$/, () => "/api/student/courses"],
-  [/^\/courses\/(?!join$)([^/]+)$/, (id) => `/api/student/courses/${id}`],
-  [/^\/lessons\/([^/]+)$/, (id) => `/api/student/lessons/${id}`],
+const prefetchable: [RegExp, (id: string) => string[]][] = [
+  [/^\/dashboard$/, () => ["/api/student/dashboard"]],
+  [/^\/dunia$/, () => ["/api/student/world"]],
+  [/^\/courses$/, () => ["/api/student/courses"]],
+  // An island and its halls read the same two.
+  [/^\/courses\/(?!join$)([^/]+)(?:\/balai\/[^/]+)?$/, (id) => [`/api/student/courses/${id}`, `/api/student/courses/${id}/island`]],
+  [/^\/lessons\/([^/]+)$/, (id) => [`/api/student/lessons/${id}`]],
 ];
 
 /** Warms the data of a student page the user is about to open (hover, focus, touch). */
@@ -46,7 +48,7 @@ export function prefetchStudentPage(pathname: string) {
   for (const [pattern, apiPath] of prefetchable) {
     const match = pattern.exec(pathname);
     if (match) {
-      http.getRecent(apiPath(match[1] ?? "")).catch(() => {});
+      for (const path of apiPath(match[1] ?? "")) http.getRecent(path).catch(() => {});
       return;
     }
   }
@@ -59,11 +61,11 @@ export const studentApi = {
     ),
   island: (request: Request, courseId: string) =>
     studentRequest(request, () =>
-      http.get<IslandData>(`/api/student/courses/${courseId}/island`, forwardedRequestInit(request)),
+      http.getRecent<IslandData>(`/api/student/courses/${courseId}/island`, forwardedRequestInit(request)),
     ),
   world: (request: Request) =>
     studentRequest(request, () =>
-      http.get<WorldData>("/api/student/world", forwardedRequestInit(request)),
+      http.getRecent<WorldData>("/api/student/world", forwardedRequestInit(request)),
     ),
   points: (request: Request) =>
     studentRequest(request, () =>

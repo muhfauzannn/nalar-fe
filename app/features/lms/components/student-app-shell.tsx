@@ -161,6 +161,8 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
   // between them; each route draws its buttons into the layer over it.
   const world3d = useWorld3d();
   const inWorld = world3d && isWorldPath(location.pathname);
+  // The camera already flies to the next world route; its old cards step aside.
+  const flying = inWorld && navigation.state === "loading" && isWorldPath(navigation.location.pathname);
   const [overlay, setOverlay] = useState<HTMLElement | null>(null);
 
   async function signOut() {
@@ -279,7 +281,13 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
             <Suspense fallback={null}>
               <WorldStage />
             </Suspense>
-            <div ref={setOverlay} className="pointer-events-none absolute inset-0 z-10" />
+            <div
+              ref={setOverlay}
+              className={cn(
+                "pointer-events-none absolute inset-0 z-10 transition-opacity duration-150 ease-out",
+                flying && "opacity-0",
+              )}
+            />
             <WorldOverlayContext.Provider value={overlay}>
               <Outlet />
             </WorldOverlayContext.Provider>
