@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 
-import { InclinedPlaneLab } from "./inclined-plane-lab";
 import { LajuLab } from "./laju-lab";
 import { OsmosisLab } from "./osmosis-lab";
 import { ParabolaLab } from "./parabola-lab";
@@ -11,12 +10,6 @@ import { SinusLab } from "./sinus-lab";
 export type LabProps = { solved: string[]; onSolve: (challenge: string) => Promise<number> };
 
 export const LABS: Record<string, { title: string; subject: string; challenges: number; Component: ComponentType<LabProps> }> = {
-  "bidang-miring": {
-    title: "Bidang miring",
-    subject: "Fisika",
-    challenges: 3,
-    Component: InclinedPlaneLab as ComponentType<LabProps>,
-  },
   "gerak-parabola": {
     title: "Gerak parabola",
     subject: "Fisika",

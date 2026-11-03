@@ -76,7 +76,7 @@ export const island: IslandData = {
     {
       id: "lab-a",
       lessonId: "lesson-a",
-      labKey: "bidang-miring",
+      labKey: "gerak-parabola",
       solved: 0,
       challenges: 3,
     },
@@ -97,7 +97,7 @@ export const lesson: LessonData = {
   enrollmentId: "enrollment-a",
   progressStatus: null,
   resources: [],
-  labs: [{ id: "lab-a", labKey: "bidang-miring", solved: [] }],
+  labs: [{ id: "lab-a", labKey: "gerak-parabola", solved: [] }],
 };
 export const quiz: QuizData = {
   quiz: {
