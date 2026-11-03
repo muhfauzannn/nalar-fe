@@ -7,7 +7,12 @@ import { SinusLab } from "./sinus-lab";
 
 // The labs Bernalar ships (PRD §5.10). Keys and challenge ids must match the
 // server's catalog in nalar-be/src/modules/labs/lab-catalog.ts.
-export type LabProps = { solved: string[]; onSolve: (challenge: string) => Promise<number> };
+export type LabProps = {
+  solved: string[];
+  onSolve: (challenge: string) => Promise<number>;
+  /** The lab's state in one line, for the AI tutor beside it. */
+  onState?: (summary: string) => void;
+};
 
 export const LABS: Record<string, { title: string; subject: string; challenges: number; Component: ComponentType<LabProps> }> = {
   "gerak-parabola": {

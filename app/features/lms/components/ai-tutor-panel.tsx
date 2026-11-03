@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { cn } from "~/lib/utils";
 import { useAiTutorLive } from "../hooks/use-ai-tutor-live";
 import type { AiTutorMode, AiTutorTarget } from "../types";
 import {
@@ -24,9 +25,20 @@ const tutorModeItems: Array<{ label: string; value: AiTutorMode }> = [
   { label: "Umpan balik", value: "feedback" },
 ];
 
-export function AiTutorPanel({ target }: { target: AiTutorTarget }) {
+export function AiTutorPanel({
+  target,
+  liveContext,
+  placeholder = "Tanya tentang soal ini…",
+  className,
+}: {
+  target: AiTutorTarget;
+  /** What the student sees right now (a lab's mission and settings); sent as background, never as a question. */
+  liveContext?: string;
+  placeholder?: string;
+  className?: string;
+}) {
   const [draft, setDraft] = useState("");
-  const tutor = useAiTutorLive(target);
+  const tutor = useAiTutorLive(target, liveContext);
   const connected = tutor.status === "ready" || tutor.status === "responding";
   const voiceOn = tutor.channel === "voice" && (connected || tutor.status === "connecting");
 
@@ -55,7 +67,10 @@ export function AiTutorPanel({ target }: { target: AiTutorTarget }) {
 
   return (
     <section
-      className="flex h-[30rem] min-w-0 flex-col overflow-hidden rounded-2xl border bg-card xl:h-[min(38rem,calc(100dvh-8rem))]"
+      className={cn(
+        "flex h-[30rem] min-w-0 flex-col overflow-hidden rounded-2xl border bg-card xl:h-[min(38rem,calc(100dvh-8rem))]",
+        className,
+      )}
       aria-label="Tutor AI"
     >
       <header className="flex items-center justify-between gap-3 border-b px-4 py-2.5">
@@ -118,7 +133,7 @@ export function AiTutorPanel({ target }: { target: AiTutorTarget }) {
           onChange={setDraft}
           onSend={() => void send()}
           canSend={tutor.status !== "responding" && tutor.status !== "connecting"}
-          placeholder="Tanya tentang soal ini…"
+          placeholder={placeholder}
           voice={voiceStart}
         />
       </div>

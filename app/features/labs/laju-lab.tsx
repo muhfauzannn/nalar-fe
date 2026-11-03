@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerE
 
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
-import { ActionButton, ChoiceChips, Float, FeedbackPill, inPlane, labCard, MissionStrip, PhoneSlider, pagePoint, useMissions, viewPoint } from "./lab-ui";
+import { ActionButton, ChoiceChips, Float, FeedbackPill, inPlane, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
 import { CATALYST_MASS, CHALLENGES, CONC, DOUBLE_BAND, EA, EA_CATALYST, effectiveShare, FAST_TARGET, fmt, judge, rateOf, SAFE_TEMP, speedOf, TEMP, type ChallengeId, type Mix } from "./laju/model";
 import {
   at,
@@ -58,7 +58,7 @@ function oneIn(share: number) {
   return fmt(n, 0);
 }
 
-export function LajuLab({ solved, onSolve }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number> }) {
+export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void }) {
   const firstOpen = CHALLENGES.findIndex((challenge) => !solved.includes(challenge.id));
   const [active, setActive] = useState(firstOpen === -1 ? 0 : firstOpen);
   const challenge = CHALLENGES[active]!;
@@ -86,6 +86,13 @@ export function LajuLab({ solved, onSolve }: { solved: string[]; onSolve: (chall
   const band = challenge.id === "gandakan-suhu" ? gaugeBand(DOUBLE_BAND.min, DOUBLE_BAND.max) : challenge.id === "cepat-tapi-aman" ? gaugeBand(FAST_TARGET, 32) : "";
   const glow = glowOf(mix.temp);
   const hot = challenge.id === "cepat-tapi-aman" && mix.temp > SAFE_TEMP;
+  useLabState(onState, [
+    `Misi ${active + 1} dari ${CHALLENGES.length} (${challenge.id}): ${challenge.story}`,
+    `Suhu ${mix.temp} K, konsentrasi ${fmt(mix.conc, 2)} M, katalis ${mix.catalyst ? "dicelupkan" : "tidak dipakai"}; pengukur menunjukkan laju ${fmt(rate)}× campuran awal`,
+    challenge.predict && `Tebakan siswa: ${guess ?? "belum menebak"}`,
+    feedback && `Umpan balik lab: ${feedback.text}`,
+    `Sudah selesai: ${done.length ? done.join(", ") : "belum ada"}`,
+  ]);
 
   // ---- the particles: a small simulation written straight to the circles ----
 

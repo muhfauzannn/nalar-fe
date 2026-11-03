@@ -1,5 +1,5 @@
 import { Check, Lock } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { announcePoints, flyCoin, HAPTIC, haptic, playSound } from "~/features/game-feel";
 import { cn } from "~/lib/utils";
@@ -153,6 +153,17 @@ export function useMissions<Id extends string>(solved: string[], onSolve: (chall
     }
   };
   return { done, feedback, setFeedback, miss, win };
+}
+
+/**
+ * Tells the lab's AI tutor what is on the screen: one line built from the parts
+ * that are set, sent whenever it changes.
+ */
+export function useLabState(onState: ((summary: string) => void) | undefined, parts: Array<string | false | null | undefined>) {
+  const summary = parts.filter(Boolean).join(". ");
+  useEffect(() => {
+    onState?.(summary);
+  }, [onState, summary]);
 }
 
 /** Where a point of an SVG's viewBox is on the page, for the reward coin. */

@@ -288,7 +288,8 @@ export type AiTutorMode = "hint" | "feedback";
 export type AiTutorChannel = "chat" | "voice";
 export type AiTutorTarget =
   | { targetType: "assignment"; targetId: string }
-  | { targetType: "quiz"; targetId: string; questionId: string };
+  | { targetType: "quiz"; targetId: string; questionId: string }
+  | { targetType: "lab"; targetId: string };
 
 export type AiTutorMessage = {
   id: string;

@@ -3,7 +3,7 @@ import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from
 
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
-import { ActionButton, ChoiceChips, Float, FeedbackPill, inPlane, labCard, MissionStrip, PhoneSlider, pagePoint, useMissions, viewPoint } from "./lab-ui";
+import { ActionButton, ChoiceChips, Float, FeedbackPill, inPlane, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
 import { AMPLITUDE, CHALLENGES, fmt, halfMarks, heightOf, isPeriodMark, matchesTarget, radianText, TARGET_WAVE, TURN, type ChallengeId, type Gear } from "./sinus/model";
 import {
   BENCH_ART,
@@ -33,7 +33,7 @@ const SIZE: [number, number] = [WIDTH, HEIGHT];
 const clampTheta = (t: number) => Math.min(TURN, Math.max(0, Math.round(t)));
 const clampA = (a: number) => Math.min(AMPLITUDE.max, Math.max(AMPLITUDE.min, Math.round(a * 10) / 10));
 
-export function SinusLab({ solved, onSolve }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number> }) {
+export function SinusLab({ solved, onSolve, onState }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void }) {
   const firstOpen = CHALLENGES.findIndex((challenge) => !solved.includes(challenge.id));
   const [active, setActive] = useState(firstOpen === -1 ? 0 : firstOpen);
   const challenge = CHALLENGES[active]!;
@@ -56,6 +56,13 @@ export function SinusLab({ solved, onSolve }: { solved: string[]; onSolve: (chal
   const wave = useMemo(() => waveD(amplitude, gear, theta), [amplitude, gear, theta]);
   const target = useMemo(() => (challenge.id === "tiru-gelombang" ? waveD(TARGET_WAVE.amplitude, TARGET_WAVE.gear, TURN, 0.2) : ""), [challenge.id]);
   const halfLine = challenge.id === "dua-sudut-setengah";
+  useLabState(onState, [
+    `Misi ${active + 1} dari ${CHALLENGES.length} (${challenge.id}): ${challenge.story}`,
+    `Engkol θ = ${theta}° (${radianText(theta)} rad), jarak pasak A = ${fmt(amplitude, 1)}, roda gigi ${gear}×, pena di y = ${fmt(y)}`,
+    marks.length > 0 && `Sudut yang sudah ditandai: ${marks.map((t) => `${t}°`).join(", ")}`,
+    feedback && `Umpan balik lab: ${feedback.text}`,
+    `Sudah selesai: ${done.length ? done.join(", ") : "belum ada"}`,
+  ]);
 
   function choose(index: number) {
     const next = CHALLENGES[index]!;

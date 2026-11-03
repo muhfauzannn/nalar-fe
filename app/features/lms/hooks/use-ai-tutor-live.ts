@@ -40,7 +40,13 @@ type MicrophoneMessage = {
   level: number;
 };
 
-export function useAiTutorLive(target: AiTutorTarget) {
+/**
+ * `liveContext` is what the student is looking at right now (a lab's mission and
+ * settings). It reaches the tutor as background, never as a question: on each new
+ * session, a moment after it changes while the tutor is idle, and before a typed
+ * question.
+ */
+export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [messages, setMessages] = useState<AiTutorMessage[]>([]);
   const [mode, setModeState] = useState<AiTutorMode>("hint");
@@ -55,6 +61,8 @@ export function useAiTutorLive(target: AiTutorTarget) {
 
   const mountedRef = useRef(true);
   const sessionRef = useRef<Session | null>(null);
+  const liveContextRef = useRef(liveContext);
+  const sentContextRef = useRef<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const modelRef = useRef<string | null>(null);
   const connectionGenerationRef = useRef(0);
@@ -68,6 +76,18 @@ export function useAiTutorLive(target: AiTutorTarget) {
   const awaitingClassificationRef = useRef(false);
   const toolTurnPendingRef = useRef(false);
   const statusRef = useRef<ConnectionStatus>("idle");
+
+  // Only refs inside, so any callback may call it however old its closure is.
+  function pushContext(session: Session) {
+    const context = liveContextRef.current;
+    if (!context || sentContextRef.current === context) return;
+    try {
+      session.sendClientContent({ turns: [{ role: "user", parts: [{ text: `[KEADAAN LAB] ${context}` }] }], turnComplete: false });
+      sentContextRef.current = context;
+    } catch {
+      // Background only: the tutor still works without it.
+    }
+  }
   const connectingRef = useRef(false);
   // True while a scheduled reconnect is pending: what the student asks for meanwhile is queued.
   const waitingRef = useRef(false);
@@ -103,6 +123,16 @@ export function useAiTutorLive(target: AiTutorTarget) {
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+
+  // Debounced, and only while the tutor is idle, so a context turn never cuts into a reply.
+  useEffect(() => {
+    liveContextRef.current = liveContext;
+    if (!liveContext || status !== "ready") return;
+    const timer = window.setTimeout(() => {
+      if (statusRef.current === "ready" && sessionRef.current) pushContext(sessionRef.current);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [liveContext, status]);
 
   const surface = target.targetType;
   const report = useCallback(
@@ -496,6 +526,8 @@ export function useAiTutorLive(target: AiTutorTarget) {
           return false;
         }
         sessionRef.current = next;
+        sentContextRef.current = null;
+        pushContext(next);
         old.close();
         retry.markReady();
         report({ event: "renewed", phase: "live", ageMs: Date.now() - began });
@@ -548,6 +580,8 @@ export function useAiTutorLive(target: AiTutorTarget) {
           return;
         }
         sessionRef.current = session;
+        sentContextRef.current = null;
+        pushContext(session);
         setStatus("ready");
         retry.markReady();
         renewal.arm();
@@ -656,6 +690,7 @@ export function useAiTutorLive(target: AiTutorTarget) {
       try {
         lastSentTextRef.current = content;
         awaitingClassificationRef.current = true;
+        pushContext(session);
         setStatus("responding");
         session.sendRealtimeInput({ text: content });
         return true;

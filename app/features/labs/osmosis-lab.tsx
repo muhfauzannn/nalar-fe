@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerE
 
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
-import { ActionButton, ChoiceChips, Float, FeedbackPill, labCard, MissionStrip, PhoneSlider, pagePoint, useMissions, viewPoint } from "./lab-ui";
+import { ActionButton, ChoiceChips, Float, FeedbackPill, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
 import { BURST, CELLS, CHALLENGES, fmt, flowOf, judge, SALT, stateOf, volumeOf, type ChallengeId, type Guess, type State } from "./osmosis/model";
 import { bloodOutline, CONE, HEIGHT, ONION, ONION_CELLS, PIPETTE_ART, RING_AXIS, ringAt, roundRect, saltAtZ, scatter, SCOPE_ART, VIEW, WIDTH } from "./osmosis/scene";
 
@@ -27,7 +27,7 @@ const STATE_TEXT: Record<State, string> = {
   plasmolisis: "plasmolisis",
 };
 
-export function OsmosisLab({ solved, onSolve }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number> }) {
+export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void }) {
   const firstOpen = CHALLENGES.findIndex((challenge) => !solved.includes(challenge.id));
   const [active, setActive] = useState(firstOpen === -1 ? 0 : firstOpen);
   const challenge = CHALLENGES[active]!;
@@ -53,6 +53,14 @@ export function OsmosisLab({ solved, onSolve }: { solved: string[]; onSolve: (ch
   const state: State = burst ? "pecah" : stateOf(cell, volume);
   const flow = flowOf(cell, applied);
   const ring = useMemo(() => ringAt(salt), [salt]);
+  useLabState(onState, [
+    `Misi ${active + 1} dari ${CHALLENGES.length} (${challenge.id}): ${challenge.story}`,
+    `Sel ${cell === "darah" ? "darah merah" : "bawang merah"}; cincin pipet di ${salt === 0 ? "air suling" : pct(salt)}; larutan di kaca ${applied === 0 ? "air suling" : pct(applied)}`,
+    `Di lensa: sel ${STATE_TEXT[state]}, volume ${burst ? "—" : `${Math.round(Math.min(volume, BURST) * 100)} %`}${busy ? " (sedang menyesuaikan)" : ""}`,
+    challenge.predict && `Tebakan siswa: ${guess ?? "belum menebak"}`,
+    feedback && `Umpan balik lab: ${feedback.text}`,
+    `Sudah selesai: ${done.length ? done.join(", ") : "belum ada"}`,
+  ]);
 
   // the cell eases toward its volume; the water arrows keep moving while it does (and both ways at balance)
   useEffect(() => {

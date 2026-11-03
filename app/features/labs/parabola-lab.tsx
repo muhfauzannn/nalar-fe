@@ -6,6 +6,7 @@ import { cn } from "~/lib/utils";
 
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
+import { useLabState } from "./lab-ui";
 import {
   ANGLE,
   BALL_RADIUS,
@@ -67,7 +68,7 @@ const speedToT = (speed: number) => (speed - SPEED.min) / (SPEED.max - SPEED.min
 const tToSpeed = (t: number) => Math.round((SPEED.min + Math.min(1, Math.max(0, t)) * (SPEED.max - SPEED.min)) * 2) / 2;
 const clampAngle = (a: number) => Math.min(ANGLE.max, Math.max(ANGLE.min, Math.round(a)));
 
-export function ParabolaLab({ solved, onSolve }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number> }) {
+export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void }) {
   const firstOpen = CHALLENGES.findIndex((challenge) => !solved.includes(challenge.id));
   const [active, setActive] = useState(firstOpen === -1 ? 0 : firstOpen);
   const challenge = CHALLENGES[active]!;
@@ -83,6 +84,14 @@ export function ParabolaLab({ solved, onSolve }: { solved: string[]; onSolve: (c
   const [firedMasses, setFiredMasses] = useState<Mass[]>([]);
   const [touched, setTouched] = useState({ angle: false, speed: false });
   const [landing, setLanding] = useState<{ x: number; range: number; hit: boolean } | null>(null);
+  useLabState(onState, [
+    `Misi ${active + 1} dari ${CHALLENGES.length} (${challenge.id}): ${challenge.story}`,
+    `Sudut laras ${angle}°, kecepatan awal ${speed} m/s, bola ${mass} kg`,
+    challenge.id === "berat-ringan" && `Tebakan siswa: ${prediction ?? "belum menebak"}; bola yang sudah ditembakkan: ${firedMasses.join(" dan ") || "belum ada"} kg`,
+    landing && `Tembakan terakhir mendarat ${fmt(landing.range)} m dari tebing${landing.hit ? ", mengenai bendera" : ""}`,
+    feedback && `Umpan balik lab: ${feedback.text}`,
+    `Sudah selesai: ${done.length ? done.join(", ") : "belum ada"}`,
+  ]);
 
   const svg = useRef<SVGSVGElement>(null);
   const ball = useRef<SVGGElement>(null);
