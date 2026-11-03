@@ -453,3 +453,26 @@
     border-radius: 0.75rem;
   }
 }
+
+/* Labs: what a student can change breathes softly until they first touch it. */
+@keyframes parabola-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.parabola-breathe {
+  animation: parabola-breathe 1.6s ease-in-out infinite;
+}
+.parabola-handle:focus-visible {
+  outline: none;
+}
+.parabola-handle:focus-visible circle:nth-child(2),
+.parabola-handle:focus-visible rect {
+  stroke: #18153a;
+  stroke-width: 1.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .parabola-breathe {
+    animation: none;
+    opacity: 1;
+  }
+}
