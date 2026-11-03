@@ -2,8 +2,9 @@ import { createRoot } from "react-dom/client";
 import { createMemoryRouter, Outlet, redirect, RouterProvider, useLocation } from "react-router";
 import { CourseEditorPage } from "../../app/features/authoring/pages/course-editor-page";
 import { MyCoursesPage } from "../../app/features/authoring/pages/my-courses-page";
+import { QuizAnalyticsPage } from "../../app/features/authoring/pages/quiz-analytics-page";
 import { QuizEditorPage } from "../../app/features/authoring/pages/quiz-editor-page";
-import type { CourseEditorData, ManagedCourseSummary, QuizEditorData } from "../../app/features/authoring/types";
+import type { CourseEditorData, ManagedCourseSummary, QuizAnalytics, QuizEditorData } from "../../app/features/authoring/types";
 import "../../app/app.css";
 
 // Kelola course without the student shell or a server: the real list and editor
@@ -58,6 +59,34 @@ const quiz: QuizEditorData = {
   readiness: { ready: true, questionCount: 2, problems: [] },
 };
 
+// The quiz's tutor reflections, one student per case the page has to tell apart.
+// `?belum` is a class where nobody has a reflection yet.
+const reflection = (relianceLevel: QuizAnalytics["distribution"][number]["level"], turns: number, direct: number, hint: number, reflective: number, redirected: number, report: string) => ({
+  relianceLevel, studentReport: report, recommendations: ["Coba soalnya dulu sebelum bertanya."], promptTurnCount: turns, directCount: direct, hintCount: hint, reflectiveCount: reflective, redirectedCount: redirected, computedAt: "2026-10-01T09:05:00.000Z",
+});
+const noneYet = query.has("belum");
+const analytics: QuizAnalytics = {
+  quiz: { id: "q1", title: "Kuis Bab 1 — Gelombang", status: "published", dueAt: null, courseId: "c1", courseName: "Fisika Kelas XI — Gelombang dan Optik" },
+  counts: noneYet ? { enrolled: 2, notStarted: 1, inProgress: 0, submitted: 1, reflected: 0 } : { enrolled: 7, notStarted: 1, inProgress: 1, submitted: 4, reflected: 3 },
+  distribution: noneYet
+    ? [{ level: "none", count: 0 }, { level: "low", count: 0 }, { level: "moderate", count: 0 }, { level: "high", count: 0 }]
+    : [{ level: "none", count: 1 }, { level: "low", count: 1 }, { level: "moderate", count: 0 }, { level: "high", count: 1 }],
+  students: noneYet
+    ? [
+        { membershipId: "m1", name: "Ani", attemptNumber: 1, status: "submitted", submittedAt: "2026-10-01T09:00:00.000Z", reflection: null },
+        { membershipId: "m2", name: "Budi", attemptNumber: null, status: "not_started", submittedAt: null, reflection: null },
+      ]
+    : [
+        { membershipId: "m1", name: "Ani", attemptNumber: 1, status: "submitted", submittedAt: "2026-10-01T09:00:00.000Z", reflection: reflection("low", 5, 0, 3, 2, 0, "Kamu bertanya dengan hati-hati dan mengerjakan sisanya sendiri.") },
+        { membershipId: "m2", name: "Budi", attemptNumber: 1, status: "submitted", submittedAt: "2026-10-01T09:00:00.000Z", reflection: reflection("high", 8, 7, 1, 0, 4, "Kebanyakan pertanyaanmu meminta jawaban jadi.") },
+        { membershipId: "m3", name: "Citra", attemptNumber: 1, status: "submitted", submittedAt: "2026-10-01T09:00:00.000Z", reflection: reflection("none", 0, 0, 0, 0, 0, "Kamu mengerjakan kuis tanpa bertanya ke tutor.") },
+        { membershipId: "m4", name: "Dodi", attemptNumber: 1, status: "in_progress", submittedAt: null, reflection: null },
+        { membershipId: "m5", name: "Eka", attemptNumber: null, status: "not_started", submittedAt: null, reflection: null },
+        { membershipId: "m6", name: "Fitri", attemptNumber: 1, status: "submitted", submittedAt: "2026-10-01T09:00:00.000Z", reflection: null },
+        { membershipId: "m7", name: "Muhammad Aryasatya Wiratama Kusumawardhana Putra", attemptNumber: null, status: "not_started", submittedAt: null, reflection: null },
+      ],
+};
+
 function Url() {
   const { pathname, search } = useLocation();
   return <output data-testid="url" className="sr-only">{pathname + search}</output>;
@@ -86,6 +115,7 @@ const router = createMemoryRouter(
           },
         },
         { path: "manage/quizzes/:quizId", Component: () => <QuizEditorPage data={quiz} /> },
+        { path: "manage/quizzes/:quizId/analytics", Component: () => <QuizAnalyticsPage data={analytics} /> },
         { path: "manage/courses/:courseId", Component: () => <CourseEditorPage data={editor} subjects={subjects} scenarios={[]} /> },
       ],
     },

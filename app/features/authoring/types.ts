@@ -241,6 +241,43 @@ export type AssignmentAnalytics = {
   }>;
 };
 
+// A quiz has no Index (PRD §5.3A). The teacher reads the light reflection on how
+// each student used the tutor, apart from the attempt's score (not part of this view).
+export type AiRelianceLevel = "none" | "low" | "moderate" | "high";
+
+export type QuizReflection = {
+  relianceLevel: AiRelianceLevel;
+  studentReport: string;
+  recommendations: string[];
+  promptTurnCount: number;
+  directCount: number;
+  hintCount: number;
+  reflectiveCount: number;
+  redirectedCount: number;
+  computedAt: string | null;
+};
+
+export type QuizAnalytics = {
+  quiz: {
+    id: string;
+    title: string;
+    status: WorkStatus;
+    dueAt: string | null;
+    courseId: string;
+    courseName: string;
+  };
+  counts: { enrolled: number; notStarted: number; inProgress: number; submitted: number; reflected: number };
+  distribution: Array<{ level: AiRelianceLevel; count: number }>;
+  students: Array<{
+    membershipId: string;
+    name: string;
+    attemptNumber: number | null;
+    status: "not_started" | "in_progress" | "submitted";
+    submittedAt: string | null;
+    reflection: QuizReflection | null;
+  }>;
+};
+
 export type SubmissionProcess = {
   assignment: { id: string; title: string; courseId: string; courseName: string };
   student: { name: string };

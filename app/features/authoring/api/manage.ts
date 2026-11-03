@@ -10,6 +10,7 @@ import type {
   ManagedCourseSummary,
   PublicationStatus,
   QuestionDraft,
+  QuizAnalytics,
   QuizEditorData,
   ResourceType,
   Scenario,
@@ -189,6 +190,10 @@ export const manageApi = {
       status?: WorkStatus;
     },
   ) => write(request, () => http.patch(`${base}/quizzes/${quizId}`, body, init(request))),
+  quizAnalytics: (request: Request, quizId: string) =>
+    load(request, () =>
+      http.get<QuizAnalytics>(`${base}/quizzes/${quizId}/analytics`, init(request)),
+    ),
   duplicateQuiz: (request: Request, quizId: string) =>
     write(request, () =>
       http.post<{ id: string }>(`${base}/quizzes/${quizId}/duplicate`, {}, init(request)),

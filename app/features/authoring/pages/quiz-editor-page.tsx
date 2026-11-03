@@ -1,5 +1,6 @@
-import { Check, Copy, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChartBar, Check, Copy, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
+import { Link } from "react-router";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { MathText } from "~/components/math-text";
@@ -56,6 +57,7 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
         }
         actions={
           <QuizStatusActions
+            quizId={quiz.id}
             status={quiz.status}
             attemptCount={attemptCount}
             ready={readiness.ready}
@@ -169,11 +171,13 @@ function EmptyQuestions({ editable, onAdd }: { editable: boolean; onAdd: () => v
 }
 
 function QuizStatusActions({
+  quizId,
   status,
   attemptCount,
   ready,
   questionCount,
 }: {
+  quizId: string;
   status: WorkStatus;
   attemptCount: number;
   ready: boolean;
@@ -188,6 +192,12 @@ function QuizStatusActions({
   return (
     <div className="flex flex-col items-start gap-2 md:items-end">
       <div className="flex flex-wrap gap-2 md:justify-end">
+        {status !== "draft" ? (
+          <Button variant="outline" size="touch" className={ringed} render={<Link to={`/manage/quizzes/${quizId}/analytics`} />}>
+            <ChartBar data-icon="inline-start" />
+            Refleksi tutor
+          </Button>
+        ) : null}
         {status === "draft" ? (
           <Button type="button" variant="mint" size="touch" loading={pending} disabled={!ready} onClick={() => change("published")}>
             Terbitkan kuis

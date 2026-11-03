@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+import { StatTile } from "../components/stat-tile";
 import { humanizeFactor, LEVELS, levelCopy, stageCopy } from "../lib/offloading";
 import type { AssignmentAnalytics, OffloadingLevel } from "../types";
 
@@ -48,10 +49,10 @@ export function AssignmentAnalyticsPage({ data }: { data: AssignmentAnalytics })
       />
 
       <section aria-label="Ringkasan pengerjaan" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Siswa" value={counts.enrolled} />
-        <Stat label="Belum mulai" value={counts.notStarted} />
-        <Stat label="Sedang mengerjakan" value={counts.inProgress} />
-        <Stat label="Sudah mengumpulkan" value={counts.submitted} note={`${counts.analyzed} sudah dianalisis`} />
+        <StatTile label="Siswa" value={counts.enrolled} />
+        <StatTile label="Belum mulai" value={counts.notStarted} />
+        <StatTile label="Sedang mengerjakan" value={counts.inProgress} />
+        <StatTile label="Sudah mengumpulkan" value={counts.submitted} note={`${counts.analyzed} sudah dianalisis`} />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
@@ -83,16 +84,6 @@ export function AssignmentAnalyticsPage({ data }: { data: AssignmentAnalytics })
           <StudentTable students={shown} base={base} />
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function Stat({ label, value, note }: { label: string; value: number; note?: string }) {
-  return (
-    <div className="rounded-2xl bg-card p-4 shadow-card ring-1 ring-border">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tabular-nums">{value}</p>
-      {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
     </div>
   );
 }

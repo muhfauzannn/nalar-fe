@@ -19,6 +19,7 @@ export { JoinCoursePage } from "./pages/join-course-page";
 export { LessonEditorPage } from "./pages/lesson-editor-page";
 export { NEW_COURSE_URL } from "./lib/new-course-sheet";
 export { MyCoursesPage } from "./pages/my-courses-page";
+export { QuizAnalyticsPage } from "./pages/quiz-analytics-page";
 export { QuizEditorPage } from "./pages/quiz-editor-page";
 export { SubmissionProcessPage } from "./pages/submission-process-page";
 export type * from "./types";

@@ -1,4 +1,4 @@
-import type { OffloadingLevel, PromptIntent, WorkflowStage } from "../types";
+import type { AiRelianceLevel, OffloadingLevel, PromptIntent, WorkflowStage } from "../types";
 
 // Level names and teacher follow-ups come straight from the proposal (PRD §5.3,
 // Tabel 3). The Index is reflective feedback, never a grade: the copy describes
@@ -40,6 +40,38 @@ export const levelCopy: Record<
     range: "76–100",
     pattern: "Penyelesaian didominasi AI; keterlibatan berpikir mandiri rendah.",
     followUp: "Intervensi: latihan mandiri tanpa AI, batasi bantuan tutor, dan latih evaluasi jawaban.",
+    swatch: "bg-level-4",
+  },
+};
+
+// The quiz's lighter reflection (PRD §5.3A) has four levels of its own. The names
+// are the ones the student sees, so a teacher and a student talk about the same
+// thing; the swatches take the Index's one ordered ramp, light -> dark as reliance grows.
+export const RELIANCE_LEVELS: AiRelianceLevel[] = ["none", "low", "moderate", "high"];
+
+export const relianceCopy: Record<AiRelianceLevel, { name: string; pattern: string; followUp: string; swatch: string }> = {
+  none: {
+    name: "Tanpa AI Tutor",
+    pattern: "Mengerjakan tanpa bertanya ke tutor.",
+    followUp: "Tidak perlu tindak lanjut. Tutor tersedia kalau mereka butuh.",
+    swatch: "bg-level-1",
+  },
+  low: {
+    name: "Pemakaian sehat",
+    pattern: "Bertanya untuk petunjuk dan klarifikasi, lalu mengerjakan sendiri.",
+    followUp: "Pertahankan. Ajak mereka menjelaskan jawaban dengan kata sendiri.",
+    swatch: "bg-level-2",
+  },
+  moderate: {
+    name: "Campuran",
+    pattern: "Sebagian pertanyaan meminta petunjuk, sebagian meminta jawaban.",
+    followUp: "Ingatkan mencoba soal dulu sebelum bertanya, dan minta petunjuk, bukan jawaban.",
+    swatch: "bg-level-3",
+  },
+  high: {
+    name: "Cenderung meminta jawaban",
+    pattern: "Sebagian besar pertanyaan meminta jawaban jadi.",
+    followUp: "Bicara satu per satu. Latih soal serupa tanpa tutor lalu bahas langkahnya.",
     swatch: "bg-level-4",
   },
 };
