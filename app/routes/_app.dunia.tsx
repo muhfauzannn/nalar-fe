@@ -1,5 +1,6 @@
 import { ApplicationLoader } from "~/features/loading/application-loader";
 import { useLocation } from "react-router";
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 import { useRouteLoaderData } from "react-router";
 
 import type { Route } from "./+types/_app.dunia";
@@ -7,6 +8,13 @@ import { studentApi, useWorld3d, WorldOverlay, WorldPage, type StudentShellData 
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   return studentApi.world(request);
+}
+
+// Opening the join sheet (?gabung) changes the URL but not the world's data.
+// Joining itself leaves for the new island, so nothing here needs a refresh.
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  if (!formMethod && currentUrl.pathname === nextUrl.pathname) return false;
+  return defaultShouldRevalidate;
 }
 
 export function HydrateFallback() {

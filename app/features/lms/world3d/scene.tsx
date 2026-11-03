@@ -21,6 +21,7 @@ import { cameraView, MidClouds, Sky } from "./sky";
 import { fadeVeil } from "./veil";
 import { frameWorld, type WorldExtent } from "./world-camera";
 import { useWorldCarousel } from "./carousel";
+import { useOpenJoinSheet } from "./join";
 import { classroomForScene, sceneMatchesRoute, shotForUrl, useWorldScene, type ChestState, type WorldScene, type WorldShot } from "./store";
 
 const C = { mint: "#4bd29f", lav: "#d3c5f8", stone: "#efeafc", rim: "#c9bff0" };
@@ -608,16 +609,17 @@ function WorldSign({ island, show, active, onClick, height }: { island: WorldIsl
 }
 
 function JoinIsland({ position, show }: { position: Vec3; show: boolean }) {
-  const navigate = useNavigate();
+  // Joining is a sheet over the world, so the camera stays where it is.
+  const openJoin = useOpenJoinSheet();
   const mist = useMemo(() => new THREE.MeshStandardMaterial({ color: C.lav, transparent: true, opacity: 0.55, depthWrite: false }), []);
   return (
     <group position={position}>
-      <Clickable onClick={() => navigate("/courses/join")} label="Gabung course">
+      <Clickable onClick={() => openJoin()} label="Gabung course">
         <HexBoard tiles={tilesWithin(1)} seed={31} ghost />
         <Piece name="towerA" />
         <mesh position={[0, 0.8, 0]} material={mist}><sphereGeometry args={[4.2, 16, 10]} /></mesh>
       </Clickable>
-      <Sign position={[0, 6.5, 0]} show={show} onClick={() => navigate("/courses/join")} label="Gabung course baru">
+      <Sign position={[0, 6.5, 0]} show={show} onClick={() => openJoin()} label="Gabung course baru">
         <SignText small="Pulau berikutnya" strong="Gabung course" />
       </Sign>
     </group>

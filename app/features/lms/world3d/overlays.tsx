@@ -9,6 +9,7 @@ import { cn } from "~/lib/utils";
 import { usePageReady } from "~/features/loading/context";
 
 import { BadgeMoment, ChestMoment, chestSeen, markBadgeSeen, markChestSeen, missionsJustDone, newBadges } from "../components/game-moments";
+import { JoinCourseSheet } from "../components/join-course-sheet";
 import { PostSheet } from "../components/post-sheet";
 import { WorldIslandCarousel } from "../components/world-island-carousel";
 import { LevelBar, LevelUpMoment, Missions, WeekTarget } from "../components/progress-widgets";
@@ -16,6 +17,7 @@ import { useStudentId } from "../hooks/use-student-id";
 import { districtsOf, type Stop } from "../lib/districts";
 import { missionCopy, postNames } from "../lib/game";
 import type { BadgeProgress, CourseData, EarnedPoint, IslandData, PointsData, WorkflowStage, WorldData } from "../types";
+import { useJoinSheet } from "./join";
 import { useWorldOverlay } from "./mode";
 import { useStageScene, type ChestState } from "./store";
 
@@ -66,6 +68,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
   const studentId = useStudentId();
   const ready = usePageReady();
   const [missionsOpen, setMissionsOpen] = useState(false);
+  const join = useJoinSheet();
   useStageScene({ world: data, shot: { kind: "world" } }, [data]);
   useEffect(() => {
     if (!ready || !studentId) return;
@@ -76,7 +79,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
   // With every hall finished there is no current post, but the island is still there to visit.
   const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? data.islands[0] ?? null;
   const current = active?.current ?? null;
-  const href = active ? (current ? `/courses/${active.course.id}/balai/${current.assignmentId}` : `/courses/${active.course.id}`) : "/courses/join";
+  const href = active ? (current ? `/courses/${active.course.id}/balai/${current.assignmentId}` : `/courses/${active.course.id}`) : null;
   return (
     <Overlay>
       {studentId && <LevelUpMoment userId={studentId} points={data} />}
@@ -100,7 +103,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
         )}
       </div>
       <Dock>
-        <WorldIslandCarousel islands={data.islands} />
+        <WorldIslandCarousel islands={data.islands} onJoin={() => join.open()} />
         <div className={cn(card, "flex w-full max-w-[26rem] items-center gap-3 p-3")}>
           <img src="/game/cat-avatar.webp" alt="" className="size-12 shrink-0 rounded-2xl bg-[#dff7ee] object-cover" />
           <div className="min-w-0 flex-1">
@@ -109,15 +112,22 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
               {current?.post ? `Pos ${current.post.index} · ${postNames[current.post.stage]}` : current ? current.title : active ? `Pulau ${active.course.subjectName}` : "Gabung course dari gurumu"}
             </p>
           </div>
-          <Link to={href} data-press className="shrink-0 rounded-[14px] bg-[#4bd29f] px-4 py-3 text-sm font-bold text-[#04352a]">
-            {active ? "Terbang" : "Gabung"}
-          </Link>
+          {href ? (
+            <Link to={href} data-press className="shrink-0 rounded-[14px] bg-[#4bd29f] px-4 py-3 text-sm font-bold text-[#04352a]">
+              Terbang
+            </Link>
+          ) : (
+            <button type="button" data-press onClick={() => join.open()} className="shrink-0 rounded-[14px] bg-[#4bd29f] px-4 py-3 text-sm font-bold text-[#04352a]">
+              Gabung
+            </button>
+          )}
         </div>
         <Link to="/courses" className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold shadow-sm">
           <List className="size-3.5" aria-hidden="true" />
           Tampilan daftar
         </Link>
       </Dock>
+      <JoinCourseSheet open={join.sheet !== null} code={join.sheet?.code ?? ""} onClose={join.close} />
     </Overlay>
   );
 }
