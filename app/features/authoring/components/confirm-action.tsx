@@ -32,7 +32,7 @@ export function ConfirmAction({
   confirmLabel: string;
   onConfirm: () => void;
   variant?: "outline" | "destructive" | "ghost";
-  size?: "sm" | "xs" | "default";
+  size?: "sm" | "xs" | "default" | "touch";
   disabled?: boolean;
   icon?: ReactNode;
 }) {

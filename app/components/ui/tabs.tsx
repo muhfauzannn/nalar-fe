@@ -1,7 +1,9 @@
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
+import { createContext, useContext } from "react"
 
 import { cn } from "~/lib/utils"
+import { chipClass } from "./chip"
 
 function Tabs({
   className,
@@ -30,6 +32,10 @@ const tabsListVariants = cva(
           "relative rounded-lg bg-muted p-1 group-data-horizontal/tabs:h-10",
         line:
           "gap-1 rounded-none bg-transparent p-0 group-data-horizontal/tabs:h-9",
+        // Separate 44px pills that scroll sideways when they do not fit, instead of
+        // wrapping into a fixed-height bar. On a phone the strip bleeds to the screen edge.
+        chips:
+          "-my-1 w-full max-w-full justify-start gap-2 overflow-x-auto rounded-none bg-transparent px-0 py-1 [scrollbar-width:none] group-data-horizontal/tabs:h-auto [&::-webkit-scrollbar]:hidden",
       },
     },
     defaultVariants: {
@@ -37,6 +43,10 @@ const tabsListVariants = cva(
     },
   }
 )
+
+// The triggers of a chips strip look nothing like the segmented ones, so they
+// need to know which list they sit in.
+const TabsVariantContext = createContext<"default" | "line" | "chips">("default")
 
 function TabsList({
   className,
@@ -58,12 +68,16 @@ function TabsList({
           className="pointer-events-none absolute top-(--active-tab-top) left-(--active-tab-left) h-(--active-tab-height) w-(--active-tab-width) rounded-md bg-background shadow-sm transition-[left,width] duration-200 ease-out-strong motion-reduce:transition-none dark:border dark:border-input dark:bg-input/30"
         />
       ) : null}
-      {children}
+      <TabsVariantContext.Provider value={variant ?? "default"}>{children}</TabsVariantContext.Provider>
     </TabsPrimitive.List>
   )
 }
 
 function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
+  const variant = useContext(TabsVariantContext)
+  if (variant === "chips") {
+    return <TabsPrimitive.Tab data-slot="tabs-trigger" className={cn(chipClass, className)} {...props} />
+  }
   return (
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"

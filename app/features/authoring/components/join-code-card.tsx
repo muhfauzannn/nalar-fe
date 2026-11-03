@@ -38,8 +38,10 @@ export function JoinCodeCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <KeyRound className="size-4" aria-hidden="true" />
+        <CardTitle className="flex items-center gap-2.5 text-[1.0625rem] font-bold">
+          <span className="grid size-8 place-items-center rounded-[0.625rem] bg-brand-lavender-soft text-brand-lavender-foreground">
+            <KeyRound className="size-4" aria-hidden="true" />
+          </span>
           Kode kelas
         </CardTitle>
       </CardHeader>
@@ -61,50 +63,57 @@ export function JoinCodeCard({
             <p
               key={joinCode}
               data-testid="join-code"
-              className="enter-pop rounded-xl border bg-muted/40 px-4 py-3 text-center font-mono text-3xl font-semibold tracking-[0.3em] select-all"
+              className="enter-pop rounded-xl bg-brand-lavender-soft px-3 py-4 text-center font-mono text-[1.875rem] leading-tight font-bold tracking-[0.2em] select-all sm:py-5 sm:text-3xl sm:tracking-[0.3em]"
             >
               {formatJoinCode(joinCode)}
             </p>
             <span role="status" className="sr-only">
               {copied ? "Tersalin ke papan klip" : ""}
             </span>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => copy("code")}>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <Button type="button" size="touch" onClick={() => copy("code")}>
                 <IconSwap done={copied === "code"} idle={<Copy />} finished={<Check />} />
                 Salin kode
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => copy("link")}>
+              <Button type="button" variant="soft" size="touch" onClick={() => copy("link")}>
                 <IconSwap done={copied === "link"} idle={<Link2 />} finished={<Check />} />
                 Salin tautan
               </Button>
+            </div>
+            <div className="-mt-1 flex flex-wrap gap-1 border-t pt-1.5">
               <ConfirmAction
                 label="Buat kode baru"
                 icon={<RefreshCw />}
                 title="Buat kode kelas baru?"
                 description="Kode dan tautan lama berhenti berlaku. Siswa yang sudah bergabung tidak terpengaruh."
                 confirmLabel="Buat kode baru"
+                variant="ghost"
+                size="touch"
                 disabled={busy}
                 onConfirm={() => reset.submit({ intent: "join-code-reset" })}
               />
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="touch"
+                className="text-muted-foreground"
                 disabled={busy}
                 onClick={() => disable.submit({ intent: "join-code-disable" })}
-               loading={disable.pending}>
+                loading={disable.pending}
+              >
                 Matikan kode
               </Button>
             </div>
           </>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.125rem] bg-surface-soft p-4">
             <p className="text-sm text-muted-foreground">
               Kode kelas dimatikan. Tidak ada yang bisa bergabung sampai kamu membuat kode baru.
             </p>
             <Button
               type="button"
-              size="sm"
+              variant="mint"
+              size="touch"
               loading={reset.pending}
               disabled={disable.pending}
               onClick={() => reset.submit({ intent: "join-code-reset" })}

@@ -6,6 +6,7 @@ import { PageHeader } from "~/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { ChipCount } from "~/components/ui/chip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -78,11 +79,18 @@ export function CourseEditorPage({
       />
 
       <Tabs value={tab} onValueChange={selectTab}>
-        <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-fit">
+        {/* The strip bleeds to the screen edge on a phone and scrolls sideways when the four do not fit. */}
+        <TabsList variant="chips" className="-mx-4 px-4 sm:mx-0 sm:px-0">
           <TabsTrigger value="overview">Ringkasan</TabsTrigger>
-          <TabsTrigger value="content">Materi ({data.modules.length})</TabsTrigger>
-          <TabsTrigger value="quizzes">Kuis ({data.quizzes.length})</TabsTrigger>
-          <TabsTrigger value="assignments">Assignment ({data.assignments.length})</TabsTrigger>
+          <TabsTrigger value="content">
+            Materi <ChipCount>{data.modules.length}</ChipCount>
+          </TabsTrigger>
+          <TabsTrigger value="quizzes">
+            Kuis <ChipCount>{data.quizzes.length}</ChipCount>
+          </TabsTrigger>
+          <TabsTrigger value="assignments">
+            Assignment <ChipCount>{data.assignments.length}</ChipCount>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 grid gap-6 lg:grid-cols-2">
@@ -124,17 +132,24 @@ function CourseStatusActions({
     <div className="flex flex-col items-start gap-2 md:items-end">
       <div className="flex flex-wrap gap-2 md:justify-end">
         {status !== "published" ? (
-          <Button type="button" loading={pending} onClick={() => change("published")}>
+          <Button type="button" variant="mint" size="touch" loading={pending} onClick={() => change("published")}>
             {status === "archived" ? "Terbitkan lagi" : "Terbitkan course"}
           </Button>
         ) : null}
         {status === "published" ? (
-          <Button type="button" variant="outline" disabled={pending} onClick={() => change("archived")}>
+          <Button
+            type="button"
+            variant="outline"
+            size="touch"
+            className="border-2 border-brand-lavender"
+            disabled={pending}
+            onClick={() => change("archived")}
+          >
             Arsipkan
           </Button>
         ) : null}
         {status !== "draft" && canDraft ? (
-          <Button type="button" variant="ghost" disabled={pending} onClick={() => change("draft")}>
+          <Button type="button" variant="ghost" size="touch" disabled={pending} onClick={() => change("draft")}>
             Kembali ke draf
           </Button>
         ) : null}
@@ -167,11 +182,11 @@ function CourseDetailsCard({
           <ActionError error={error} />
           <Field>
             <FieldLabel htmlFor="course-name">Nama course</FieldLabel>
-            <Input id="course-name" name="name" required maxLength={120} defaultValue={course.name} />
+            <Input id="course-name" name="name" variant="soft" required maxLength={120} defaultValue={course.name} />
           </Field>
           <Field>
             <FieldLabel htmlFor="course-subject">Mata pelajaran</FieldLabel>
-            <NativeSelect id="course-subject" name="subjectId" defaultValue={course.subjectId}>
+            <NativeSelect id="course-subject" name="subjectId" variant="soft" defaultValue={course.subjectId}>
               {subjects.map((subject) => (
                 <NativeSelectOption key={subject.id} value={subject.id}>
                   {subject.name}
@@ -184,13 +199,14 @@ function CourseDetailsCard({
             <Textarea
               id="course-description"
               name="description"
+              variant="soft"
               rows={4}
               maxLength={2000}
               defaultValue={course.description ?? ""}
             />
           </Field>
           <div className="flex justify-end">
-            <Button type="submit" loading={pending}>
+            <Button type="submit" variant="mint" size="xl" loading={pending} className="w-full sm:w-auto">
               Simpan perubahan
             </Button>
           </div>

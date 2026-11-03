@@ -46,9 +46,10 @@ export function PageHeader({
             {crumbs.map((crumb, index) => (
               <Fragment key={crumb.to}>
                 {index > 0 && <BreadcrumbSeparator />}
-                <BreadcrumbItem className="min-w-0">
+                <BreadcrumbItem className="relative min-w-0">
+                  {/* The hit area grows past the text (to 44px) without moving the title; it hangs off the item because the truncated link would clip it. */}
                   <BreadcrumbLink
-                    className="block max-w-[16rem] truncate py-0.5 sm:max-w-sm"
+                    className="block max-w-[16rem] truncate py-0.5 after:absolute after:inset-x-0 after:-inset-y-2.5 sm:max-w-sm"
                     render={<Link to={crumb.to} />}
                   >
                     {crumb.label}

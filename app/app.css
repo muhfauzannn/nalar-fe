@@ -44,6 +44,14 @@
   --color-brand-lavender: var(--brand-lavender);
   --color-brand-lavender-foreground: var(--brand-lavender-foreground);
   --color-brand-lavender-soft: var(--brand-lavender-soft);
+  /* Text that sits on solid mint (the brand-mint-foreground shade flips light in dark mode). */
+  --color-brand-mint-ink: var(--brand-mint-ink);
+  /* Needs-attention tint (a draft, a streak): the one warm accent. */
+  --color-brand-amber: var(--brand-amber);
+  --color-brand-amber-foreground: var(--brand-amber-foreground);
+  --color-brand-amber-soft: var(--brand-amber-soft);
+  /* Quiet field/row surface inside a card (inputs, stat tiles, steps). */
+  --color-surface-soft: var(--surface-soft);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -103,6 +111,11 @@
   --brand-lavender: #d3c5f8;
   --brand-lavender-foreground: #18153a;
   --brand-lavender-soft: #ece7fb;
+  --brand-mint-ink: #04352a;
+  --brand-amber: #c98a12;
+  --brand-amber-foreground: #855a00;
+  --brand-amber-soft: #fdf1d8;
+  --surface-soft: #f6f3fd;
 
   --chart-1: #18153a;
   --chart-2: #4bd29f;
@@ -158,6 +171,11 @@
   --brand-lavender: #c6c1f1;
   --brand-lavender-foreground: #ddd8ff;
   --brand-lavender-soft: rgb(198 193 241 / 0.15);
+  --brand-mint-ink: #04352a;
+  --brand-amber: #f5b83d;
+  --brand-amber-foreground: #f6cf7a;
+  --brand-amber-soft: rgb(245 184 61 / 0.15);
+  --surface-soft: #26242e;
 
   --chart-1: #c6c1f1;
   --chart-2: #58dda9;

@@ -17,6 +17,8 @@ const badgeVariants = cva(
         mint: "bg-brand-mint-soft text-brand-mint-foreground [a]:hover:bg-brand-mint-soft/70",
         lavender:
           "bg-brand-lavender-soft text-brand-lavender-foreground [a]:hover:bg-brand-lavender-soft/70",
+        amber:
+          "bg-brand-amber-soft text-brand-amber-foreground [a]:hover:bg-brand-amber-soft/70",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:

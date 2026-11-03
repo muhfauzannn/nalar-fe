@@ -1,10 +1,12 @@
 import { ApplicationLoader } from "~/features/loading/application-loader";
-import { useLocation } from "react-router";
+import { redirect, useLocation } from "react-router";
 import type { Route } from "./+types/_app.manage.courses.new";
-import { manageApi, newCourseAction, NewCoursePage } from "~/features/authoring";
+import { newCourseAction, NEW_COURSE_URL } from "~/features/authoring";
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  return manageApi.subjects(request);
+// Creating a course is a sheet over the list now (/manage?buat). This address stays
+// for the links that already point here, and as the action the sheet posts to.
+export function clientLoader() {
+  return redirect(NEW_COURSE_URL);
 }
 
 export async function clientAction(args: Route.ClientActionArgs) {
@@ -20,6 +22,6 @@ export function meta() {
   return [{ title: "Buat Course | NALAR" }];
 }
 
-export default function NewCourseRoute({ loaderData, actionData }: Route.ComponentProps) {
-  return <NewCoursePage subjects={loaderData.subjects} result={actionData} />;
+export default function NewCourseRoute() {
+  return null;
 }
