@@ -56,6 +56,7 @@ import { pointCopy } from "../lib/game";
 import type { AssignmentData, EarnedPoint, OffloadingLevel, OffloadingResult, WorkflowStage } from "../types";
 import { AccessNotice, contactTeacher, datedFact, noticeFacts, type Notice } from "../components/access-notice";
 import { AiTutorPanel } from "../components/ai-tutor-panel";
+import { useHostedTutor } from "../components/tutor-host";
 import { useWritingSignals, writingSignalsKey } from "../hooks/use-writing-signals";
 import { assignmentDraftKey, readActivityDraft, writeActivityDraft } from "../lib/activity-drafts";
 
@@ -336,9 +337,15 @@ function AssignmentWorkspace({
   actionDraft?: string;
 }) {
   const submission = assignment.submission;
+  const guidedQuestioning = submission?.currentStage === "2_guided_questioning";
+  // In the classroom the tutor spirit takes the guided questioning instead of a panel here.
+  const tutorHosted = useHostedTutor(
+    submission && guidedQuestioning
+      ? { key: `assignment:${submission.id}`, label: `Tugas ${assignment.title}`, target: { targetType: "assignment", targetId: submission.id } }
+      : null,
+  );
   if (!submission) return null;
   const completedCount = submission.stages.filter((stage) => stage.status === "completed").length;
-  const guidedQuestioning = submission.currentStage === "2_guided_questioning";
 
   return (
     <div className="grid items-start gap-6 @7xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem]">
@@ -347,7 +354,7 @@ function AssignmentWorkspace({
         <ActiveStage assignment={assignment} working={working} actionDraft={actionDraft} />
       </div>
       <aside className="order-3 flex min-w-0 flex-col gap-5 @7xl:sticky @7xl:top-24">
-        {guidedQuestioning && (
+        {guidedQuestioning && !tutorHosted && (
           <AiTutorPanel
             target={{ targetType: "assignment", targetId: submission.id }}
           />

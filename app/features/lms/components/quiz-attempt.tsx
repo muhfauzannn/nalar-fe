@@ -55,6 +55,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Spinner } from "~/components/ui/spinner";
+import { useHostedTutor } from "./tutor-host";
 import { AiTutorPanel } from "./ai-tutor-panel";
 import { QuizAttemptBlocked, QuizAttemptExpired } from "./quiz-unavailable";
 import type { QuizData } from "../types";
@@ -224,6 +225,16 @@ export function QuizAttempt({ data, working, embedded = false }: { data: QuizDat
   const reviewStep = questionCount;
   const reviewing = activeStep === reviewStep;
   const activeQuestion = reviewing ? undefined : data.questions[activeStep];
+  // In the classroom the tutor spirit takes the question instead of a panel here.
+  const tutorHosted = useHostedTutor(
+    activeQuestion && attempt
+      ? {
+          key: `quiz:${attempt.id}:${activeQuestion.id}`,
+          label: `Kuis, soal ${activeStep + 1}`,
+          target: { targetType: "quiz", targetId: attempt.id, questionId: activeQuestion.id },
+        }
+      : null,
+  );
   const answeredCount = data.questions.filter((question) =>
     hasAnswer(answers, question.id),
   ).length;
@@ -363,7 +374,7 @@ export function QuizAttempt({ data, working, embedded = false }: { data: QuizDat
           </div>
         </section>
 
-        {!reviewing && activeQuestion && (
+        {!reviewing && activeQuestion && !tutorHosted && (
           <aside
             className="order-3 min-w-0 @7xl:sticky @7xl:top-24"
             aria-label="Tutor untuk soal aktif"

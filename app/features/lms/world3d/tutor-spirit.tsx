@@ -1,0 +1,141 @@
+import { useGLTF } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
+import * as THREE from "three";
+
+import { STILL } from "./ground";
+import { spirit, type SpiritMood } from "./spirit-store";
+
+// The AI tutor as a small magical spirit (scripts/world/build-tutor-spirit.mjs):
+// a crystal heart with a face, two rune rings, feather wings and sparkle motes.
+// It idles with a slow bob; listening, its crystal pulses with the student's
+// voice; thinking, its rings spin fast; speaking, its wings beat and it glows.
+
+export const TUTOR_SPIRIT_URL = "/game/tutor-spirit.glb";
+
+export function preloadTutorSpirit() {
+  useGLTF.preload(TUTOR_SPIRIT_URL, false, true);
+}
+
+/** How each mood moves the spirit: ring speeds (rad/s), wing beat, mote swirl, crystal glow. */
+const MOTION: Record<SpiritMood, { ringA: number; ringB: number; flap: number; beat: number; motes: number; glow: number }> = {
+  idle: { ringA: 0.45, ringB: -0.35, flap: 0.12, beat: 2.2, motes: 0.35, glow: 0.75 },
+  listening: { ringA: 1.1, ringB: -0.9, flap: 0.2, beat: 3.2, motes: 0.8, glow: 0.9 },
+  thinking: { ringA: 3.6, ringB: -2.8, flap: 0.16, beat: 4, motes: 2.4, glow: 1 },
+  speaking: { ringA: 1.4, ringB: -1.1, flap: 0.55, beat: 9, motes: 1.1, glow: 1.25 },
+};
+
+/** Glow parts keep their own colours: the emissive is multiplied by the vertex colour. */
+function glowMaterial(intensity: number) {
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, emissive: "#ffffff", emissiveIntensity: intensity, flatShading: true });
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n\ttotalEmissiveRadiance *= vColor.rgb;");
+  };
+  return material;
+}
+
+function useSpiritModel() {
+  const { scene } = useGLTF(TUTOR_SPIRIT_URL, false, true);
+  return useMemo(() => {
+    const root = scene.getObjectByName("tutorSpirit")!.clone(true);
+    const glows: Record<string, THREE.MeshStandardMaterial> = {};
+    root.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      const material = mesh.material as THREE.Material;
+      if (material.name !== "glow") return;
+      // meshes hang on `<name>_mesh` holders; the first named ancestor above them is the part
+      let named: THREE.Object3D | null = mesh;
+      while (named && (!named.name || named.name.endsWith("_mesh"))) named = named.parent;
+      const owner = named?.name || "tutorSpirit";
+      const glow = glowMaterial(owner === "spiritMotes" ? 1.4 : 0.9);
+      glows[owner] = glow;
+      mesh.material = glow;
+    });
+    const part = (name: string) => root.getObjectByName(name) ?? new THREE.Object3D();
+    return { root, glows, ringA: part("spiritRingA"), ringB: part("spiritRingB"), wingL: part("spiritWingL"), wingR: part("spiritWingR"), eyes: part("spiritEyes"), motes: part("spiritMotes") };
+  }, [scene]);
+}
+
+/** The spirit itself, animated from the shared mood. Its origin is the crystal's centre. */
+export function TutorSpirit({ phase = 0 }: { phase?: number }) {
+  const model = useSpiritModel();
+  const live = useRef({ ringA: 0, ringB: 0, speedA: MOTION.idle.ringA, speedB: MOTION.idle.ringB, flap: MOTION.idle.flap, beat: MOTION.idle.beat, motes: MOTION.idle.motes, glow: MOTION.idle.glow, clock: phase, beatPhase: 0 });
+
+  useFrame((_, rawDelta) => {
+    if (STILL) return;
+    const delta = Math.min(rawDelta, 0.05);
+    const { mood, level } = spirit.get();
+    const want = MOTION[mood];
+    const l = live.current;
+    const ease = 1 - Math.exp(-delta * 5);
+    l.speedA += (want.ringA - l.speedA) * ease;
+    l.speedB += (want.ringB - l.speedB) * ease;
+    l.flap += (want.flap - l.flap) * ease;
+    l.beat += (want.beat - l.beat) * ease;
+    l.motes += (want.motes - l.motes) * ease;
+    l.clock += delta;
+    l.beatPhase += delta * l.beat;
+    const t = l.clock;
+
+    model.root.position.y = Math.sin(t * 1.6) * 0.035;
+    model.root.rotation.y = Math.sin(t * 0.45) * 0.28;
+    l.ringA += delta * l.speedA;
+    l.ringB += delta * l.speedB;
+    model.ringA.rotation.set(0.42, l.ringA, 0);
+    model.ringB.rotation.set(0, l.ringB, 0.38);
+    const flap = Math.sin(l.beatPhase) * l.flap;
+    model.wingL.rotation.set(0, 0.25, -flap);
+    model.wingR.rotation.set(0, -0.25, flap);
+    model.motes.rotation.y += delta * l.motes;
+    model.motes.position.y = Math.sin(t * 0.9) * 0.02;
+    // a blink every few seconds, quicker than a frame-perfect timer would look
+    const blink = (t + 0.7) % 3.4;
+    model.eyes.scale.y = blink < 0.12 ? Math.max(0.12, Math.abs(blink - 0.06) / 0.06) : 1;
+
+    const pulse =
+      mood === "listening" ? 0.2 + level() * 1.6 :
+      mood === "thinking" ? 0.35 * (0.5 + 0.5 * Math.sin(t * 9)) :
+      mood === "speaking" ? 0.3 * (0.5 + 0.5 * Math.sin(t * 14)) :
+      0.12 * Math.sin(t * 2);
+    l.glow += (want.glow + pulse - l.glow) * ease;
+    const heart = model.glows.tutorSpirit;
+    if (heart) heart.emissiveIntensity = l.glow;
+    for (const ring of ["spiritRingA", "spiritRingB"]) {
+      const material = model.glows[ring];
+      if (material) material.emissiveIntensity = 0.7 + (l.glow - 0.75) * 0.8;
+    }
+  });
+
+  return <primitive object={model.root} />;
+}
+
+/**
+ * The spirit in a small view of its own, for when the student is at a station
+ * and the room has stopped rendering. Clicking it opens or closes the tutor.
+ */
+export function SpiritCorner({ open }: { open: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => spirit.toggle()}
+      aria-label={open ? "Tutup tutor" : "Panggil tutor"}
+      aria-expanded={open}
+      className="spirit-corner pointer-events-auto absolute right-2 top-1 z-30 size-[92px] rounded-full outline-none transition-transform duration-150 active:scale-[0.95] focus-visible:ring-2 focus-visible:ring-[#a594f5] sm:right-4"
+    >
+      <span aria-hidden="true" className="absolute inset-3 rounded-full bg-[radial-gradient(circle,rgba(165,148,245,.45),rgba(165,148,245,0)_70%)]" />
+      <Canvas
+        className="!pointer-events-none"
+        dpr={[1, 1.5]}
+        gl={{ alpha: true, antialias: true }}
+        camera={{ position: [0, 0.02, 1.55], fov: 32 }}
+        frameloop={STILL ? "demand" : "always"}
+      >
+        <hemisphereLight args={["#fff7ee", "#8b7fd0", 1.3]} />
+        <directionalLight position={[1.5, 2, 2]} intensity={1.4} color="#fff0dc" />
+        <TutorSpirit phase={1.3} />
+      </Canvas>
+    </button>
+  );
+}

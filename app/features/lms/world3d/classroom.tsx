@@ -20,6 +20,8 @@ import { classroomHomeFov, classroomHomePose, classroomSurface, stationAspect, s
 import { STILL } from "./ground";
 import { sketchOf, type Vec3 } from "./layout";
 import { Clickable, Sign, SignText } from "./signs";
+import { spirit } from "./spirit-store";
+import { preloadTutorSpirit, TutorSpirit } from "./tutor-spirit";
 
 // The course classroom (docs/world-concept/classroom-*.png): one room the
 // student walks into from the island, with the lesson's PDF on the blackboard,
@@ -33,7 +35,11 @@ export const CLASSROOM_URL = "/game/classroom.glb";
 
 export function preloadClassroom() {
   useGLTF.preload(CLASSROOM_URL, false, true);
+  preloadTutorSpirit();
 }
+
+/** Where the tutor spirit floats while the student looks around the room: beside the board. */
+const SPIRIT_HOME: Vec3 = [-2.95, 2.35, -3.05];
 
 // ---- camera ---------------------------------------------------------------------------------
 
@@ -375,9 +381,20 @@ export function Classroom({ courseId, focus, lesson, course, island, ready = fal
       <Sign position={s.tugas.sign as Vec3} show={show && !narrow && Boolean(course?.assignments.length)} onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} label="Tugas">
         <SignText small="Tugas" strong={`${course?.assignments.length ?? 0} buku`} />
       </Sign>
+      <Sign position={[SPIRIT_HOME[0], SPIRIT_HOME[1] + 0.75, SPIRIT_HOME[2]]} show={show && !narrow} onClick={() => spirit.toggle()} label="Panggil tutor">
+        <SignText small="Tutor AI" strong="Panggil aku" />
+      </Sign>
       <Sign position={s.quiz.sign as Vec3} show={show && !narrow && Boolean(quiz)} onClick={go.quiz} label="Quiz">
         <SignText small="Quiz" strong={course?.quizzes[0]?.title ?? "Target"} />
       </Sign>
+      {show && (
+        <Clickable onClick={() => spirit.toggle()} label="Tutor AI">
+          <group position={SPIRIT_HOME} scale={1.7}>
+            <TutorSpirit />
+            <pointLight position={[0, 0, 0.25]} intensity={1.6} distance={2.4} decay={1.8} color="#b7a9ff" />
+          </group>
+        </Clickable>
+      )}
       {show && (
         <Html center position={[0, 1.62, -2.9]} zIndexRange={[19, 0]} style={{ pointerEvents: "none" }}>
           <span className="block h-[54px] w-[46px] overflow-hidden rounded-full border-[3px] border-[#4bd29f] bg-white shadow-[0_8px_16px_rgba(24,21,58,.3)]">

@@ -1,36 +1,50 @@
-import { FlaskConical, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { FlaskConical } from "lucide-react";
+import { useCallback } from "react";
 
 import { LABS } from "~/features/labs";
 import { http } from "~/lib/http";
-import { cn } from "~/lib/utils";
 import type { LessonData } from "../types";
-import { AiTutorPanel } from "./ai-tutor-panel";
 
 // The labs attached to a lesson (PRD §5.10): a tool to understand the idea by
-// applying it, never graded. Each solved challenge is recorded once. Beside each
-// lab is an AI tutor that sees what the student is doing in it.
-export function LessonLabs({ labs, onSolved }: { labs: LessonData["labs"]; onSolved?: () => void }) {
+// applying it, never graded. Each solved challenge is recorded once. A lab
+// reports what is on its screen through `onLabState`, which the classroom's
+// tutor spirit reads.
+export function LessonLabs({
+  labs,
+  onSolved,
+  onLabState,
+}: {
+  labs: LessonData["labs"];
+  onSolved?: () => void;
+  onLabState?: (labId: string, summary: string) => void;
+}) {
   const shown = labs.filter((lab) => LABS[lab.labKey]);
   if (shown.length === 0) return null;
   return (
     <section aria-label="Lab interaktif" className="flex flex-col gap-4">
       {shown.map((lab) => (
-        <LessonLab key={lab.id} lab={lab} onSolved={onSolved} />
+        <LessonLab key={lab.id} lab={lab} onSolved={onSolved} onLabState={onLabState} />
       ))}
     </section>
   );
 }
 
-function LessonLab({ lab, onSolved }: { lab: LessonData["labs"][number]; onSolved?: () => void }) {
+function LessonLab({
+  lab,
+  onSolved,
+  onLabState,
+}: {
+  lab: LessonData["labs"][number];
+  onSolved?: () => void;
+  onLabState?: (labId: string, summary: string) => void;
+}) {
   const entry = LABS[lab.labKey]!;
-  const [state, setState] = useState("");
-  const [tutorOpen, setTutorOpen] = useState(false);
   const solve = async (challenge: string) => {
     const result = await http.post<{ points: number }>(`/api/student/labs/${lab.id}/challenges/${challenge}`, {});
     onSolved?.();
     return result.points;
   };
+  const onState = useCallback((summary: string) => onLabState?.(lab.id, summary), [onLabState, lab.id]);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -41,28 +55,8 @@ function LessonLab({ lab, onSolved }: { lab: LessonData["labs"][number]; onSolve
         <span className="text-sm text-muted-foreground tabular-nums">
           {lab.solved.length} dari {entry.challenges} tantangan
         </span>
-        <button
-          type="button"
-          onClick={() => setTutorOpen((open) => !open)}
-          aria-expanded={tutorOpen}
-          className={cn(
-            "ml-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 transition-transform duration-150 active:scale-[0.97]",
-            tutorOpen ? "bg-foreground text-background ring-foreground" : "bg-card text-foreground ring-border",
-          )}
-        >
-          <Sparkles className="size-4" aria-hidden="true" />
-          {tutorOpen ? "Tutup tutor" : "Tanya AI Tutor"}
-        </button>
       </div>
-      <entry.Component solved={lab.solved} onSolve={solve} onState={setState} />
-      {tutorOpen ? (
-        <AiTutorPanel
-          target={{ targetType: "lab", targetId: lab.id }}
-          liveContext={state}
-          placeholder="Tanya tentang lab ini…"
-          className="h-[26rem] xl:h-[26rem]"
-        />
-      ) : null}
+      <entry.Component solved={lab.solved} onSolve={solve} onState={onLabState ? onState : undefined} />
     </div>
   );
 }

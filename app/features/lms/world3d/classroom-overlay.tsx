@@ -5,7 +5,7 @@ import {
   NotebookPen,
   Target,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Link,
   useNavigate,
@@ -19,12 +19,14 @@ import { LABS } from "~/features/labs";
 import { cn } from "~/lib/utils";
 import type { loadClassroom } from "../api/classroom";
 import { LessonLabs } from "../components/lesson-labs";
+import { TutorHostProvider, type TutorSource } from "../components/tutor-host";
 import { PdfReader } from "../components/pdf-reader";
 import { AssignmentPage } from "../pages/assignment-page";
 import { QuizPage } from "../pages/quiz-page";
 import { useSurfaceRect } from "./board-rect";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { card, Dock, Overlay, press, TopBar } from "./overlays";
+import { SpiritTutor } from "./spirit-tutor";
 import { useStageScene } from "./store";
 
 type Props = Awaited<ReturnType<typeof loadClassroom>> & {
@@ -105,11 +107,30 @@ export function ClassroomOverlay({
       (lab) => lab.id === selectedLab?.id && LABS[lab.labKey],
     ) ?? [];
 
+  // The tutor spirit looks at whatever the current station hands it: the lab
+  // (with its live state) here, the quiz question or the assignment from their pages.
+  const [hosted, setHosted] = useState<TutorSource | null>(null);
+  const host = useMemo(() => ({ setSource: setHosted }), []);
+  const [labState, setLabState] = useState<{ labId: string; summary: string } | null>(null);
+  const onLabState = useCallback((labId: string, summary: string) => setLabState({ labId, summary }), []);
+  const labSource: TutorSource | null =
+    focus === "lab" && selectedLab && activeLabs.length
+      ? {
+          key: `lab:${selectedLab.id}`,
+          label: `Lab ${LABS[selectedLab.labKey]?.title ?? ""}`.trim(),
+          target: { targetType: "lab", targetId: selectedLab.id },
+          liveContext: labState?.labId === selectedLab.id ? labState.summary : undefined,
+        }
+      : null;
+  const tutorSource = focus === "lab" ? labSource : focus ? hosted : null;
+
   return (
+    <TutorHostProvider host={host}>
     <Overlay>
       <TopBar
         back={focus ? closeTo : `/courses/${courseId}?tempat=library`}
         backLabel={focus ? "Kembali melihat kelas" : undefined}
+        reserveRight={Boolean(focus)}
         crumbs={[
           { label: "Dunia", to: "/dunia" },
           {
@@ -141,6 +162,7 @@ export function ClassroomOverlay({
                   key={selectedLab?.id}
                   labs={activeLabs}
                   onSolved={() => void revalidator.revalidate()}
+                  onLabState={onLabState}
                 />
               ) : (
                 <Unavailable title="Belum ada percobaan" />
@@ -276,7 +298,9 @@ export function ClassroomOverlay({
           </nav>
         </Dock>
       )}
+      <SpiritTutor source={tutorSource} focus={focus} />
     </Overlay>
+    </TutorHostProvider>
   );
 }
 

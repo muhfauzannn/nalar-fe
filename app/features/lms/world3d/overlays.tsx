@@ -31,9 +31,9 @@ export function Overlay({ children }: { children: ReactNode }) {
 export const card = "pointer-events-auto rounded-[22px] bg-white shadow-[0_12px_30px_-10px_rgba(24,21,58,.35)]";
 export const press = "transition-transform duration-150 active:scale-[0.97]";
 
-export function TopBar({ back, backLabel, crumbs }: { back?: string; backLabel?: string; crumbs: { label: string; to?: string }[] }) {
+export function TopBar({ back, backLabel, crumbs, reserveRight = false }: { back?: string; backLabel?: string; crumbs: { label: string; to?: string }[]; reserveRight?: boolean }) {
   return (
-    <div className="absolute left-3 right-3 top-3 z-20 flex items-center gap-2 sm:left-4 sm:top-4">
+    <div className={cn("absolute left-3 right-3 top-3 z-20 flex items-center gap-2 sm:left-4 sm:top-4", reserveRight && "pr-[86px] sm:pr-[96px]")}>
       {back && (
         <Link to={back} aria-label={backLabel ?? "Kembali"} className={cn("pointer-events-auto flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-white/93 px-3 shadow-sm", press)}>
           <ChevronLeft className="size-5" aria-hidden="true" />
