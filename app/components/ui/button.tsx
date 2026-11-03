@@ -34,6 +34,9 @@ const buttonVariants = cva(
         touch:
           "h-12 gap-2 rounded-[1.125rem] px-5 font-bold has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
         xl: "h-13 gap-2 rounded-[1.125rem] px-6 text-base font-bold has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5",
+        // 44px: the row-level actions of a list (edit, delete, move), where 48 would crowd the card.
+        tap: "h-11 gap-1.5 rounded-[0.875rem] px-4 font-semibold has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        "icon-tap": "size-11 rounded-[0.875rem]",
         icon: "size-9",
         "icon-xs":
           "size-7 rounded-full in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",

@@ -7,9 +7,11 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { EmptyIllustration } from "~/components/ui/empty";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { cn } from "~/lib/utils";
 import { ActionError, useAction } from "../components/action-feedback";
 import { ConfirmAction } from "../components/confirm-action";
 import { ListItem } from "../components/list-item";
@@ -63,7 +65,7 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
       />
 
       {locked ? (
-        <Alert data-testid="quiz-locked">
+        <Alert variant="note" data-testid="quiz-locked">
           <Lock />
           <AlertTitle>Kuis ini sudah dikerjakan {attemptCount} siswa</AlertTitle>
           <AlertDescription>
@@ -73,7 +75,7 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
           </AlertDescription>
         </Alert>
       ) : quiz.status !== "draft" ? (
-        <Alert>
+        <Alert variant="note">
           <AlertTitle>Kuis sudah diterbitkan</AlertTitle>
           <AlertDescription>
             Kembalikan ke draf untuk mengubah soal. Selama belum ada siswa yang mengerjakan, ini aman.
@@ -85,7 +87,7 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
 
       <section aria-labelledby="questions-title" className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <h2 id="questions-title" className="font-heading text-2xl font-semibold tracking-tight">
               Soal
             </h2>
@@ -93,9 +95,9 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
               Pilihan ganda dan isian singkat dinilai otomatis saat siswa mengumpulkan.
             </p>
           </div>
-          {editable && !adding ? (
-            <Button type="button" onClick={() => setAdding(true)}>
-              <Plus data-icon="inline-start" />
+          {editable && !adding && questions.length > 0 ? (
+            <Button type="button" variant="mint" size="touch" className="max-sm:w-full" onClick={() => setAdding(true)}>
+              <Plus data-icon="inline-start" strokeWidth={2.5} />
               Tambah soal
             </Button>
           ) : null}
@@ -111,9 +113,9 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
 
         <ActionError error={order.error} />
         {questions.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Belum ada soal. Kuis baru bisa diterbitkan setelah punya minimal satu soal.
-          </p>
+          adding ? null : (
+            <EmptyQuestions editable={editable} onAdd={() => setAdding(true)} />
+          )
         ) : (
           <ol ref={flip.ref} className="flex flex-col gap-3" aria-label="Daftar soal">
             {shownQuestions.map((question, index) => (
@@ -127,6 +129,7 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
                   <ReorderControls
                     ids={ids}
                     index={index}
+                    size="tap"
                     label={`soal ${index + 1}`}
                     disabled={!editable}
                     onChange={(next) => {
@@ -140,6 +143,27 @@ export function QuizEditorPage({ data }: { data: QuizEditorData }) {
           </ol>
         )}
       </section>
+    </div>
+  );
+}
+
+// A new quiz has no question; one needs to exist before it can be published.
+function EmptyQuestions({ editable, onAdd }: { editable: boolean; onAdd: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl bg-card p-6 text-center shadow-card ring-1 ring-border">
+      <div className="grid size-32 place-items-center rounded-full bg-surface-soft">
+        <EmptyIllustration alt="" width={1254} height={1254} className="mb-0 size-28 max-w-none" />
+      </div>
+      <h3 className="font-heading text-lg font-bold">Belum ada soal</h3>
+      <p className="max-w-sm text-sm/relaxed text-muted-foreground">
+        Kuis baru bisa diterbitkan setelah punya minimal satu soal.
+      </p>
+      {editable ? (
+        <Button type="button" variant="mint" size="touch" className="max-sm:w-full" onClick={onAdd}>
+          <Plus data-icon="inline-start" strokeWidth={2.5} />
+          Tambah soal
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -159,42 +183,51 @@ function QuizStatusActions({
   const change = (next: WorkStatus) => submit({ intent: "quiz-status", status: next });
   const copy = useAction();
   const canDraft = attemptCount === 0;
+  const ringed = "border-2 border-brand-lavender";
 
   return (
     <div className="flex flex-col items-start gap-2 md:items-end">
       <div className="flex flex-wrap gap-2 md:justify-end">
         {status === "draft" ? (
-          <Button type="button" loading={pending} disabled={!ready} onClick={() => change("published")}>
+          <Button type="button" variant="mint" size="touch" loading={pending} disabled={!ready} onClick={() => change("published")}>
             Terbitkan kuis
           </Button>
         ) : null}
         {status === "published" ? (
-          <Button type="button" variant="outline" disabled={pending} onClick={() => change("closed")}>
+          <Button type="button" variant="outline" size="touch" className={ringed} disabled={pending} onClick={() => change("closed")}>
             Tutup kuis
           </Button>
         ) : null}
         {status === "closed" ? (
-          <Button type="button" disabled={pending} onClick={() => change("published")}>
+          <Button type="button" variant="mint" size="touch" disabled={pending} onClick={() => change("published")}>
             Buka lagi
           </Button>
         ) : null}
         {(status === "published" || status === "closed") && canDraft ? (
-          <Button type="button" variant="ghost" disabled={pending} onClick={() => change("draft")}>
+          <Button type="button" variant="ghost" size="touch" disabled={pending} onClick={() => change("draft")}>
             Kembali ke draf
           </Button>
         ) : null}
         {status === "archived" ? (
-          <Button type="button" variant="outline" disabled={pending} onClick={() => change(canDraft ? "draft" : "closed")}>
+          <Button
+            type="button"
+            variant="outline"
+            size="touch"
+            className={ringed}
+            disabled={pending}
+            onClick={() => change(canDraft ? "draft" : "closed")}
+          >
             Pulihkan
           </Button>
         ) : (
-          <Button type="button" variant="ghost" disabled={pending} onClick={() => change("archived")}>
+          <Button type="button" variant="ghost" size="touch" disabled={pending} onClick={() => change("archived")}>
             Arsipkan
           </Button>
         )}
         <Button
           type="button"
-          variant="outline"
+          variant="soft"
+          size="touch"
           loading={copy.pending}
           onClick={() => copy.submit({ intent: "quiz-duplicate" })}
         >
@@ -220,7 +253,7 @@ function QuizSettingsCard({ data }: { data: QuizEditorData }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Pengaturan</CardTitle>
+        <CardTitle className="text-[1.0625rem] font-bold">Pengaturan</CardTitle>
         <CardDescription>
           Waktu ditampilkan dalam zona waktu perangkatmu.
         </CardDescription>
@@ -234,25 +267,27 @@ function QuizSettingsCard({ data }: { data: QuizEditorData }) {
           <input type="hidden" name="intent" value="quiz-update" />
           <ActionError error={error} />
           <Field>
-            <FieldLabel htmlFor="quiz-title">Judul</FieldLabel>
-            <Input id="quiz-title" name="title" required maxLength={160} defaultValue={quiz.title} />
+            <FieldLabel htmlFor="quiz-title" className="font-semibold">Judul</FieldLabel>
+            <Input id="quiz-title" name="title" variant="soft" required maxLength={160} defaultValue={quiz.title} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="quiz-instructions">Instruksi untuk siswa</FieldLabel>
+            <FieldLabel htmlFor="quiz-instructions" className="font-semibold">Instruksi untuk siswa</FieldLabel>
             <Textarea
               id="quiz-instructions"
               name="instructions"
+              variant="soft"
               rows={3}
               maxLength={5000}
               defaultValue={quiz.instructions ?? ""}
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="quiz-limit">Batas waktu (menit)</FieldLabel>
+              <FieldLabel htmlFor="quiz-limit" className="font-semibold">Batas waktu (menit)</FieldLabel>
               <Input
                 id="quiz-limit"
                 name="timeLimitMinutes"
+                variant="soft"
                 type="number"
                 min={1}
                 max={600}
@@ -263,20 +298,20 @@ function QuizSettingsCard({ data }: { data: QuizEditorData }) {
               {limitLocked ? <FieldDescription>Terkunci setelah ada yang mengerjakan.</FieldDescription> : null}
             </Field>
             <Field>
-              <FieldLabel htmlFor="quiz-available">Mulai tersedia</FieldLabel>
-              <Input id="quiz-available" name="availableAt" type="datetime-local" defaultValue={isoToLocal(quiz.availableAt)} />
+              <FieldLabel htmlFor="quiz-available" className="font-semibold">Mulai tersedia</FieldLabel>
+              <Input id="quiz-available" name="availableAt" variant="soft" type="datetime-local" defaultValue={isoToLocal(quiz.availableAt)} />
             </Field>
             <Field>
-              <FieldLabel htmlFor="quiz-due">Batas pengumpulan</FieldLabel>
-              <Input id="quiz-due" name="dueAt" type="datetime-local" defaultValue={isoToLocal(quiz.dueAt)} />
+              <FieldLabel htmlFor="quiz-due" className="font-semibold">Batas pengumpulan</FieldLabel>
+              <Input id="quiz-due" name="dueAt" variant="soft" type="datetime-local" defaultValue={isoToLocal(quiz.dueAt)} />
             </Field>
             <Field>
-              <FieldLabel htmlFor="quiz-closes">Ditutup otomatis</FieldLabel>
-              <Input id="quiz-closes" name="closesAt" type="datetime-local" defaultValue={isoToLocal(quiz.closesAt)} />
+              <FieldLabel htmlFor="quiz-closes" className="font-semibold">Ditutup otomatis</FieldLabel>
+              <Input id="quiz-closes" name="closesAt" variant="soft" type="datetime-local" defaultValue={isoToLocal(quiz.closesAt)} />
             </Field>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" loading={pending}>
+            <Button type="submit" variant="mint" size="xl" loading={pending} className="w-full sm:w-auto">
               Simpan pengaturan
             </Button>
           </div>
@@ -305,34 +340,89 @@ function QuestionCard({
 
   return (
     <ListItem flipKey={question.id} index={number - 1}>
-      <Card data-testid="question-card">
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-start gap-3">
-            {orderControls}
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+      <Card size="sm" data-testid="question-card">
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex items-start gap-3">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-lavender-soft text-sm font-bold text-brand-lavender-foreground tabular-nums">
               {number}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-medium leading-relaxed">
+              <p className="leading-relaxed font-semibold wrap-break-word">
                 <MathText>{question.prompt}</MathText>
               </p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <Badge variant="outline">
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <Badge variant="lavender">
                   {question.type === "multiple_choice" ? "Pilihan ganda" : "Isian singkat"}
                 </Badge>
-                <Badge variant="ghost">{question.points} poin</Badge>
+                <Badge variant="outline">{question.points} poin</Badge>
               </div>
             </div>
-            {editable ? (
+          </div>
+
+          {question.type === "multiple_choice" ? (
+            <ul className="flex flex-col gap-2" aria-label="Opsi jawaban">
+              {question.options.map((option) => (
+                <li
+                  key={option.id}
+                  data-correct={option.isCorrect}
+                  className={cn(
+                    "flex items-center gap-3 rounded-[1.125rem] px-3 py-2.5 text-sm",
+                    option.isCorrect
+                      ? "bg-brand-mint-soft font-medium text-brand-mint-foreground"
+                      : "bg-surface-soft text-muted-foreground",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid size-6 shrink-0 place-items-center rounded-full",
+                      option.isCorrect
+                        ? "bg-brand-mint text-brand-mint-ink"
+                        : "border-2 border-brand-lavender bg-card",
+                    )}
+                  >
+                    {option.isCorrect ? <Check className="size-3.5" strokeWidth={3} aria-label="Jawaban benar" /> : null}
+                  </span>
+                  <span className="min-w-0 wrap-break-word">
+                    <MathText>{option.label}</MathText>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="rounded-[1.125rem] bg-surface-soft px-3 py-2.5 text-sm text-muted-foreground">
+              <p>Jawaban diterima:</p>
+              <p className="mt-1.5 flex flex-wrap gap-1.5">
+                {(question.acceptedAnswers ?? []).map((answer) => (
+                  <span
+                    key={answer}
+                    className="rounded-full bg-brand-mint-soft px-3 py-1 font-medium text-brand-mint-foreground"
+                  >
+                    {answer}
+                  </span>
+                ))}
+              </p>
+            </div>
+          )}
+          {question.explanation ? (
+            <p className="rounded-[1.125rem] bg-brand-lavender-soft px-3 py-2.5 text-xs/relaxed text-brand-lavender-foreground">
+              Pembahasan: <MathText>{question.explanation}</MathText>
+            </p>
+          ) : null}
+
+          <ActionError error={remove.error} />
+
+          {editable ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+              {orderControls}
               <div className="flex items-center gap-1">
-                <Button type="button" size="xs" variant="ghost" onClick={() => setEditing((value) => !value)}>
-                  <Pencil /> {editing ? "Tutup" : "Ubah"}
+                <Button type="button" size="tap" variant="soft" onClick={() => setEditing((value) => !value)}>
+                  <Pencil data-icon="inline-start" /> {editing ? "Tutup" : "Ubah"}
                 </Button>
                 <ConfirmAction
                   label="Hapus"
-                  size="xs"
+                  size="tap"
                   variant="ghost"
-                  icon={<Trash2 />}
+                  icon={<Trash2 data-icon="inline-start" />}
                   title={`Hapus soal ${number}?`}
                   description="Soal ini akan dihapus dari kuis dan tidak bisa dikembalikan."
                   confirmLabel="Hapus soal"
@@ -340,44 +430,11 @@ function QuestionCard({
                   onConfirm={() => remove.submit({ intent: "question-delete", questionId: question.id })}
                 />
               </div>
-            ) : null}
-          </div>
-          <ActionError error={remove.error} />
-
-          {question.type === "multiple_choice" ? (
-            <ul className="flex flex-col gap-1.5 pl-11" aria-label="Opsi jawaban">
-              {question.options.map((option) => (
-                <li
-                  key={option.id}
-                  data-correct={option.isCorrect}
-                  className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm ${option.isCorrect ? "bg-brand-mint-soft font-medium text-brand-mint-foreground" : "text-muted-foreground"}`}
-                >
-                  {option.isCorrect ? <Check className="size-4 shrink-0" aria-label="Jawaban benar" /> : <span className="size-4 shrink-0" />}
-                  <MathText>{option.label}</MathText>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="pl-11 text-sm text-muted-foreground">
-              Jawaban diterima:{" "}
-              {(question.acceptedAnswers ?? []).map((answer, index) => (
-                <span key={answer}>
-                  {index > 0 ? ", " : ""}
-                  <span className="rounded bg-brand-mint-soft px-1.5 py-0.5 font-medium text-brand-mint-foreground">
-                    {answer}
-                  </span>
-                </span>
-              ))}
-            </p>
-          )}
-          {question.explanation ? (
-            <p className="pl-11 text-xs text-muted-foreground">
-              Pembahasan: <MathText>{question.explanation}</MathText>
-            </p>
+            </div>
           ) : null}
 
           {editing ? (
-            <div className="enter-up rounded-lg border bg-muted/30 p-4">
+            <div className="enter-up rounded-[1.125rem] border-2 border-brand-lavender-soft p-4">
               <QuestionForm quizId={quizId} question={question} onDone={closeEdit} />
             </div>
           ) : null}

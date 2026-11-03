@@ -11,6 +11,8 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+        // A calm heads-up inside an editor (locked, already published): a soft lavender row, not a bordered box.
+        note: "rounded-[1.125rem] border-0 bg-brand-lavender-soft px-4 py-3 text-brand-lavender-foreground has-[>svg]:gap-x-3",
       },
     },
     defaultVariants: {

@@ -146,3 +146,74 @@ test("the class code is one tap to copy, and its buttons are thumb-sized", async
   await expect(page.getByRole("status").filter({ hasText: "Tersalin" })).toHaveCount(1);
   expect(await page.evaluate(() => (window as unknown as { copied: string }).copied)).toBe("K7M2-QX9P");
 });
+
+test("the course editor lists its quizzes and assignments as rows that open their editors", async ({ page }) => {
+  await visit(page, "?at=/manage/courses/c1");
+  await page.getByRole("tab", { name: /^Kuis/ }).click();
+  const rows = page.getByTestId("quiz-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("3 soal");
+  await expect(rows.first().getByRole("link", { name: "Buka editor" })).toHaveAttribute("href", "/manage/quizzes/q1");
+  expect(await heightOf(rows.first().getByRole("link", { name: "Buka editor" }))).toBeGreaterThanOrEqual(44);
+  expect(await heightOf(page.getByLabel("Judul kuis"))).toBeGreaterThanOrEqual(44);
+
+  await page.getByRole("tab", { name: /^Assignment/ }).click();
+  await expect(page.getByTestId("assignment-row").first().getByRole("link", { name: "Buka editor" })).toHaveAttribute(
+    "href",
+    "/manage/assignments/a1",
+  );
+});
+
+test("the quiz editor shows each question with its right answer marked, and its actions are thumb-sized", async ({ page }) => {
+  await visit(page, "?at=/manage/quizzes/q1");
+  const cards = page.getByTestId("question-card");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.first().locator('[data-correct="true"]')).toHaveText(/2 m/);
+  await expect(cards.first().locator('[data-correct="false"]')).toHaveCount(2);
+  await expect(cards.nth(1)).toContainText("hertz");
+
+  const actions = [
+    cards.first().getByRole("button", { name: "Ubah" }),
+    cards.first().getByRole("button", { name: "Hapus" }),
+    cards.first().getByRole("button", { name: "Turunkan soal 1" }),
+    page.getByRole("button", { name: "Tambah soal" }),
+    page.getByRole("button", { name: "Terbitkan kuis" }),
+  ];
+  for (const action of actions) expect(await heightOf(action), String(await action.textContent())).toBeGreaterThanOrEqual(44);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBe(0);
+});
+
+test("editing a question opens a form whose fields and answer marks are thumb-sized", async ({ page }) => {
+  await visit(page, "?at=/manage/quizzes/q1");
+  await page.getByTestId("question-card").first().getByRole("button", { name: "Ubah" }).click();
+  const form = page.getByRole("button", { name: "Simpan soal" }).locator("xpath=ancestor::form");
+  for (const field of [form.getByLabel("Poin"), form.getByLabel("Teks opsi 1"), form.getByLabel("Hapus opsi 1"), form.getByRole("button", { name: "Tambah opsi" })]) {
+    expect(await heightOf(field)).toBeGreaterThanOrEqual(44);
+  }
+  // The right answer is a radio like before, only bigger: choosing another one moves the mark.
+  const second = form.getByLabel("Jadikan opsi 1 jawaban benar");
+  await expect(form.getByLabel("Jadikan opsi 2 jawaban benar")).toBeChecked();
+  await second.check({ force: true });
+  await expect(second).toBeChecked();
+  await expect(form.getByLabel("Jadikan opsi 2 jawaban benar")).not.toBeChecked();
+});
+
+test("a question without text is refused before anything is sent", async ({ page }) => {
+  await visit(page, "?at=/manage/quizzes/q1&tanpasoal");
+  // No question yet: one way to add, in the empty card, not a second one in the header.
+  await expect(page.getByRole("heading", { name: "Belum ada soal" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Tambah soal" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Tambah soal" }).click();
+  await page.getByRole("button", { name: "Tambah soal" }).last().click();
+  await expect(page.getByRole("alert")).toHaveText("Soal wajib diisi.");
+});
+
+test("a quiz students already took is locked: no way to edit or move its questions", async ({ page }) => {
+  await visit(page, "?at=/manage/quizzes/q1&locked");
+  await expect(page.getByTestId("quiz-locked")).toContainText("12 siswa");
+  await expect(page.getByTestId("question-card")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Ubah" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Naikkan/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tambah soal" })).toHaveCount(0);
+});

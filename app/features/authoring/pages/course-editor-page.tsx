@@ -1,6 +1,6 @@
-import { ArrowRight, Plus, Users } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 
 import { PageHeader } from "~/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -17,8 +17,8 @@ import { formatDateTime } from "~/features/lms/lib/format";
 import { ActionError, useAction, useResetOnSuccess } from "../components/action-feedback";
 import { CourseContentTab } from "../components/course-content-tab";
 import { JoinCodeCard } from "../components/join-code-card";
-import { ListItem } from "../components/list-item";
 import { StatusBadge } from "../components/status-badge";
+import { WorkRow } from "../components/work-row";
 import type {
   CourseEditorData,
   ManagedAssignmentSummary,
@@ -170,7 +170,7 @@ function CourseDetailsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Detail course</CardTitle>
+        <CardTitle className="text-[1.0625rem] font-bold">Detail course</CardTitle>
       </CardHeader>
       <CardContent>
         <fetcher.Form
@@ -225,24 +225,24 @@ function QuizzesTab({ quizzes }: { quizzes: ManagedQuizSummary[] }) {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Kuis baru</CardTitle>
+          <CardTitle className="text-[1.0625rem] font-bold">Kuis baru</CardTitle>
           <CardDescription>
             Kuis pilihan ganda dan isian singkat yang dinilai otomatis. Soal ditambahkan di halaman kuis.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <fetcher.Form ref={formRef} method="post" className="flex flex-wrap items-end gap-3">
+          <fetcher.Form ref={formRef} method="post" className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
             <input type="hidden" name="intent" value="quiz-create" />
             <Field className="min-w-52 flex-1">
-              <FieldLabel htmlFor="new-quiz-title">Judul kuis</FieldLabel>
-              <Input id="new-quiz-title" name="title" required maxLength={160} placeholder="mis. Kuis Bab 1" />
+              <FieldLabel htmlFor="new-quiz-title" className="font-semibold">Judul kuis</FieldLabel>
+              <Input id="new-quiz-title" name="title" variant="soft" required maxLength={160} placeholder="mis. Kuis Bab 1" />
             </Field>
-            <Field className="w-40">
-              <FieldLabel htmlFor="new-quiz-limit">Batas waktu (menit)</FieldLabel>
-              <Input id="new-quiz-limit" name="timeLimitMinutes" type="number" min={1} max={600} placeholder="Tanpa batas" />
+            <Field className="sm:w-48">
+              <FieldLabel htmlFor="new-quiz-limit" className="font-semibold">Batas waktu (menit)</FieldLabel>
+              <Input id="new-quiz-limit" name="timeLimitMinutes" variant="soft" type="number" min={1} max={600} placeholder="Tanpa batas" />
             </Field>
-            <Button type="submit" loading={pending}>
-              <Plus data-icon="inline-start" />
+            <Button type="submit" variant="mint" size="xl" loading={pending} className="w-full sm:w-auto">
+              <Plus data-icon="inline-start" strokeWidth={2.5} />
               Buat kuis
             </Button>
           </fetcher.Form>
@@ -251,32 +251,26 @@ function QuizzesTab({ quizzes }: { quizzes: ManagedQuizSummary[] }) {
       </Card>
 
       {quizzes.length === 0 ? (
-        <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-[1.125rem] bg-surface-soft p-8 text-center text-sm text-muted-foreground">
           Belum ada kuis.
         </p>
       ) : (
         <ul className="flex flex-col gap-3" aria-label="Daftar kuis">
           {quizzes.map((quiz, index) => (
-            <ListItem key={quiz.id} index={index}>
-              <Card data-testid="quiz-row">
-                <CardContent className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex min-w-0 flex-col gap-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={quiz.status} />
-                      <span className="font-medium">{quiz.title}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {quiz.questionCount} soal · {quiz.attemptCount} pengerjaan
-                      {quiz.dueAt ? ` · batas ${formatDateTime(quiz.dueAt)}` : ""}
-                    </p>
-                  </div>
-                  <Button size="sm" variant="outline" render={<Link to={`/manage/quizzes/${quiz.id}`} />}>
-                    Buka editor
-                    <ArrowRight data-icon="inline-end" />
-                  </Button>
-                </CardContent>
-              </Card>
-            </ListItem>
+            <WorkRow
+              key={quiz.id}
+              index={index}
+              testId="quiz-row"
+              title={quiz.title}
+              status={quiz.status}
+              href={`/manage/quizzes/${quiz.id}`}
+              meta={
+                <>
+                  {quiz.questionCount} soal · {quiz.attemptCount} pengerjaan
+                  {quiz.dueAt ? ` · batas ${formatDateTime(quiz.dueAt)}` : ""}
+                </>
+              }
+            />
           ))}
         </ul>
       )}
@@ -299,7 +293,7 @@ function AssignmentsTab({
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Assignment baru</CardTitle>
+          <CardTitle className="text-[1.0625rem] font-bold">Assignment baru</CardTitle>
           <CardDescription>
             Assignment NALAR berjalan dalam lima tahap dengan AI Tutor yang membimbing, bukan memberi
             jawaban. Pilih skenario; rubriknya disalin dan bisa kamu sesuaikan.
@@ -307,7 +301,7 @@ function AssignmentsTab({
         </CardHeader>
         <CardContent>
           {scenarios.length === 0 ? (
-            <Alert>
+            <Alert variant="note">
               <AlertTitle>Belum ada skenario</AlertTitle>
               <AlertDescription>
                 Skenario disiapkan oleh tim NALAR dan belum tersedia di server ini.
@@ -319,8 +313,8 @@ function AssignmentsTab({
               <ActionError error={error} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor="new-assignment-scenario">Skenario</FieldLabel>
-                  <NativeSelect id="new-assignment-scenario" name="scenarioId" required defaultValue="">
+                  <FieldLabel htmlFor="new-assignment-scenario" className="font-semibold">Skenario</FieldLabel>
+                  <NativeSelect id="new-assignment-scenario" name="scenarioId" variant="soft" required defaultValue="">
                     <NativeSelectOption value="" disabled>
                       Pilih skenario
                     </NativeSelectOption>
@@ -332,18 +326,19 @@ function AssignmentsTab({
                   </NativeSelect>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="new-assignment-title">Judul (opsional)</FieldLabel>
+                  <FieldLabel htmlFor="new-assignment-title" className="font-semibold">Judul (opsional)</FieldLabel>
                   <Input
                     id="new-assignment-title"
                     name="title"
+                    variant="soft"
                     maxLength={160}
                     placeholder="Kosongkan untuk memakai judul skenario"
                   />
                 </Field>
               </div>
               <div className="flex justify-end">
-                <Button type="submit" loading={pending}>
-                  <Plus data-icon="inline-start" />
+                <Button type="submit" variant="mint" size="xl" loading={pending} className="w-full sm:w-auto">
+                  <Plus data-icon="inline-start" strokeWidth={2.5} />
                   Buat assignment
                 </Button>
               </div>
@@ -353,36 +348,26 @@ function AssignmentsTab({
       </Card>
 
       {assignments.length === 0 ? (
-        <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-[1.125rem] bg-surface-soft p-8 text-center text-sm text-muted-foreground">
           Belum ada assignment.
         </p>
       ) : (
         <ul className="flex flex-col gap-3" aria-label="Daftar assignment">
           {assignments.map((assignment, index) => (
-            <ListItem key={assignment.id} index={index}>
-              <Card data-testid="assignment-row">
-                <CardContent className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex min-w-0 flex-col gap-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={assignment.status} />
-                      <span className="font-medium">{assignment.title}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Skenario: {assignment.scenarioTitle} · {assignment.submissionCount} pengerjaan
-                      {assignment.dueAt ? ` · batas ${formatDateTime(assignment.dueAt)}` : ""}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    render={<Link to={`/manage/assignments/${assignment.id}`} />}
-                  >
-                    Buka editor
-                    <ArrowRight data-icon="inline-end" />
-                  </Button>
-                </CardContent>
-              </Card>
-            </ListItem>
+            <WorkRow
+              key={assignment.id}
+              index={index}
+              testId="assignment-row"
+              title={assignment.title}
+              status={assignment.status}
+              href={`/manage/assignments/${assignment.id}`}
+              meta={
+                <>
+                  Skenario: {assignment.scenarioTitle} · {assignment.submissionCount} pengerjaan
+                  {assignment.dueAt ? ` · batas ${formatDateTime(assignment.dueAt)}` : ""}
+                </>
+              }
+            />
           ))}
         </ul>
       )}

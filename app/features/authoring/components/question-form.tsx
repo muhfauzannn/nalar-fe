@@ -1,4 +1,4 @@
-import { Plus, X } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -115,9 +115,10 @@ export function QuestionForm({
 
       <div className="grid gap-4 sm:grid-cols-[14rem_8rem]">
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-type`}>Jenis soal</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-type`} className="font-semibold">Jenis soal</FieldLabel>
           <NativeSelect
             id={`${idPrefix}-type`}
+            variant="soft"
             value={type}
             onChange={(event) => setType(event.target.value as QuestionDraft["type"])}
           >
@@ -126,9 +127,10 @@ export function QuestionForm({
           </NativeSelect>
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-points`}>Poin</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-points`} className="font-semibold">Poin</FieldLabel>
           <Input
             id={`${idPrefix}-points`}
+            variant="soft"
             type="number"
             min={0.5}
             max={100}
@@ -140,9 +142,10 @@ export function QuestionForm({
       </div>
 
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-prompt`}>Soal</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-prompt`} className="font-semibold">Soal</FieldLabel>
         <Textarea
           id={`${idPrefix}-prompt`}
+          variant="soft"
           rows={3}
           maxLength={3000}
           value={prompt}
@@ -153,18 +156,25 @@ export function QuestionForm({
 
       {type === "multiple_choice" ? (
         <fieldset className="flex flex-col gap-3">
-          <legend className="mb-1 text-sm font-medium">Opsi jawaban</legend>
+          <legend className="mb-1 text-sm font-semibold">Opsi jawaban</legend>
           {options.map((option, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name={`${idPrefix}-correct`}
-                checked={option.isCorrect}
-                onChange={() => setCorrect(index)}
-                aria-label={`Jadikan opsi ${index + 1} jawaban benar`}
-                className="size-4 shrink-0 accent-primary"
-              />
+            <div key={index} className="flex items-center gap-1">
+              {/* A 44px target around a 24px mark: mint with a tick for the right answer, a lavender ring for the rest. */}
+              <label className="relative grid size-11 shrink-0 cursor-pointer place-items-center rounded-full has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
+                <input
+                  type="radio"
+                  name={`${idPrefix}-correct`}
+                  checked={option.isCorrect}
+                  onChange={() => setCorrect(index)}
+                  aria-label={`Jadikan opsi ${index + 1} jawaban benar`}
+                  className="peer sr-only"
+                />
+                <span className="grid size-6 place-items-center rounded-full border-2 border-brand-lavender bg-card text-transparent transition-colors duration-150 peer-checked:border-brand-mint peer-checked:bg-brand-mint peer-checked:text-brand-mint-ink">
+                  <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
+                </span>
+              </label>
               <Input
+                variant="soft"
                 aria-label={`Teks opsi ${index + 1}`}
                 value={option.label}
                 maxLength={300}
@@ -178,7 +188,7 @@ export function QuestionForm({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                size="icon-tap"
                 aria-label={`Hapus opsi ${index + 1}`}
                 disabled={options.length <= 2}
                 onClick={() => removeOption(index)}
@@ -188,11 +198,11 @@ export function QuestionForm({
             </div>
           ))}
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">Titik di kiri menandai jawaban yang benar.</p>
+            <p className="text-xs text-muted-foreground">Lingkaran hijau di kiri menandai jawaban yang benar.</p>
             <Button
               type="button"
-              variant="outline"
-              size="xs"
+              variant="soft"
+              size="tap"
               disabled={options.length >= 8}
               onClick={() => setOptions((current) => [...current, { label: "", isCorrect: false }])}
             >
@@ -202,10 +212,11 @@ export function QuestionForm({
         </fieldset>
       ) : (
         <fieldset className="flex flex-col gap-3">
-          <legend className="mb-1 text-sm font-medium">Jawaban yang diterima</legend>
+          <legend className="mb-1 text-sm font-semibold">Jawaban yang diterima</legend>
           {answers.map((answer, index) => (
-            <div key={index} className="flex items-center gap-2">
+            <div key={index} className="flex items-center gap-1">
               <Input
+                variant="soft"
                 aria-label={`Jawaban diterima ${index + 1}`}
                 value={answer}
                 maxLength={200}
@@ -217,7 +228,7 @@ export function QuestionForm({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                size="icon-tap"
                 aria-label={`Hapus jawaban ${index + 1}`}
                 disabled={answers.length <= 1}
                 onClick={() => setAnswers((current) => current.filter((_, i) => i !== index))}
@@ -232,8 +243,8 @@ export function QuestionForm({
             </p>
             <Button
               type="button"
-              variant="outline"
-              size="xs"
+              variant="soft"
+              size="tap"
               disabled={answers.length >= 20}
               onClick={() => setAnswers((current) => [...current, ""])}
             >
@@ -244,9 +255,10 @@ export function QuestionForm({
       )}
 
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-explanation`}>Pembahasan (opsional)</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-explanation`} className="font-semibold">Pembahasan (opsional)</FieldLabel>
         <Textarea
           id={`${idPrefix}-explanation`}
+          variant="soft"
           rows={2}
           maxLength={3000}
           value={explanation}
@@ -255,11 +267,11 @@ export function QuestionForm({
         <FieldDescription>Baru terlihat oleh siswa setelah mereka mengumpulkan kuis.</FieldDescription>
       </Field>
 
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onDone}>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" size="touch" onClick={onDone}>
           Batal
         </Button>
-        <Button type="submit" size="sm" loading={pending}>
+        <Button type="submit" variant="mint" size="touch" loading={pending}>
           {question ? "Simpan soal" : "Tambah soal"}
         </Button>
       </div>

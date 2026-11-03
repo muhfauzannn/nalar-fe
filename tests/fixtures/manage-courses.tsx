@@ -2,13 +2,15 @@ import { createRoot } from "react-dom/client";
 import { createMemoryRouter, Outlet, redirect, RouterProvider, useLocation } from "react-router";
 import { CourseEditorPage } from "../../app/features/authoring/pages/course-editor-page";
 import { MyCoursesPage } from "../../app/features/authoring/pages/my-courses-page";
-import type { CourseEditorData, ManagedCourseSummary } from "../../app/features/authoring/types";
+import { QuizEditorPage } from "../../app/features/authoring/pages/quiz-editor-page";
+import type { CourseEditorData, ManagedCourseSummary, QuizEditorData } from "../../app/features/authoring/types";
 import "../../app/app.css";
 
 // Kelola course without the student shell or a server: the real list and editor
 // over a memory router whose /manage/courses/new answers like the app's action
 // (a redirect to the editor, or a rejection for the name "Gagal"). `?kosong` starts
-// with no courses; `?at=` is where the visit starts.
+// with no courses; `?at=` is where the visit starts. The quiz editor also takes
+// `?locked` (a quiz students already took) and `?tanpasoal` (no question yet).
 const query = new URL(location.href).searchParams;
 const start = query.get("at") ?? "/manage";
 
@@ -26,8 +28,34 @@ const editor: CourseEditorData = {
   course: { id: "c1", name: courses[0]!.name, description: courses[0]!.description, status: "published", subjectId: "s1", subjectName: "Fisika", joinCode: "K7M2QX9P" },
   studentCount: 37,
   modules: [],
-  quizzes: [],
-  assignments: [],
+  quizzes: [
+    { id: "q1", title: "Kuis Bab 1 — Gelombang", status: "published", moduleId: null, dueAt: null, closesAt: null, questionCount: 3, attemptCount: 31 },
+    { id: "q2", title: "Kuis Bab 2", status: "draft", moduleId: null, dueAt: null, closesAt: null, questionCount: 0, attemptCount: 0 },
+  ],
+  assignments: [
+    { id: "a1", title: "Analisis gelombang di pantai", status: "published", moduleId: null, scenarioTitle: "Gelombang laut", dueAt: null, closesAt: null, submissionCount: 12 },
+  ],
+};
+const locked = query.has("locked");
+const quiz: QuizEditorData = {
+  quiz: { id: "q1", courseId: "c1", moduleId: null, title: "Kuis Bab 1 — Gelombang", instructions: "Kerjakan dengan tenang.", status: locked ? "published" : "draft", availableAt: null, dueAt: null, closesAt: null, timeLimitMinutes: 30 },
+  questions: query.has("tanpasoal")
+    ? []
+    : [
+        {
+          id: "s1", type: "multiple_choice", prompt: "Berapakah panjang gelombang dengan f = 50 Hz dan v = 100 m/s?", explanation: "λ = v / f", acceptedAnswers: null, points: 2, position: 0,
+          options: [
+            { id: "o1", label: "0,5 m", isCorrect: false, position: 0 },
+            { id: "o2", label: "2 m", isCorrect: true, position: 1 },
+            { id: "o3", label: "5 m", isCorrect: false, position: 2 },
+          ],
+        },
+        { id: "s2", type: "short_answer", prompt: "Satuan frekuensi dalam SI adalah ...", explanation: null, acceptedAnswers: ["hertz", "Hz"], points: 1, position: 1, options: [] },
+      ],
+  attemptCount: locked ? 12 : 0,
+  locked,
+  editable: !locked,
+  readiness: { ready: true, questionCount: 2, problems: [] },
 };
 
 function Url() {
@@ -57,6 +85,7 @@ const router = createMemoryRouter(
             return redirect("/manage/courses/c1");
           },
         },
+        { path: "manage/quizzes/:quizId", Component: () => <QuizEditorPage data={quiz} /> },
         { path: "manage/courses/:courseId", Component: () => <CourseEditorPage data={editor} subjects={subjects} scenarios={[]} /> },
       ],
     },
