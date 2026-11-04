@@ -77,6 +77,8 @@ test("a right code leaves for the course's island and the sheet goes away", asyn
 test("closing a sheet opened here steps back; one opened by a link replaces the URL", async ({ page }) => {
   await visit(page);
   await page.getByRole("button", { name: "Buka gabung" }).click();
+  // A key pressed before the sheet is there reaches nothing.
+  await expect(sheet(page)).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(sheet(page)).toHaveCount(0);
   await expect(url(page)).toHaveText("/dunia");
