@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+import { ClassJourney } from "../components/class-journey";
 import { StatTile } from "../components/stat-tile";
 import { humanizeFactor, LEVELS, levelCopy, stageCopy } from "../lib/offloading";
 import type { AssignmentAnalytics, OffloadingLevel } from "../types";
@@ -54,6 +55,8 @@ export function AssignmentAnalyticsPage({ data }: { data: AssignmentAnalytics })
         <StatTile label="Sedang mengerjakan" value={counts.inProgress} />
         <StatTile label="Sudah mengumpulkan" value={counts.submitted} note={`${counts.analyzed} sudah dianalisis`} />
       </section>
+
+      {data.journeyRules && <ClassJourney data={data} base={base} />}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <Distribution distribution={distribution} analyzed={counts.analyzed} onPick={setFilter} />

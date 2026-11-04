@@ -2,9 +2,10 @@ import { createRoot } from "react-dom/client";
 import { createMemoryRouter, Outlet, redirect, RouterProvider, useLocation } from "react-router";
 import { CourseEditorPage } from "../../app/features/authoring/pages/course-editor-page";
 import { MyCoursesPage } from "../../app/features/authoring/pages/my-courses-page";
+import { AssignmentAnalyticsPage } from "../../app/features/authoring/pages/assignment-analytics-page";
 import { QuizAnalyticsPage } from "../../app/features/authoring/pages/quiz-analytics-page";
 import { QuizEditorPage } from "../../app/features/authoring/pages/quiz-editor-page";
-import type { CourseEditorData, ManagedCourseSummary, QuizAnalytics, QuizEditorData } from "../../app/features/authoring/types";
+import type { AssignmentAnalytics, CourseEditorData, ManagedCourseSummary, QuizAnalytics, QuizEditorData } from "../../app/features/authoring/types";
 import "../../app/app.css";
 
 // Kelola course without the student shell or a server: the real list and editor
@@ -65,6 +66,28 @@ const reflection = (relianceLevel: QuizAnalytics["distribution"][number]["level"
   relianceLevel, studentReport: report, recommendations: ["Coba soalnya dulu sebelum bertanya."], promptTurnCount: turns, directCount: direct, hintCount: hint, reflectiveCount: reflective, redirectedCount: redirected, computedAt: "2026-10-01T09:05:00.000Z",
 });
 const noneYet = query.has("belum");
+// Twelve students along the four routes of a class, and two who have not submitted.
+const journey = (draftWords: number, draft: "strong" | "thin", asked: "probing" | "hints" | "answers", direct: number, revision: "deep" | "pasted", ownChange: number, pastedPercent = 0) => ({
+  draftWords, draft, asked, prompts: { direct, hint: 1, reflective: asked === "probing" ? 2 : 0 }, revision, ownChange, pastedPercent,
+});
+const journeys = [
+  ...[60, 72, 55].map((words) => journey(words, "strong", "probing", 0, "deep", 60)),
+  ...[24, 30, 18, 33].map((words) => journey(words, "thin", "hints", 0, "deep", 40)),
+  ...[13, 16, 11].map((words) => journey(words, "thin", "answers", 2, "pasted", 12, 80)),
+  ...[5, 6].map((words) => journey(words, "thin", "answers", 3, "pasted", 5, 95)),
+].map((item, index) => (query.has("kosong") ? null : { ...item, ownChange: item.ownChange + index }));
+const classAnalytics: AssignmentAnalytics = {
+  assignment: { id: "a1", title: "Susu basi", status: "published", dueAt: null, courseId: "c1", courseName: "Kimia" },
+  counts: { enrolled: 14, notStarted: 2, inProgress: 0, submitted: 12, analyzed: 12 },
+  distribution: [{ level: "1_ai_as_tool", count: 3 }, { level: "2_ai_as_scaffold", count: 4 }, { level: "3_partial_offloading", count: 3 }, { level: "4_full_offloading", count: 2 }],
+  commonFactors: [],
+  students: [...journeys, null, null].map((item, index) => ({
+    membershipId: `m${index}`, name: `Siswa ${index + 1}`, submissionId: item ? `s${index}` : null, status: item ? "submitted" : "not_started",
+    currentStage: null, stagesCompleted: item ? 5 : 0, submittedAt: null, offloading: null, journey: item,
+  })),
+  journeyRules: { strongDraftWords: 40, deepRevisionPercent: 25 },
+};
+
 const analytics: QuizAnalytics = {
   quiz: { id: "q1", title: "Kuis Bab 1 — Gelombang", status: "published", dueAt: null, courseId: "c1", courseName: "Fisika Kelas XI — Gelombang dan Optik" },
   counts: noneYet ? { enrolled: 2, notStarted: 1, inProgress: 0, submitted: 1, reflected: 0 } : { enrolled: 7, notStarted: 1, inProgress: 1, submitted: 4, reflected: 3 },
@@ -116,6 +139,8 @@ const router = createMemoryRouter(
         },
         { path: "manage/quizzes/:quizId", Component: () => <QuizEditorPage data={quiz} /> },
         { path: "manage/quizzes/:quizId/analytics", Component: () => <QuizAnalyticsPage data={analytics} /> },
+        { path: "manage/assignments/:assignmentId/analytics", Component: () => <AssignmentAnalyticsPage data={classAnalytics} /> },
+        { path: "manage/assignments/:assignmentId/analytics/:submissionId", Component: () => <p>Proses siswa</p> },
         { path: "manage/courses/:courseId", Component: () => <CourseEditorPage data={editor} subjects={subjects} scenarios={[]} /> },
       ],
     },

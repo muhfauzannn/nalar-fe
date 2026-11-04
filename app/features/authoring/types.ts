@@ -238,7 +238,18 @@ export type AssignmentAnalytics = {
       previousScore: number | null;
       topFactor: { factor: string; contribution: number; plainExplanation: string } | null;
     } | null;
+    /** What the student did, read from their work and not from the Index. Only once they have submitted. */
+    journey?: {
+      draftWords: number;
+      draft: "strong" | "thin";
+      asked: "none" | "probing" | "hints" | "answers";
+      prompts: { direct: number; hint: number; reflective: number };
+      revision: "deep" | "light" | "pasted";
+      ownChange: number;
+      pastedPercent: number;
+    } | null;
   }>;
+  journeyRules: { strongDraftWords: number; deepRevisionPercent: number };
 };
 
 // A quiz has no Index (PRD §5.3A). The teacher reads the light reflection on how
