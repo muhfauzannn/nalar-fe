@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { useLabPointer } from "~/features/labs/pointer";
 import { cn } from "~/lib/utils";
 import type { TutorSource } from "../components/tutor-host";
 import {
@@ -35,19 +36,42 @@ const tutorModeItems: Array<{ label: string; value: AiTutorMode }> = [
   { label: "Umpan balik", value: "feedback" },
 ];
 
-export function SpiritTutor({ source, focus }: { source: TutorSource | null; focus: ClassroomFocus | null }) {
+// The conversation bubble under the spirit, shared by every tutor that talks from it.
+export const bubbleClass =
+  "spirit-bubble pointer-events-auto absolute right-2 top-[6.25rem] z-30 flex w-[min(23rem,calc(100%-1rem))] flex-col overflow-hidden rounded-[22px] border border-[#d9d0fb] bg-[linear-gradient(180deg,#fdfcff,#f5f2ff)] text-[#18153a] shadow-[0_18px_44px_rgba(94,74,196,.28)] sm:right-4";
+export const bubbleTall = "h-[min(30rem,calc(100%-7.5rem))]";
+// While the tutor points at a part of a lab the bubble folds down to its latest line and the
+// composer, so the part it points at (often on the right, under the bubble) stays in view.
+const bubbleCompact = "h-[min(13.5rem,calc(100%-7.5rem))]";
+
+/**
+ * `boardTutor`: the board is showing a PDF. Its tutor (board-study.tsx) holds the
+ * conversation and the reader's pointer together, so it draws the bubble itself.
+ */
+export function SpiritTutor({
+  source,
+  focus,
+  boardTutor = false,
+}: {
+  source: TutorSource | null;
+  focus: ClassroomFocus | null;
+  boardTutor?: boolean;
+}) {
   const open = useSpiritOpen();
+  const pointed = useLabPointer();
+  const pointing = Boolean(source?.labParts && pointed);
   // Leaving the classroom closes the conversation; the spirit waits for the next visit.
   useEffect(() => () => spirit.setOpen(false), []);
   return (
     <>
       {focus && <SpiritCorner open={open} />}
-      {open && (
+      {open && !boardTutor && (
         <section
           aria-label="Tutor AI"
           className={cn(
-            "spirit-bubble pointer-events-auto absolute right-2 top-[6.25rem] z-30 flex w-[min(23rem,calc(100%-1rem))] flex-col overflow-hidden rounded-[22px] border border-[#d9d0fb] bg-[linear-gradient(180deg,#fdfcff,#f5f2ff)] text-[#18153a] shadow-[0_18px_44px_rgba(94,74,196,.28)] sm:right-4",
-            source && "h-[min(30rem,calc(100%-7.5rem))]",
+            bubbleClass,
+            source && (pointing ? bubbleCompact : bubbleTall),
+            source && "transition-[height] duration-200 motion-reduce:transition-none",
           )}
         >
           {source ? <SpiritChat key={source.key} source={source} /> : <SpiritHint focus={focus} />}
@@ -57,7 +81,7 @@ export function SpiritTutor({ source, focus }: { source: TutorSource | null; foc
   );
 }
 
-function BubbleHeader({ label, children }: { label: string; children?: ReactNode }) {
+export function BubbleHeader({ label, children }: { label: string; children?: ReactNode }) {
   return (
     <header className="flex items-center gap-2 border-b border-[#ebe6fb] px-3 py-2.5">
       <Sparkles className="size-4 shrink-0 text-[#7c6ad8]" aria-hidden="true" />
@@ -80,7 +104,7 @@ function BubbleHeader({ label, children }: { label: string; children?: ReactNode
 
 function SpiritChat({ source }: { source: TutorSource }) {
   const [draft, setDraft] = useState("");
-  const tutor = useAiTutorLive(source.target, source.liveContext);
+  const tutor = useAiTutorLive(source.target, source.liveContext, source.labParts);
   const connected = tutor.status === "ready" || tutor.status === "responding";
   const voiceOn = tutor.channel === "voice" && (connected || tutor.status === "connecting");
 
@@ -175,7 +199,7 @@ function SpiritChat({ source }: { source: TutorSource }) {
 function SpiritHint({ focus }: { focus: ClassroomFocus | null }) {
   const text =
     focus === "papan"
-      ? "Di papan aku belum bisa membaca materinya. Buka materi di halaman pelajaran untuk tutor PDF, atau panggil aku di lab, kuis, dan tugas."
+      ? "Materi di papan ini berupa teks, jadi aku belum bisa membacanya. Panggil aku di lab, kuis, dan tugas."
       : focus === "kuis"
         ? "Mulai kuisnya dulu. Aku menemani setiap soal, tanpa membocorkan jawaban."
         : focus === "tugas"

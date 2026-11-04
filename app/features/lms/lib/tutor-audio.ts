@@ -18,6 +18,14 @@ export function decodeTutorAudio(base64: string, mimeType: string) {
   return { samples, rate };
 }
 
+/** How long one base64 16-bit PCM chunk plays, without decoding it. */
+export function tutorAudioSeconds(base64: string, mimeType: string) {
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  const bytes = Math.floor((base64.length * 3) / 4) - padding;
+  const rate = Number(/rate=(\d+)/.exec(mimeType)?.[1]) || 24_000;
+  return Math.max(0, Math.floor(bytes / 2)) / rate;
+}
+
 /** Stops native audio that keeps arriving after its spoken transcript has stalled. */
 export class TutorAudioProgressGuard {
   private transcriptLength = 0;

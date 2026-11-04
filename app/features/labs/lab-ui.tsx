@@ -189,4 +189,5 @@ export function inPlane(p: [number, number], origin: [number, number], ex: [numb
   return [(dx * ez[1] - dy * ez[0]) / det, (ex[0] * dy - ex[1] * dx) / det];
 }
 
-export const labCard = "iso overflow-hidden rounded-[22px] border border-[#e9e4f8] bg-[#fbfaf7]";
+// `relative`: the tutor's pointer (lab-pointer.tsx) is drawn over the card.
+export const labCard = "iso relative overflow-hidden rounded-[22px] border border-[#e9e4f8] bg-[#fbfaf7]";

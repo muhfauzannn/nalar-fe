@@ -15,6 +15,8 @@ export type TutorSource = {
   target: AiTutorTarget;
   /** What is on the screen right now, sent to the tutor as background. */
   liveContext?: string;
+  /** The parts of a lab the tutor may point at (`data-lab-part` ids). */
+  labParts?: readonly string[];
 };
 
 type Host = { setSource: (source: TutorSource | null) => void };

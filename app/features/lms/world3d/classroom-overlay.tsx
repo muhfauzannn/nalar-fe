@@ -20,10 +20,11 @@ import { cn } from "~/lib/utils";
 import type { loadClassroom } from "../api/classroom";
 import { LessonLabs } from "../components/lesson-labs";
 import { TutorHostProvider, type TutorSource } from "../components/tutor-host";
-import { PdfReader } from "../components/pdf-reader";
 import { AssignmentPage } from "../pages/assignment-page";
 import { QuizPage } from "../pages/quiz-page";
 import { useSurfaceRect } from "./board-rect";
+import { BoardStudy } from "./board-study";
+import { boardPdf } from "./board-tutor";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { card, Dock, Overlay, press, TopBar } from "./overlays";
 import { SpiritTutor } from "./spirit-tutor";
@@ -120,9 +121,12 @@ export function ClassroomOverlay({
           label: `Lab ${LABS[selectedLab.labKey]?.title ?? ""}`.trim(),
           target: { targetType: "lab", targetId: selectedLab.id },
           liveContext: labState?.labId === selectedLab.id ? labState.summary : undefined,
+          labParts: LABS[selectedLab.labKey]?.parts,
         }
       : null;
   const tutorSource = focus === "lab" ? labSource : focus ? hosted : null;
+  // A PDF on the board has its own tutor (board-study.tsx), which draws the spirit's bubble.
+  const pdfOnBoard = focus === "papan" ? boardPdf(lesson) : null;
 
   return (
     <TutorHostProvider host={host}>
@@ -142,7 +146,7 @@ export function ClassroomOverlay({
         ]}
       />
       {focus ? (
-        <StationWorkspace key={focus} focus={focus} closeTo={closeTo} pdf={focus === "papan" && Boolean(lesson?.resources.some((resource) => resource.file))}>
+        <StationWorkspace key={focus} focus={focus} closeTo={closeTo} pdf={pdfOnBoard !== null}>
           {focus === "papan" ? (
             lesson ? (
               <BoardReader lesson={lesson} />
@@ -298,7 +302,7 @@ export function ClassroomOverlay({
           </nav>
         </Dock>
       )}
-      <SpiritTutor source={tutorSource} focus={focus} />
+      <SpiritTutor source={tutorSource} focus={focus} boardTutor={pdfOnBoard !== null} />
     </Overlay>
     </TutorHostProvider>
   );
@@ -448,15 +452,9 @@ function StationWorkspace({
 }
 
 function BoardReader({ lesson }: { lesson: NonNullable<Props["lesson"]> }) {
-  const file = lesson.resources.find((resource) => resource.file);
+  const file = boardPdf(lesson);
   return file ? (
-    <PdfReader
-      resourceId={file.id}
-      title={file.title}
-      fitContainer
-      guidance={null}
-      onContext={ignore}
-    />
+    <BoardStudy key={file.id} resource={file} />
   ) : (
     <article className="mx-auto max-w-[44rem] px-5 py-6 leading-8">
       {lesson.content ? (
@@ -478,4 +476,3 @@ function Unavailable({ title }: { title: string }) {
     </Alert>
   );
 }
-const ignore = () => {};

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerE
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
 import { ActionButton, ChoiceChips, Float, FeedbackPill, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
+import { LabPointer } from "./lab-pointer";
 import { BURST, CELLS, CHALLENGES, fmt, flowOf, judge, SALT, stateOf, volumeOf, type ChallengeId, type Guess, type State } from "./osmosis/model";
 import { bloodOutline, CONE, HEIGHT, ONION, ONION_CELLS, PIPETTE_ART, RING_AXIS, ringAt, roundRect, saltAtZ, scatter, SCOPE_ART, VIEW, WIDTH } from "./osmosis/scene";
 
@@ -280,7 +281,7 @@ export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onS
           {dropT !== null ? <circle cx={PIPETTE_ART.dropAt(dropT)[0]} cy={PIPETTE_ART.dropAt(dropT)[1]} r={1.6} fill={salt > 0 ? "#f5c84b" : "#9cc9e4"} /> : null}
 
           {/* the field of view */}
-          <circle cx={VIEW.cx} cy={VIEW.cy} r={VIEW.r + 9} fill="#2b2740" />
+          <circle cx={VIEW.cx} cy={VIEW.cy} r={VIEW.r + 9} fill="#2b2740" data-lab-part="lensa" />
           <g clipPath="url(#os-field)">
             <rect x={VIEW.cx - VIEW.r} y={VIEW.cy - VIEW.r} width={VIEW.r * 2} height={VIEW.r * 2} fill={`rgb(${252 - tint * 4}, ${251 - tint * 12}, ${246 - tint * 60})`} />
             {ions.map(([x, y], i) => (
@@ -332,6 +333,7 @@ export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onS
             role="slider"
             tabIndex={locked ? -1 : 0}
             aria-label="Kadar garam di pipet"
+            data-lab-part="pipet"
             aria-valuemin={SALT.min}
             aria-valuemax={SALT.max}
             aria-valuenow={salt}
@@ -412,12 +414,15 @@ export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onS
         ) : null}
         <span className="flex-1" />
         <FeedbackPill feedback={feedback} />
-        <ActionButton onClick={drop} disabled={!canDrop}>
-          <span className="flex items-center gap-1.5">
-            <Droplet className={busy ? "size-4 animate-pulse" : "size-4"} aria-hidden="true" /> {busy ? "Mengamati…" : "Teteskan"}
-          </span>
-        </ActionButton>
+        <span data-lab-part="teteskan" className="inline-flex">
+          <ActionButton onClick={drop} disabled={!canDrop}>
+            <span className="flex items-center gap-1.5">
+              <Droplet className={busy ? "size-4 animate-pulse" : "size-4"} aria-hidden="true" /> {busy ? "Mengamati…" : "Teteskan"}
+            </span>
+          </ActionButton>
+        </span>
       </div>
+      <LabPointer />
     </div>
   );
 }

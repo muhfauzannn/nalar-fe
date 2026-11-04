@@ -23,6 +23,7 @@ import {
   LevelMeter,
   TutorAudioProgressGuard,
   TUTOR_INPUT_MIME_TYPE,
+  tutorAudioSeconds,
 } from "../lib/tutor-audio";
 import type {
   AiTutorChannel,
@@ -31,6 +32,17 @@ import type {
   AiTutorTarget,
 } from "../types";
 import { liveInputPreview } from "../lib/live-transcript";
+import { classificationNudge } from "../lib/classification-nudge";
+import { SpokenCues, type CueRelease } from "../lib/spoken-cues";
+import { TurnAudioClock } from "../lib/turn-clock";
+import { labPointer, parseLabPointer, type LabPointerPlan } from "~/features/labs/pointer";
+
+// A teacher's hand reaches the spot just before the word lands, not after it.
+const CUE_LEAD_SECONDS = 0.25;
+// How long the pointer stays on its last part once the tutor has finished speaking.
+const POINTER_LINGER_MS = 5_000;
+// How long a question may go without anything from the tutor before the turn is given up on.
+const RESPONSE_TIMEOUT_MS = 45_000;
 
 type ConnectionStatus = "idle" | "connecting" | "ready" | "responding" | "error";
 
@@ -45,8 +57,12 @@ type MicrophoneMessage = {
  * settings). It reaches the tutor as background, never as a question: on each new
  * session, a moment after it changes while the tutor is idle, and before a typed
  * question.
+ *
+ * `labParts` are the parts of a lab the tutor may point at (`data-lab-part` ids). It
+ * points the way the PDF tutor does: a plan of steps made before it speaks, each shown
+ * when its words are heard (see labs/pointer.ts).
  */
-export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
+export function useAiTutorLive(target: AiTutorTarget, liveContext?: string, labParts?: readonly string[]) {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [messages, setMessages] = useState<AiTutorMessage[]>([]);
   const [mode, setModeState] = useState<AiTutorMode>("hint");
@@ -74,6 +90,8 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
   const outputTextRef = useRef("");
   const inputTextRef = useRef("");
   const awaitingClassificationRef = useRef(false);
+  // The message the tutor was already asked once to check (lib/classification-nudge.ts).
+  const nudgedForRef = useRef<string | null>(null);
   const toolTurnPendingRef = useRef(false);
   const statusRef = useRef<ConnectionStatus>("idle");
 
@@ -115,6 +133,29 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
   const playbackQueueRef = useRef<Promise<void>>(Promise.resolve());
   const audioProgressRef = useRef(new TutorAudioProgressGuard());
   const audioRunawayReportedRef = useRef(false);
+  // Pointing at the lab: the tutor's audio clock, the matcher that ties its steps to its words,
+  // the releases heard but not yet due, and the timers that move and clear the pointer.
+  const labPartsRef = useRef(labParts);
+  labPartsRef.current = labParts;
+  const clockRef = useRef(new TurnAudioClock());
+  const cuesRef = useRef<SpokenCues | null>(null);
+  const pendingCuesRef = useRef<CueRelease[]>([]);
+  const cueFromRef = useRef(0);
+  const cueTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lingerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Gives up on a turn the tutor never finishes (see onResponseTimeoutRef).
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onResponseTimeoutRef = useRef<() => void>(() => {});
+
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    watchdogRef.current = null;
+  }, []);
+  // Every sign of life from the tutor starts the wait over: it is silence that is timed, not length.
+  const armWatchdog = useCallback(() => {
+    clearWatchdog();
+    watchdogRef.current = setTimeout(() => onResponseTimeoutRef.current(), RESPONSE_TIMEOUT_MS);
+  }, [clearWatchdog]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -122,7 +163,9 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
 
   useEffect(() => {
     statusRef.current = status;
-  }, [status]);
+    if (status === "responding") armWatchdog();
+    else clearWatchdog();
+  }, [status, armWatchdog, clearWatchdog]);
 
   // Debounced, and only while the tutor is idle, so a context turn never cuts into a reply.
   useEffect(() => {
@@ -167,6 +210,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
     }
     outputSourcesRef.current.clear();
     nextPlaybackTimeRef.current = 0;
+    clockRef.current.reset();
     setIsTutorSpeaking(false);
   }, []);
 
@@ -200,6 +244,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
     const startAt = Math.max(context.currentTime, nextPlaybackTimeRef.current);
     source.start(startAt);
     nextPlaybackTimeRef.current = startAt + audioBuffer.duration;
+    clockRef.current.schedule(startAt, audioBuffer.duration);
     outputSourcesRef.current.add(source);
     setIsTutorSpeaking(true);
     source.onended = () => {
@@ -207,6 +252,64 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
       if (outputSourcesRef.current.size === 0) setIsTutorSpeaking(false);
     };
   }, []);
+
+  // ---- pointing at the lab (tool `point_at_lab_part`) ----
+
+  const clearPointing = useCallback(() => {
+    if (cueTimerRef.current) clearInterval(cueTimerRef.current);
+    if (lingerTimerRef.current) clearTimeout(lingerTimerRef.current);
+    cueTimerRef.current = null;
+    lingerTimerRef.current = null;
+    cuesRef.current = null;
+    pendingCuesRef.current = [];
+    labPointer.clear();
+  }, []);
+
+  // Shows the steps whose words are being heard now. Once the answer has been spoken, steps
+  // whose words never came (the tutor said it differently) still show, in order, and the
+  // pointer stays a moment on the last one.
+  const tickCues = useCallback(() => {
+    const matcher = cuesRef.current;
+    if (!matcher) return;
+    const context = outputContextRef.current;
+    const heard = channelRef.current === "voice" && context ? clockRef.current.heardSeconds(context.currentTime) : Infinity;
+    let revealed = 0;
+    while (pendingCuesRef.current.length) {
+      const next = pendingCuesRef.current[0]!;
+      if (next.at !== null && next.at - CUE_LEAD_SECONDS > heard) break;
+      revealed = Math.max(revealed, next.revealed);
+      pendingCuesRef.current.shift();
+    }
+    const finished = !activeStudentEventRef.current && outputSourcesRef.current.size === 0;
+    if (finished) revealed = matcher.total;
+    if (revealed) labPointer.reveal(revealed);
+    if (!finished) return;
+    if (cueTimerRef.current) clearInterval(cueTimerRef.current);
+    cueTimerRef.current = null;
+    cuesRef.current = null;
+    pendingCuesRef.current = [];
+    lingerTimerRef.current = setTimeout(() => labPointer.clear(), POINTER_LINGER_MS);
+  }, []);
+
+  const startPointing = useCallback((plan: LabPointerPlan) => {
+    clearPointing();
+    const matcher = new SpokenCues(plan.steps.map((step) => step.say ?? undefined));
+    cuesRef.current = matcher;
+    cueFromRef.current = clockRef.current.receivedSeconds();
+    labPointer.show(plan, matcher.revealed);
+    cueTimerRef.current = setInterval(tickCues, 50);
+  }, [clearPointing, tickCues]);
+
+  // The transcript of what the tutor says, placed on the audio it arrived with.
+  const hearCues = useCallback((text: string) => {
+    const matcher = cuesRef.current;
+    if (!matcher) return;
+    const voice = channelRef.current === "voice";
+    const to = voice ? clockRef.current.receivedSeconds() : null;
+    pendingCuesRef.current.push(...matcher.hear(text, voice ? cueFromRef.current : null, to));
+    if (to !== null) cueFromRef.current = to;
+    tickCues();
+  }, [tickCues]);
 
   const finalizeTutorTurn = useCallback(async () => {
     const content = outputTextRef.current.replace(/\s+/g, " ").trim();
@@ -218,6 +321,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
     replyEventRef.current = null;
     activeWasRedirectedRef.current = false;
     const wasAwaitingClassification = awaitingClassificationRef.current;
+    const lastSent = lastSentTextRef.current;
     awaitingClassificationRef.current = false;
     lastSentTextRef.current = null;
     setOutputTranscript("");
@@ -225,6 +329,24 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
 
     if (!content || !studentEventId || !replyEventId || !conversationIdRef.current) {
       if (wasAwaitingClassification && !studentEventId) {
+        // The tutor answered without checking the question first, so that answer was never shown or
+        // spoken. Ask it once to check and answer again; only if that fails does the student hear of it.
+        const question = (lastSent ?? inputTextRef.current).replace(/\s+/g, " ").trim();
+        const session = sessionRef.current;
+        if (session && question && nudgedForRef.current !== question) {
+          try {
+            nudgedForRef.current = question;
+            awaitingClassificationRef.current = true;
+            lastSentTextRef.current = question;
+            setStatus("responding");
+            armWatchdog();
+            session.sendRealtimeInput({ text: classificationNudge(question) });
+            return;
+          } catch {
+            // Fall through to telling the student.
+          }
+        }
+        nudgedForRef.current = null;
         setError("Pesan belum berhasil diverifikasi. Silakan ulangi pertanyaanmu.");
       }
       awaitingClassificationRef.current = false;
@@ -259,7 +381,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
     } catch (caught) {
       setError(errorMessage(caught, "Transkrip respons tutor belum tersimpan."));
     }
-  }, [appendMessage, target]);
+  }, [appendMessage, armWatchdog, target]);
 
   const handleToolCall = useCallback(
     async (message: LiveServerMessage) => {
@@ -268,6 +390,40 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
       if (!session || !conversationId) return;
 
       for (const call of message.toolCall?.functionCalls ?? []) {
+        if (call.name === "point_at_lab_part") {
+          if (!activeStudentEventRef.current) {
+            // Unlike the other failures, this one is to be fixed, not worked around: check the
+            // question now, then point.
+            session.sendToolResponse({
+              functionResponses: {
+                id: call.id,
+                name: call.name,
+                response: {
+                  ok: false,
+                  error: "Panggil classify_student_prompt dahulu pada giliran ini.",
+                  responseInstruction: "Panggil classify_student_prompt dengan pesan siswa terakhir sekarang, lalu panggil point_at_lab_part lagi dan jawab sesuai hasil klasifikasi.",
+                },
+              },
+            });
+            continue;
+          }
+          let response: Record<string, unknown>;
+          try {
+            const parts = labPartsRef.current;
+            if (target.targetType !== "lab" || !parts?.length) throw new Error("Tidak ada bagian alat yang bisa ditunjuk di sini.");
+            startPointing(parseLabPointer(call.args, parts));
+            response = { ok: true };
+          } catch (caught) {
+            response = {
+              ok: false,
+              continueWithExplanation: true,
+              error: caught instanceof Error ? caught.message : "Tindakan tidak valid.",
+              responseInstruction: "Penunjuk gagal dan tidak tampil. Tetap jawab dengan penjelasan kata-kata, dan jangan ulangi tool ini pada giliran yang sama.",
+            };
+          }
+          session.sendToolResponse({ functionResponses: { id: call.id, name: call.name, response } });
+          continue;
+        }
         if (call.name !== "classify_student_prompt") continue;
         setStatus("responding");
         const content =
@@ -282,12 +438,15 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
           });
           activeStudentEventRef.current = studentEventId;
           setError(null);
+          // A new question: the last answer's pointer and audio are over.
+          clearPointing();
           stopPlayback();
           audioProgressRef.current.reset();
           audioRunawayReportedRef.current = false;
           activeWasRedirectedRef.current = classification.wasRedirected;
           awaitingClassificationRef.current = false;
           lastSentTextRef.current = null;
+          nudgedForRef.current = null;
           replyEventRef.current = crypto.randomUUID();
           inputTextRef.current = "";
           setInputTranscript("");
@@ -304,6 +463,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
             intent: classification.intent,
           });
           setStatus("responding");
+          armWatchdog();
           session.sendToolResponse({
             functionResponses: {
               id: call.id,
@@ -332,7 +492,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
         }
       }
     },
-    [appendMessage, stopPlayback, target],
+    [appendMessage, armWatchdog, clearPointing, startPointing, stopPlayback, target],
   );
 
   const handleServerMessage = useCallback(
@@ -370,6 +530,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
       for (const part of audioParts ?? []) {
         const audioData = part.inlineData?.data;
         if (audioData && channelRef.current === "voice" && activeStudentEventRef.current) {
+          clockRef.current.receive(tutorAudioSeconds(audioData, part.inlineData?.mimeType ?? ""));
           const epoch = playbackEpochRef.current;
           const queued = playbackQueueRef.current.then(() => playPcm(audioData, part.inlineData?.mimeType ?? "", epoch));
           playbackQueueRef.current = queued.catch(() => {
@@ -377,10 +538,14 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
           });
         }
       }
+      // After the audio of this message is counted: the words are placed on what has arrived.
+      if (outputText && activeStudentEventRef.current) hearCues(outputText);
+      if (statusRef.current === "responding" && (message.toolCall || outputText || (audioParts?.length ?? 0) > 0)) armWatchdog();
       if (outputText || (audioParts?.length ?? 0) > 0) {
         toolTurnPendingRef.current = false;
       }
       if (serverContent?.interrupted) {
+        clearPointing();
         stopPlayback();
         audioProgressRef.current.reset();
         audioRunawayReportedRef.current = false;
@@ -398,7 +563,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
         }
       }
     },
-    [finalizeTutorTurn, handleToolCall, playPcm, stopPlayback],
+    [armWatchdog, clearPointing, finalizeTutorTurn, handleToolCall, hearCues, playPcm, stopPlayback],
   );
 
   // Closes everything the live session owns. Keeps queued intent and the retry timer, so a
@@ -429,13 +594,45 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string) {
     activeWasRedirectedRef.current = false;
     awaitingClassificationRef.current = false;
     lastSentTextRef.current = null;
+    nudgedForRef.current = null;
     toolTurnPendingRef.current = false;
     replyEventRef.current = null;
+    clearWatchdog();
+    clearPointing();
     stopPlayback();
     audioProgressRef.current.reset();
     audioRunawayReportedRef.current = false;
     setStatus("idle");
-  }, [stopPlayback]);
+  }, [clearPointing, clearWatchdog, stopPlayback]);
+
+  // The tutor went quiet for too long in the middle of a turn, and the socket is still open.
+  // Seen with real Gemini: the answer was heard and written out, but `turnComplete` never came,
+  // so the app stayed on "responding" and refused every later question.
+  onResponseTimeoutRef.current = () => {
+    watchdogRef.current = null;
+    if (!mountedRef.current || statusRef.current !== "responding") return;
+    // A long answer still being played is not a stuck one.
+    if (outputSourcesRef.current.size > 0) {
+      armWatchdog();
+      return;
+    }
+    const classified = Boolean(activeStudentEventRef.current);
+    const answered = classified && outputTextRef.current.trim().length > 0;
+    report({
+      event: "response_timeout",
+      phase: "live",
+      reason: answered ? "answered_without_turn_complete" : classified ? "classified_without_answer" : "no_classification",
+    });
+    toolTurnPendingRef.current = false;
+    // What was said is kept and saved as if the turn had ended; the session stays.
+    if (answered) {
+      void finalizeTutorTurn();
+      return;
+    }
+    // Nothing to keep: the session is not trusted any more. The next question opens a new one.
+    setError("Tutor belum menyelesaikan respons. Ajukan pertanyaanmu lagi.");
+    void teardown();
+  };
 
   // The student (or unmount) ended it: nothing is retried or replayed afterwards.
   const disconnect = useCallback(async () => {

@@ -30,6 +30,25 @@ import {
 } from "./classroom-data";
 import "../../app/app.css";
 
+// `?pdf=1` puts a PDF on the board. Its bytes and the tutor's session token are
+// the one thing that leaves the page (see below), for the test's routes to answer.
+if (new URL(location.href).searchParams.get("pdf"))
+  lesson.resources = [
+    {
+      id: "resource-a",
+      type: "file",
+      title: "Materi pecahan",
+      content: null,
+      url: null,
+      file: { name: "pecahan.pdf", size: 800 },
+      position: 1,
+    },
+  ];
+
+// `?lab=<key>` puts another lab on the bench.
+const labKey = new URL(location.href).searchParams.get("lab");
+if (labKey) for (const lab of [...island.labs, ...lesson.labs]) lab.labKey = labKey;
+
 // All student requests in this fixture stay in memory. No backend or AI calls.
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
@@ -43,6 +62,8 @@ window.fetch = async (input, init) => {
   );
   const path = url.pathname;
   if (!path.startsWith("/api/")) return nativeFetch(input, init);
+  // The PDF bytes and everything the tutors ask the API are answered by the test's own routes.
+  if (path.endsWith("/file") || path.includes("/ai-tutor/")) return nativeFetch(input, init);
   const method = init?.method ?? "GET";
   const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
   let data: unknown = {};

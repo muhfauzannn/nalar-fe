@@ -7,6 +7,7 @@ import { cn } from "~/lib/utils";
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
 import { useLabState } from "./lab-ui";
+import { LabPointer } from "./lab-pointer";
 import {
   ANGLE,
   BALL_RADIUS,
@@ -322,7 +323,7 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
   const canFire = phase !== "flying" && !(challenge.id === "berat-ringan" && !prediction);
 
   return (
-    <div className="parabola-lab iso overflow-hidden rounded-[22px] border border-[#e9e4f8] bg-[#fbfaf7]" data-theme="light">
+    <div className="parabola-lab iso relative overflow-hidden rounded-[22px] border border-[#e9e4f8] bg-[#fbfaf7]" data-theme="light">
       {/* mission strip: which of the three, and the one-line story */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[#efebf9] px-3 py-2.5 sm:px-4">
         <div className="flex gap-1.5" role="tablist" aria-label="Misi">
@@ -379,9 +380,11 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
               <Solid paths={peg.cap} tone="mid" />
             </g>
           ))}
-          <Line d={target.poleFoot} tone="lo" />
-          <Line d={target.pole} tone="hi" />
-          <path d={target.flag} fill="#e5484d" stroke="#b42f34" strokeWidth={0.6} strokeLinejoin="round" />
+          <g data-lab-part="bendera">
+            <Line d={target.poleFoot} tone="lo" />
+            <Line d={target.pole} tone="hi" />
+            <path d={target.flag} fill="#e5484d" stroke="#b42f34" strokeWidth={0.6} strokeLinejoin="round" />
+          </g>
           <Solid paths={FIELD_ART.endStop} tone="mid" />
           <Dots points={FIELD_ART.endStopScrews} size={0.5} tone="mid" />
 
@@ -403,28 +406,32 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
           <Dots points={CLIFF_ART.platformScrews} size={0.45} tone="mid" />
 
           {/* the shot rack */}
-          <Solid paths={RACK.board} tone="mid" />
-          {RACK.cups.map((cup) => (
-            <g key={cup.mass}>
-              <Line d={cup.rim} tone="mid" />
-              {/* the loaded ball is in the barrel (or in flight): its cup is empty */}
-              {cup.mass !== mass ? (
-                <circle cx={cup.center[0]} cy={cup.center[1]} r={ballPx(cup.mass)} fill="url(#pb-ball)" />
-              ) : null}
-            </g>
-          ))}
+          <g data-lab-part="bola">
+            <Solid paths={RACK.board} tone="mid" />
+            {RACK.cups.map((cup) => (
+              <g key={cup.mass}>
+                <Line d={cup.rim} tone="mid" />
+                {/* the loaded ball is in the barrel (or in flight): its cup is empty */}
+                {cup.mass !== mass ? (
+                  <circle cx={cup.center[0]} cy={cup.center[1]} r={ballPx(cup.mass)} fill="url(#pb-ball)" />
+                ) : null}
+              </g>
+            ))}
+          </g>
 
           {/* the powder keg and the charge column */}
-          <Solid paths={POWDER_ART.keg} tone="hi" />
-          <Line d={POWDER_ART.kegBands} tone="mid" />
-          <Line d={POWDER_ART.kegLid} tone="lo" />
-          <Line d={POWDER_ART.fuse} tone="lo" dotted />
-          <Solid paths={POWDER_ART.base} tone="mid" />
-          <Solid paths={POWDER_ART.column} tone="hi" />
-          <Line d={POWDER_ART.slot} tone="lo" />
-          <Line d={POWDER_ART.ticks.minor} tone="lo" />
-          <Line d={POWDER_ART.ticks.major} tone="mid" />
-          <Solid paths={POWDER_ART.cap} tone="mid" />
+          <g data-lab-part="mesiu">
+            <Solid paths={POWDER_ART.keg} tone="hi" />
+            <Line d={POWDER_ART.kegBands} tone="mid" />
+            <Line d={POWDER_ART.kegLid} tone="lo" />
+            <Line d={POWDER_ART.fuse} tone="lo" dotted />
+            <Solid paths={POWDER_ART.base} tone="mid" />
+            <Solid paths={POWDER_ART.column} tone="hi" />
+            <Line d={POWDER_ART.slot} tone="lo" />
+            <Line d={POWDER_ART.ticks.minor} tone="lo" />
+            <Line d={POWDER_ART.ticks.major} tone="mid" />
+            <Solid paths={POWDER_ART.cap} tone="mid" />
+          </g>
 
           {/* the cannon: far wheels, far cheek, barrel, near cheek, quadrant, near wheels */}
           {CANNON_ART.wheelsFar.map((wheel, i) => (
@@ -443,7 +450,7 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
           <Line d={CANNON_ART.cheekNear} tone="hi" />
           <Dots points={CANNON_ART.cheekBolts} size={0.5} tone="mid" />
           {/* the barrel rests on the cheeks: drawn over them */}
-          <g className="iso-solid">
+          <g className="iso-solid" data-lab-part="laras">
             <path d={barrel.body} fill="#3a365c" stroke="#18153a" strokeWidth={0.7} strokeLinejoin="round" />
             <path d={barrel.shine} stroke="#8f8bb4" strokeWidth={1.2} strokeLinecap="round" fill="none" />
             <path d={barrel.bands} fill="none" stroke="#e0a42c" strokeWidth={0.8} />
@@ -472,7 +479,7 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
           <Solid paths={RAIL_ART.rail} tone="mid" />
           <Line d={RAIL_ART.railTop} tone="faint" />
           <path ref={groundLink} fill="none" stroke="#4bd29f" strokeWidth={0.8} strokeDasharray="1.5 2.5" />
-          <g ref={cart}>
+          <g ref={cart} data-lab-part="kereta">
             {CART_ART.wheelsBack.map((wheel, i) => <path key={i} className="iso-fill" d={wheel} stroke="var(--anatomy-mid)" strokeWidth={0.6} />)}
             <Solid paths={CART_ART.body} tone="hi" />
             <Line d={CART_ART.deck} tone="faint" />
@@ -688,11 +695,13 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
           type="button"
           onClick={fire}
           disabled={!canFire}
+          data-lab-part="tembak"
           className="rounded-[14px] bg-[#18153a] px-5 py-2.5 text-sm font-bold text-white transition-transform duration-150 active:scale-[0.97] disabled:opacity-50"
         >
           Tembak!
         </button>
       </div>
+      <LabPointer />
     </div>
   );
 }

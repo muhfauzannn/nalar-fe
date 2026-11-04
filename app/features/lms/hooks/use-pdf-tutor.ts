@@ -48,6 +48,7 @@ type Status =
   | "speaking"
   | "paused"
   | "error";
+export type PdfTutorStatus = Status;
 export type PdfTutorEvent = {
   name: string;
   at: number;

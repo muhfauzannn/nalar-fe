@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerE
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
 import { ActionButton, ChoiceChips, Float, FeedbackPill, inPlane, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
+import { LabPointer } from "./lab-pointer";
 import { CATALYST_MASS, CHALLENGES, CONC, DOUBLE_BAND, EA, EA_CATALYST, effectiveShare, FAST_TARGET, fmt, judge, rateOf, SAFE_TEMP, speedOf, TEMP, type ChallengeId, type Mix } from "./laju/model";
 import {
   at,
@@ -366,7 +367,7 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
           <path d={THERMO_ART.bulb} fill="#e5484d" stroke="var(--anatomy-mid)" strokeWidth={0.4} />
           <path d={column.inside} stroke="#e5484d" strokeWidth={1.1} />
 
-          <g ref={basketGroup}>
+          <g ref={basketGroup} data-lab-part="katalis">
             <Solid paths={basket.body} tone="mid" crease="none" />
             <Line d={basket.mesh} tone="faint" />
             <Line d={basket.rim} tone="mid" />
@@ -438,6 +439,7 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
           <path d={SYRINGE_ART.tube} fill="none" stroke="var(--anatomy-lo)" strokeWidth={0.4} strokeLinejoin="round" />
 
           {/* the gauge */}
+          <g data-lab-part="pengukur">
           <path className="iso-fill" d={GAUGE_ART.case} />
           <Line d={GAUGE_ART.case} tone="mid" />
           <path className="iso-fill" d={GAUGE_ART.bezel} />
@@ -450,12 +452,14 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
           <path d={needle.needle} stroke="#e5484d" strokeWidth={1.2} strokeLinecap="round" style={{ transition: "d 300ms cubic-bezier(0.23, 1, 0.32, 1)" }} />
           <path className="iso-fill" d={GAUGE_ART.hub} />
           <Line d={GAUGE_ART.hub} tone="hi" />
+          </g>
 
           {/* handles: knob, plunger thumb, basket rod */}
           <g
             role="slider"
             tabIndex={locked.temp ? -1 : 0}
             aria-label="Pemanas (suhu)"
+            data-lab-part="pemanas"
             aria-valuemin={TEMP.min}
             aria-valuemax={TEMP.max}
             aria-valuenow={mix.temp}
@@ -479,6 +483,7 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
             role="slider"
             tabIndex={locked.conc ? -1 : 0}
             aria-label="Pompa (konsentrasi)"
+            data-lab-part="pompa"
             aria-valuemin={CONC.min}
             aria-valuemax={CONC.max}
             aria-valuenow={mix.conc}
@@ -593,12 +598,15 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
         )}
         <span className="flex-1" />
         <FeedbackPill feedback={feedback} />
-        <ActionButton onClick={react} disabled={!canRun || measuring}>
-          <span className="flex items-center gap-1.5">
-            <FlaskConical className={measuring ? "size-4 animate-pulse" : "size-4"} aria-hidden="true" /> {measuring ? "Mengukur…" : "Reaksikan"}
-          </span>
-        </ActionButton>
+        <span data-lab-part="reaksikan" className="inline-flex">
+          <ActionButton onClick={react} disabled={!canRun || measuring}>
+            <span className="flex items-center gap-1.5">
+              <FlaskConical className={measuring ? "size-4 animate-pulse" : "size-4"} aria-hidden="true" /> {measuring ? "Mengukur…" : "Reaksikan"}
+            </span>
+          </ActionButton>
+        </span>
       </div>
+      <LabPointer />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
 import { ActionButton, ChoiceChips, Float, FeedbackPill, inPlane, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
+import { LabPointer } from "./lab-pointer";
 import { AMPLITUDE, CHALLENGES, fmt, halfMarks, heightOf, isPeriodMark, matchesTarget, radianText, TARGET_WAVE, TURN, type ChallengeId, type Gear } from "./sinus/model";
 import {
   BENCH_ART,
@@ -176,7 +177,7 @@ export function SinusLab({ solved, onSolve, onState }: { solved: string[]; onSol
           {BOARD_ART.legs.map((leg, i) => <Solid key={i} paths={leg} tone="mid" />)}
           <path className="iso-fill" d={BOARD_ART.back} />
           <Line d={BOARD_ART.back} tone="mid" />
-          <path d={BOARD_ART.face} fill="#ffffff" stroke="var(--anatomy-lo)" strokeWidth={0.6} />
+          <path d={BOARD_ART.face} fill="#ffffff" stroke="var(--anatomy-lo)" strokeWidth={0.6} data-lab-part="grafik" />
           <Line d={BOARD_ART.grid} tone="faint" />
           <Line d={BOARD_ART.axis} tone="mid" />
           <Dots points={BOARD_ART.corners} size={0.5} tone="lo" />
@@ -219,9 +220,11 @@ export function SinusLab({ solved, onSolve, onState }: { solved: string[]; onSol
           <path d={`M${wheel.peg[0].toFixed(1)} ${wheel.peg[1].toFixed(1)}L${pen.tip[0].toFixed(1)} ${pen.tip[1].toFixed(1)}`} stroke="#4bd29f" strokeWidth={0.9} strokeDasharray="2 3" />
 
           {/* pen carriage on its rail */}
-          <Solid paths={pen.carriage} tone="hi" />
-          <path d={pen.rod} stroke="var(--anatomy-hi)" strokeWidth={0.8} />
-          <circle cx={pen.tip[0]} cy={pen.tip[1]} r={1.8} fill="#5e4ac4" stroke="#fff" strokeWidth={0.6} />
+          <g data-lab-part="pena">
+            <Solid paths={pen.carriage} tone="hi" />
+            <path d={pen.rod} stroke="var(--anatomy-hi)" strokeWidth={0.8} />
+            <circle cx={pen.tip[0]} cy={pen.tip[1]} r={1.8} fill="#5e4ac4" stroke="#fff" strokeWidth={0.6} />
+          </g>
 
           {/* the crank in front */}
           <Solid paths={CRANK_ART.post} tone="mid" />
@@ -237,6 +240,7 @@ export function SinusLab({ solved, onSolve, onState }: { solved: string[]; onSol
             role="slider"
             tabIndex={0}
             aria-label="Engkol"
+            data-lab-part="engkol"
             aria-valuemin={0}
             aria-valuemax={TURN}
             aria-valuenow={theta}
@@ -259,6 +263,7 @@ export function SinusLab({ solved, onSolve, onState }: { solved: string[]; onSol
             role="slider"
             tabIndex={locked.amplitude ? -1 : 0}
             aria-label="Jarak pasak (amplitudo)"
+            data-lab-part="pasak"
             aria-valuemin={AMPLITUDE.min}
             aria-valuemax={AMPLITUDE.max}
             aria-valuenow={amplitude}
@@ -317,31 +322,36 @@ export function SinusLab({ solved, onSolve, onState }: { solved: string[]; onSol
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-[#efebf9] px-3 py-2.5 sm:px-4">
-        <ChoiceChips
-          label="Roda gigi"
-          options={[
-            ["1", "Roda gigi 1×"],
-            ["2", "Roda gigi 2×"],
-          ]}
-          value={String(gear) as "1" | "2"}
-          disabled={locked.gear}
-          onChange={(value) => setGear(Number(value) as Gear)}
-        />
+        <div data-lab-part="roda-gigi" className="flex">
+          <ChoiceChips
+            label="Roda gigi"
+            options={[
+              ["1", "Roda gigi 1×"],
+              ["2", "Roda gigi 2×"],
+            ]}
+            value={String(gear) as "1" | "2"}
+            disabled={locked.gear}
+            onChange={(value) => setGear(Number(value) as Gear)}
+          />
+        </div>
         <span className="flex-1" />
         <FeedbackPill feedback={feedback} />
         <button type="button" onClick={() => { setTheta(0); setMarks([]); setFeedback(null); }} aria-label="Ulang dari 0°" className="grid size-9 place-items-center rounded-full bg-white ring-1 ring-[#e4def8] transition-transform duration-150 active:scale-[0.94]">
           <RotateCcw className="size-4" aria-hidden="true" />
         </button>
-        {challenge.marks ? (
-          <ActionButton onClick={mark}>
-            <span className="flex items-center gap-1.5">
-              <MapPin className="size-4" aria-hidden="true" /> Tandai
-            </span>
-          </ActionButton>
-        ) : (
-          <ActionButton onClick={() => check(theta, amplitude, gear)}>Bandingkan</ActionButton>
-        )}
+        <span data-lab-part="tombol" className="inline-flex">
+          {challenge.marks ? (
+            <ActionButton onClick={mark}>
+              <span className="flex items-center gap-1.5">
+                <MapPin className="size-4" aria-hidden="true" /> Tandai
+              </span>
+            </ActionButton>
+          ) : (
+            <ActionButton onClick={() => check(theta, amplitude, gear)}>Bandingkan</ActionButton>
+          )}
+        </span>
       </div>
+      <LabPointer />
     </div>
   );
 }
