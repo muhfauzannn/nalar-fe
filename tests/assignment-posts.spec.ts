@@ -175,3 +175,55 @@ test("in the classroom Pos 3 offers the course's lab, and it is not graded", asy
   await link.click();
   await expect(page.locator('[data-classroom-surface="lab"]')).toBeVisible({ timeout: 30_000 });
 });
+
+// The book in the real classroom: a page, not a web page in a frame.
+const book = (page: import("@playwright/test").Page) => page.locator('[data-classroom-surface="tugas"]');
+for (const [device, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 780 }]] as const) {
+  for (const post of [1, 2, 3, 4, 5]) {
+    test(`the classroom's book holds Pos ${post} without scrolling on ${device}`, async ({ page }, info) => {
+      info.setTimeout(60_000);
+      await page.setViewportSize(viewport);
+      await page.goto(`/tests/fixtures/classroom.html?station=tugas&pos=${post}&balasan=1`);
+      await expect(book(page).getByRole("list", { name: "Lima pos" })).toBeVisible({ timeout: 30_000 });
+      const submit = book(page).getByRole("button", { name: /Nyalakan pos|Kumpulkan tugas/ });
+      await expect(submit).toBeInViewport({ ratio: 1 });
+      expect(await book(page).evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+      const scroller = book(page).locator(".overflow-y-auto").first();
+      expect(await scroller.evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+      if (post === 1 || post === 4 || post === 5) expect((await book(page).getByRole("textbox").boundingBox())!.height).toBeGreaterThan(90);
+    });
+  }
+}
+
+test("the book keeps the sheets a post needs one tap away", async ({ page }) => {
+  await open(page, "pos=4&buku=1");
+  await page.getByRole("button", { name: "Evaluasi" }).click();
+  await expect(page.getByRole("region", { name: "Bahan" })).toContainText(EVALUATION);
+  await page.getByRole("button", { name: "Draf awal" }).click();
+  await expect(page.getByRole("region", { name: "Bahan" })).toContainText(DRAFT);
+  await expect(page.getByRole("textbox")).toHaveValue(DRAFT);
+});
+
+test("on a phone the sheets stay closed so the writing keeps the room", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await open(page, "pos=1&buku=1");
+  await expect(page.getByText("Jelaskan pengaruh sudut bidang")).toBeHidden();
+  await page.getByRole("button", { name: "Soal" }).click();
+  await expect(page.getByText("Jelaskan pengaruh sudut bidang")).toBeVisible();
+  await page.getByRole("button", { name: "Soal" }).click();
+  await expect(page.getByText("Jelaskan pengaruh sudut bidang")).toBeHidden();
+});
+
+test("the book says what is recorded while writing, in one line", async ({ page }) => {
+  await open(page, "pos=1&buku=1");
+  await expect(page.getByText("Lama menulis, teks tempelan, dan pindah tab dicatat, bukan untuk nilai.")).toBeVisible();
+});
+
+test("a post completed in the book lights up on its small path", async ({ page }) => {
+  await open(page, "pos=1&buku=1");
+  const track = page.getByRole("list", { name: "Lima pos" });
+  await page.getByRole("button", { name: "Pos berikutnya" }).click();
+  await expect(track).toHaveAttribute("data-lit", "1_independent_effort");
+  await expect(track).not.toHaveAttribute("data-lit", /.*/, { timeout: 5_000 });
+  await expect(page.getByText("Pos 2 dari 5")).toBeVisible();
+});

@@ -15,11 +15,14 @@ export function EvaluationMarks({
   messages,
   draftKey,
   lab,
+  book = false,
   children,
 }: {
   messages: Message[];
   draftKey: string;
   lab?: { href: string; title: string };
+  /** On the classroom's book: only the essentials, and the replies scroll inside the page. */
+  book?: boolean;
   children: (state: { content: string; marks: Marks }) => React.ReactNode;
 }) {
   const [marks, setMarks] = useState(() => readMarks(readActivityDraft(draftKey)));
@@ -34,13 +37,13 @@ export function EvaluationMarks({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={cn("flex flex-col", book ? "min-h-0 flex-1 gap-2" : "gap-5")}>
       <div>
-        <p className="font-medium">Tandai balasan NALAR, lalu tulis alasanmu</p>
-        <p className="mt-1 text-sm/relaxed text-muted-foreground">Tidak semua perlu ditandai. Pilih balasan yang memengaruhi jawabanmu.</p>
+        <p className={cn("font-medium", book && "text-sm")}>Tandai balasan NALAR, lalu tulis alasanmu</p>
+        {!book && <p className="mt-1 text-sm/relaxed text-muted-foreground">Tidak semua perlu ditandai. Pilih balasan yang memengaruhi jawabanmu.</p>}
       </div>
       {lab && (
-        <Link to={lab.href} className="flex items-center gap-3 rounded-2xl bg-brand-lavender-soft/60 p-3 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring">
+        <Link to={lab.href} className={cn("flex items-center gap-3 rounded-2xl bg-brand-lavender-soft/60 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring", book ? "px-3 py-1.5" : "p-3")}>
           <FlaskConical className="size-5 shrink-0" aria-hidden="true" />
           <span className="min-w-0">
             Uji di lab: {lab.title}
@@ -48,12 +51,12 @@ export function EvaluationMarks({
           </span>
         </Link>
       )}
-      <ol className="flex flex-col gap-4">
+      <ol className={cn("flex flex-col", book ? "min-h-0 flex-1 gap-2 overflow-y-auto" : "gap-4")}>
         {replies.map((reply, index) => {
           const marked = marks[reply.id];
           const asked = messages[messages.indexOf(reply) - 1];
           return (
-            <li key={reply.id} className="flex flex-col gap-3 rounded-2xl border p-4">
+            <li key={reply.id} className={cn("flex flex-col gap-3 rounded-2xl border", book ? "p-3" : "p-4")}>
               {asked?.author === "student" && (
                 <div data-author="student" className="text-sm/relaxed text-muted-foreground">
                   <p className="text-xs font-medium">Kamu</p>

@@ -195,7 +195,7 @@ export function ClassroomOverlay({
               )}
             </div>
           ) : (
-            <div className="flex flex-col gap-4 p-4 sm:p-6">
+            <div className="flex h-full flex-col gap-3 p-3 sm:p-5">
               <ActivityChoices
                 label="Pilih buku tugas"
                 items={course.assignments}
@@ -203,15 +203,17 @@ export function ClassroomOverlay({
                 href={(id) => at("tugas", { assignmentId: id })}
               />
               {assignment ? (
-                <AssignmentPage
-                  key={assignment.id}
-                  data={assignment}
-                  earned={earned}
-                  embedded
-                  lab={taskLab}
-                  returnTo={closeTo}
-                  {...action}
-                />
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <AssignmentPage
+                    key={assignment.id}
+                    data={assignment}
+                    earned={earned}
+                    embedded
+                    lab={taskLab}
+                    returnTo={closeTo}
+                    {...action}
+                  />
+                </div>
               ) : (
                 <Unavailable title="Belum ada tugas" />
               )}
@@ -446,6 +448,7 @@ function StationWorkspace({
       className={cn(
         "classroom-surface pointer-events-auto absolute overscroll-contain rounded-[4px] bg-background text-foreground shadow-sm outline-none [color-scheme:light] [&_input]:text-base [&_select]:text-base [&_textarea]:text-base",
         focus === "papan" && "bg-white text-[#18153a]",
+        focus === "tugas" && "bg-[#fbf6ea] text-[#18153a]",
         pdf ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden",
       )}
     >

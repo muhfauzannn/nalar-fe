@@ -7,7 +7,7 @@ import type { AssignmentData, WorkflowStage } from "../../app/features/lms/types
 import { assignment, stages } from "./classroom-data";
 import "../../app/app.css";
 
-// One task at one post: `?pos=<1-5>`, and `&tanpa-tutor=1` for a student who never asked.
+// One task at one post: `?pos=<1-5>`, `&tanpa-tutor=1` for a student who never asked, `&buku=1` for the classroom's book.
 const search = new URL(location.href).searchParams;
 const post = Number(search.get("pos") ?? 1);
 const texts: Partial<Record<WorkflowStage, string>> = {
@@ -44,7 +44,11 @@ function Desk() {
   return (
     <main className="mx-auto max-w-6xl p-4">
       <button type="button" onClick={() => setAt(at + 1)}>Pos berikutnya</button>
-      <AssignmentPage data={dataAt(at)} embedded />
+      {search.has("buku") ? (
+        <div className="h-[34rem]"><AssignmentPage data={dataAt(at)} embedded /></div>
+      ) : (
+        <AssignmentPage data={dataAt(at)} />
+      )}
     </main>
   );
 }

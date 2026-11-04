@@ -20,7 +20,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { enterSilentZone } from "~/features/game-feel";
@@ -113,6 +113,10 @@ const stageCopy: Record<
 // The world's own call to action, as on the island's post sheet.
 const mintButton = "bg-brand-mint font-bold text-brand-mint-ink hover:bg-brand-mint/90";
 
+// A ruled page: the lines scroll with the writing.
+const bookPaper =
+  "min-h-24 flex-1 resize-none rounded-none border-0 bg-transparent bg-[repeating-linear-gradient(transparent,transparent_calc(1.75rem-1px),#e8dfca_calc(1.75rem-1px),#e8dfca_1.75rem)] bg-local px-1 py-0 leading-7 shadow-none focus-visible:shadow-[inset_0_-2px_0_var(--brand-mint)] focus-visible:ring-0 dark:bg-transparent";
+
 const terminalErrorCodes = new Set([
   "ASSIGNMENT_ENROLLMENT_INACTIVE",
   "ASSIGNMENT_NOT_AVAILABLE",
@@ -154,6 +158,27 @@ export function AssignmentPage({
   );
   const activeStage = canContinue ? submission?.currentStage : undefined;
   const completedStages = submission?.stages.filter((stage) => stage.status === "completed").length ?? 0;
+
+  // In the classroom the task is an open book: it fits the surface and holds only what a post needs.
+  if (embedded && (canContinue || finished || (!submission && loaderData.canStart && !terminalActionError))) {
+    return (
+      <div className="@container h-full">
+        {!submission ? (
+          <BookStart data={loaderData} working={working} />
+        ) : finished ? (
+          <BookDone data={loaderData} />
+        ) : (
+          <AssignmentWorkspace
+            assignment={loaderData}
+            working={working}
+            actionDraft={actionStage === submission.currentStage ? actionDraft : undefined}
+            lab={lab}
+            book={{ earned, error: terminalActionError ? undefined : actionError }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="@container w-full max-w-full overflow-x-hidden">
@@ -329,11 +354,13 @@ function AssignmentWorkspace({
   working,
   actionDraft,
   lab,
+  book,
 }: {
   assignment: AssignmentData;
   working: boolean;
   actionDraft?: string;
   lab?: { href: string; title: string };
+  book?: { earned: EarnedPoint[]; error?: string };
 }) {
   const submission = assignment.submission;
   const guidedQuestioning = submission?.currentStage === "2_guided_questioning";
@@ -349,6 +376,34 @@ function AssignmentWorkspace({
   const lit = completedCount > seenCount ? submission?.stages[completedCount - 1]?.stage ?? null : null;
   const onLit = useCallback(() => setSeenCount(completedCount), [completedCount]);
   if (!submission) return null;
+
+  if (book) {
+    const gain = book.earned.reduce((sum, item) => sum + item.points, 0);
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <header className="flex items-center gap-3 p-1">
+          <h2 className="min-w-0 flex-1 truncate font-heading text-base font-bold">{assignment.title}</h2>
+          {gain > 0 && (
+            <p aria-live="polite" className="flex shrink-0 items-center gap-1 rounded-full bg-brand-mint-soft px-2 py-0.5 text-xs font-bold text-brand-mint-foreground tabular-nums">
+              <img src="/game/coin.webp" alt="" width={125} height={128} className="size-4" />
+              +{gain}
+              <span className="sr-only">Poin Nalar</span>
+            </p>
+          )}
+          <div className="w-36 shrink-0 @lg:w-44">
+            <PostTrack small posts={submission.stages} lit={lit} onLit={onLit} />
+          </div>
+        </header>
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 @3xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] @3xl:grid-rows-[minmax(0,1fr)] @3xl:gap-0">
+          <BookSheets key={submission.currentStage} assignment={assignment} stage={submission.currentStage} />
+          <section aria-label="Lembar kerja" className="flex min-h-0 flex-col gap-2 @3xl:pl-6">
+            {book.error && <p role="alert" className="text-sm text-destructive">{book.error}</p>}
+            <ActiveStage assignment={assignment} working={working} actionDraft={actionDraft} tutorHosted={tutorHosted} lighting={lit !== null} lab={lab} book />
+          </section>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -386,6 +441,83 @@ function AssignmentWorkspace({
   );
 }
 
+// The book's left page: the sheets a post needs, one at a time. On a phone there is one page, so
+// the sheets stay closed until the student opens one and the writing keeps the room.
+function BookSheets({ assignment, stage }: { assignment: AssignmentData; stage: WorkflowStage }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const submission = assignment.submission;
+  if (!submission) return null;
+  const text = (from: WorkflowStage) => <p className="break-words whitespace-pre-wrap">{artifactOf(submission, from)}</p>;
+  const task = { id: "soal", label: "Soal", body: <div className="whitespace-pre-wrap"><MathText>{assignment.instructions}</MathText></div> };
+  const draft = { id: "draf", label: "Draf awal", body: text("1_independent_effort") };
+  const rubric = { id: "rubrik", label: "Rubrik", body: <RubricAccordion criteria={assignment.criteria} compact /> };
+  const sheets =
+    stage === "5_reflection"
+      ? [draft, { id: "final", label: "Jawaban final", body: text("4_revision_finalization") }, task]
+      : stage === "4_revision_finalization"
+        ? [task, { id: "evaluasi", label: "Evaluasi", body: text("3_ai_evaluation") }, draft, rubric]
+        : stage === "1_independent_effort"
+          ? [task, rubric]
+          : [task, draft];
+  const shown = sheets.filter((sheet) => sheet.id !== "rubrik" || assignment.criteria.length > 0);
+  const current = shown.find((sheet) => sheet.id === open);
+  const showing = current ?? shown[0]!;
+  return (
+    <section aria-label="Bahan" className="flex min-h-0 flex-col gap-2 @3xl:border-r @3xl:border-[#e8dfca] @3xl:pr-6 @3xl:shadow-[inset_-16px_0_16px_-16px_rgba(24,21,58,0.14)]">
+      <div className="flex shrink-0 flex-wrap gap-1.5">
+        {shown.map((sheet) => (
+          <button
+            key={sheet.id}
+            type="button"
+            aria-pressed={sheet === showing}
+            onClick={() => setOpen(sheet.id === open ? null : sheet.id)}
+            className={cn(
+              "min-h-9 rounded-full px-3 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring",
+              sheet === current && "bg-[#18153a] text-white",
+              sheet === showing && sheet !== current && "@3xl:bg-[#18153a] @3xl:text-white",
+              sheet !== current && "bg-[#f0e8d6]",
+            )}
+          >
+            {sheet.label}
+          </button>
+        ))}
+      </div>
+      <div className={cn("max-h-40 min-h-0 overflow-y-auto text-sm/relaxed @3xl:block @3xl:max-h-none @3xl:flex-1", !current && "hidden")}>{showing.body}</div>
+    </section>
+  );
+}
+
+function BookStart({ data, working }: { data: AssignmentData; working: boolean }) {
+  return (
+    <div className="mx-auto flex h-full min-h-0 max-w-xl flex-col gap-3">
+      <h2 className="font-heading text-lg font-bold">{data.title}</h2>
+      <PostTrack posts={(Object.keys(stageCopy) as WorkflowStage[]).map((stage) => ({ stage, status: "locked" }))} />
+      <div className="min-h-0 flex-1 overflow-y-auto text-sm/relaxed whitespace-pre-wrap"><MathText>{data.instructions}</MathText></div>
+      <Form method="post">
+        <input type="hidden" name="intent" value="start" />
+        <Button type="submit" className={cn("w-full", mintButton)} disabled={working}>
+          {working && <Spinner data-icon="inline-start" />}
+          {working ? "Membuka tugas..." : "Mulai dari Pos 1"}
+          {!working && <ArrowRight data-icon="inline-end" />}
+        </Button>
+      </Form>
+    </div>
+  );
+}
+
+// The report and the archive are long reading, so they keep their own page.
+function BookDone({ data }: { data: AssignmentData }) {
+  return (
+    <div className="mx-auto flex h-full max-w-sm flex-col items-center justify-center gap-3 text-center">
+      <img src="/game/crystal.webp" alt="" width={185} height={240} className="h-16 w-auto" />
+      <h2 className="font-heading text-lg font-bold">Lima pos menyala</h2>
+      <p className="text-sm text-muted-foreground">{data.title} sudah dikumpulkan.</p>
+      <Button className={cn("w-full", mintButton)} render={<Link to={`/assignments/${data.id}`} />}>Baca laporan dan jawabanmu</Button>
+      <Button variant="outline" className="w-full" render={<Link to={`/courses/${data.courseId}/balai/${data.id}`} />}>Ke balai</Button>
+    </div>
+  );
+}
+
 function ActiveStage({
   assignment,
   working,
@@ -393,6 +525,7 @@ function ActiveStage({
   tutorHosted,
   lighting,
   lab,
+  book = false,
 }: {
   assignment: AssignmentData;
   working: boolean;
@@ -400,6 +533,8 @@ function ActiveStage({
   tutorHosted: boolean;
   lighting: boolean;
   lab?: { href: string; title: string };
+  /** On the classroom's book: no card, and the writing takes the rest of the page. */
+  book?: boolean;
 }) {
   const submission = assignment.submission;
   const stage = submission?.currentStage ?? "1_independent_effort";
@@ -416,49 +551,48 @@ function ActiveStage({
   const rewards = postKinds[stage].map((kind) => pointCopy[kind].title).join(" · ");
   const messages = submission.tutorMessages ?? [];
   const marking = stage === "3_ai_evaluation" && messages.some((message) => message.author === "tutor");
+  const answer = {
+    id: `content-${stage}`,
+    name: "content",
+    required: true,
+    minLength: 10,
+    defaultValue: actionDraft ?? readActivityDraft(assignmentDraftKey(submission.id, stage)) ?? (stage === "4_revision_finalization" ? artifactOf(submission, "1_independent_effort") : undefined),
+    onChange: (event: ChangeEvent<HTMLTextAreaElement>) => writeActivityDraft(assignmentDraftKey(submission.id, stage), event.currentTarget.value),
+    ...(recorded ? writing.bind : {}),
+  };
 
-  return (
-    <Card className="rounded-[1.75rem]">
-      <CardHeader className="border-b">
-        <p className="mb-1 text-xs font-medium text-muted-foreground tabular-nums">
-          Pos {Number(copy.number)} dari 5
-        </p>
-        <CardTitle className="font-heading text-xl font-bold sm:text-2xl">{copy.title}</CardTitle>
-      </CardHeader>
-
-      <CardContent className="flex flex-col gap-6">
-        <EarlierWork key={stage} stage={stage} submission={submission} />
-        {stage === "2_guided_questioning" ? (
-          <div className="flex flex-col gap-5">
+  const work = (
+        stage === "2_guided_questioning" ? (
+          <div className={cn("flex flex-col", book ? "min-h-0 flex-1 justify-between gap-3" : "gap-5")}>
             <div>
               <p className="font-medium">{copy.prompt}</p>
-              <p className="mt-1 text-sm/relaxed text-muted-foreground">{copy.guidance}</p>
+              {!book && <p className="mt-1 text-sm/relaxed text-muted-foreground">{copy.guidance}</p>}
               {tutorHosted && <p className="mt-1 text-sm/relaxed text-muted-foreground">NALAR ada di kelas bersamamu. Panggil dari tombol tutor.</p>}
             </div>
-            <PostRewards rewards={rewards} />
+            {!book && <PostRewards rewards={rewards} />}
             <Form method="post">
               <input type="hidden" name="intent" value="complete-stage" />
               <input type="hidden" name="submissionId" value={submission.id} />
               <input type="hidden" name="courseId" value={assignment.courseId} />
               <input type="hidden" name="stage" value={stage} />
               <input type="hidden" name="content" value="" />
-              <Button type="submit" disabled={working} className={mintButton}>
+              <Button type="submit" disabled={working} className={cn(book && "w-full", mintButton)}>
                 {working ? <Spinner data-icon="inline-start" /> : <ArrowRight data-icon="inline-end" />}
                 {working ? "Menyalakan pos..." : "Nyalakan pos"}
               </Button>
             </Form>
           </div>
         ) : marking ? (
-          <EvaluationMarks messages={messages} draftKey={assignmentDraftKey(submission.id, stage)} lab={lab}>
+          <EvaluationMarks messages={messages} draftKey={assignmentDraftKey(submission.id, stage)} lab={lab} book={book}>
             {({ content, marks }) => (
-              <Form method="post" className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <Form method="post" className={book ? "shrink-0" : "flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between"}>
                 <input type="hidden" name="intent" value="complete-stage" />
                 <input type="hidden" name="submissionId" value={submission.id} />
                 <input type="hidden" name="courseId" value={assignment.courseId} />
                 <input type="hidden" name="stage" value={stage} />
                 <input type="hidden" name="content" value={content} />
-                <PostRewards rewards={rewards} />
-                <Button type="submit" disabled={working || !marksReady(marks)} className={cn("w-full sm:w-auto sm:min-w-48 sm:shrink-0", mintButton)}>
+                {!book && <PostRewards rewards={rewards} />}
+                <Button type="submit" disabled={working || !marksReady(marks)} className={cn("w-full", !book && "sm:w-auto sm:min-w-48 sm:shrink-0", mintButton)}>
                   {working ? <Spinner data-icon="inline-start" /> : <ArrowRight data-icon="inline-end" />}
                   {working ? "Menyalakan pos..." : "Nyalakan pos"}
                 </Button>
@@ -468,6 +602,7 @@ function ActiveStage({
         ) : (
           <Form
             method="post"
+            className={book ? "flex min-h-0 flex-1 flex-col gap-2" : undefined}
             onSubmit={() => {
               if (recorded && signalsField.current) signalsField.current.value = writing.snapshot();
             }}
@@ -477,21 +612,27 @@ function ActiveStage({
               <input type="hidden" name="courseId" value={assignment.courseId} />
             <input type="hidden" name="stage" value={stage} />
             <input ref={signalsField} type="hidden" name="signals" defaultValue="" />
+            {book ? (
+              <>
+                <label htmlFor={`content-${stage}`} className="shrink-0 text-sm font-medium">{copy.prompt}</label>
+                <Textarea key={`${stage}:${actionDraft ?? ""}`} {...answer} placeholder={copy.guidance} className={bookPaper} />
+                {recorded && <p className="shrink-0 text-xs text-muted-foreground">Lama menulis, teks tempelan, dan pindah tab dicatat, bukan untuk nilai.</p>}
+                {finalStage && <p className="shrink-0 text-xs text-muted-foreground">Setelah dikumpulkan, jawaban tidak bisa diubah.</p>}
+                <Button type="submit" disabled={working} className={cn("w-full shrink-0", mintButton)}>
+                  {working ? <Spinner data-icon="inline-start" /> : finalStage ? <Send data-icon="inline-end" /> : <ArrowRight data-icon="inline-end" />}
+                  {working ? (finalStage ? "Mengumpulkan..." : "Menyalakan pos...") : finalStage ? "Kumpulkan tugas" : "Nyalakan pos"}
+                </Button>
+              </>
+            ) : (
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor={`content-${stage}`}>{copy.prompt}</FieldLabel>
                 <Textarea
                   key={`${stage}:${actionDraft ?? ""}`}
-                  id={`content-${stage}`}
-                  name="content"
-                  required
-                  minLength={10}
+                  {...answer}
                   rows={stage === "4_revision_finalization" ? 15 : 10}
-                  defaultValue={actionDraft ?? readActivityDraft(assignmentDraftKey(submission.id, stage)) ?? (stage === "4_revision_finalization" ? artifactOf(submission, "1_independent_effort") : undefined)}
-                  onChange={(event) => writeActivityDraft(assignmentDraftKey(submission.id, stage), event.currentTarget.value)}
                   placeholder="Tulis jawabanmu…"
                   className="min-h-56 resize-y bg-background text-base leading-relaxed sm:min-h-64"
-                  {...(recorded ? writing.bind : {})}
                 />
                 <FieldDescription>{copy.guidance}</FieldDescription>
                 {recorded ? (
@@ -536,8 +677,35 @@ function ActiveStage({
                 </Button>
               </div>
             </FieldGroup>
+            )}
           </Form>
-        )}
+        )
+  );
+
+  if (book) {
+    return (
+      <>
+        <div className="shrink-0">
+          <p className="text-xs text-muted-foreground tabular-nums">Pos {Number(copy.number)} dari 5</p>
+          <h3 className="font-heading text-lg font-bold">{copy.title}</h3>
+        </div>
+        {work}
+      </>
+    );
+  }
+
+  return (
+    <Card className="rounded-[1.75rem]">
+      <CardHeader className="border-b">
+        <p className="mb-1 text-xs font-medium text-muted-foreground tabular-nums">
+          Pos {Number(copy.number)} dari 5
+        </p>
+        <CardTitle className="font-heading text-xl font-bold sm:text-2xl">{copy.title}</CardTitle>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-6">
+        <EarlierWork key={stage} stage={stage} submission={submission} />
+        {work}
       </CardContent>
     </Card>
   );
