@@ -3,7 +3,6 @@ export { StudentAppShell } from "./components/student-app-shell";
 export { clearWritingSignals, writingSignalsKey } from "./hooks/use-writing-signals";
 export { rememberEarned, takeEarned } from "./lib/game";
 
-export { DashboardPage } from "./pages/dashboard-page";
 export { CoursesPage } from "./pages/courses-page";
 export { CourseDetailPage } from "./pages/course-detail-page";
 export { IslandPage } from "./pages/island-page";

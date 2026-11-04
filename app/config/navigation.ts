@@ -15,14 +15,13 @@ export const mainNav: readonly NavItem[] = [
 
 /** Primary student navigation shared by the public navbar and LMS shell. */
 export const studentNav: readonly NavItem[] = [
-  { label: "Dashboard", href: "/dashboard" },
   { label: "Dunia", href: "/dunia" },
   { label: "Lencana", href: "/lencana" },
   { label: "Kelola course", href: "/manage" },
 ] as const;
 
-/** Where a student lands right after signing in or registering. */
-export const postAuthPath = "/dashboard";
+/** Where a student lands right after signing in or registering: the world is the home. */
+export const postAuthPath = "/dunia";
 
 const PLACEHOLDER_ORIGIN = "http://app.invalid";
 

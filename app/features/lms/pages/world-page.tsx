@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router";
 import { finished, gameGsap, gameToast, playSound, prefersReducedMotion } from "~/features/game-feel";
 
 import { cn } from "~/lib/utils";
+import { DeadlineList } from "../components/deadlines";
 import { LevelBar, LevelUpMoment, Missions, StreakChip } from "../components/progress-widgets";
 import { useStudentId } from "../hooks/use-student-id";
 import { WorldIslandCarousel } from "../components/world-island-carousel";
@@ -153,6 +154,16 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         </div>
         {active && <Bridge island={active} />}
       </div>
+
+      {data.upcoming && data.upcoming.length > 0 && (
+        <section aria-labelledby="tenggat-title" className="rounded-[1.5rem] bg-card p-4 text-card-foreground shadow-card ring-1 ring-border max-md:mx-3">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 id="tenggat-title" className="font-heading font-semibold">Tenggat</h2>
+            <span className="text-xs text-muted-foreground">{data.upcoming.length} perlu diselesaikan</span>
+          </div>
+          <DeadlineList items={data.upcoming} world3d={false} islands={new Map(data.islands.map((item) => [item.course.id, `Pulau ${item.course.subjectName}`]))} />
+        </section>
+      )}
 
       <section aria-label="Pulau lainnya" className="flex flex-wrap items-center gap-2 max-md:px-3">
           {more.map((island) => (

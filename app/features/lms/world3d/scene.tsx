@@ -10,9 +10,11 @@ import { announcePoints, awardChip, flyCoin, gameGsap, HAPTIC, haptic, playSound
 import { cn } from "~/lib/utils";
 import { SceneReady } from "~/features/loading/scene-ready";
 import { prefetchStudentPage } from "../api/student";
+import { useNow } from "../hooks/use-now";
 import { pointCopy, postNames } from "../lib/game";
 import type { IslandSketch, PostStatus } from "../types";
 import { Classroom, preloadClassroom } from "./classroom";
+import { urgentTags } from "./deadlines";
 import { HexBoard, STILL } from "./ground";
 import { Clickable, Sign, SignText } from "./signs";
 import { Decor, Instanced, Piece, rng, seedOf, useKit, type Placed } from "./kit";
@@ -584,7 +586,7 @@ const SMALL_TILES = tilesWithin(2, [[2, -2], [-2, 1]]);
 const SMALL_FREE = SMALL_TILES.filter((tile) => tile[0] !== 0 || tile[1] !== 0);
 const LANDMARKS = ["watermill", "market", "church", "windmill", "castle"];
 
-function SimpleIsland({ island, index, showSign, active }: { island: WorldIsland; index: number; showSign: boolean; active: boolean }) {
+function SimpleIsland({ island, index, showSign, active, tag }: { island: WorldIsland; index: number; showSign: boolean; active: boolean; tag?: string }) {
   const navigate = useNavigate();
   const seed = seedOf(island.courseId);
   const go = () => navigate(`/courses/${island.courseId}`);
@@ -595,15 +597,16 @@ function SimpleIsland({ island, index, showSign, active }: { island: WorldIsland
         <Decor tiles={SMALL_FREE} seed={seed + 1} houses={HOUSES.slice(0, 1)} />
         <Piece name={LANDMARKS[index % LANDMARKS.length]!} ry={0.6} scale={TILE * 1.25} />
       </Clickable>
-      <WorldSign island={island} show={showSign} active={active} onClick={go} height={6} />
+      <WorldSign island={island} show={showSign} active={active} onClick={go} height={6} tag={tag} />
     </group>
   );
 }
 
-function WorldSign({ island, show, active, onClick, height }: { island: WorldIsland; show: boolean; active: boolean; onClick: () => void; height: number }) {
+function WorldSign({ island, show, active, onClick, height, tag }: { island: WorldIsland; show: boolean; active: boolean; onClick: () => void; height: number; tag?: string }) {
   return (
-    <Sign position={[0, height, 0]} show={show} onClick={onClick} dark={active} label={`Pulau ${island.subject}, ${island.hallsDone} dari ${island.halls} balai tuntas`}>
-      <SignText small={active ? "Sedang dijelajahi" : island.halls ? `${island.hallsDone}/${island.halls} balai tuntas` : island.name} strong={`Pulau ${island.subject}`} />
+    // A tag makes the sign taller; it rises with it so it does not sit on the island's marker.
+    <Sign position={[0, height + (tag ? 0.7 : 0), 0]} show={show} onClick={onClick} dark={active} label={`Pulau ${island.subject}, ${island.hallsDone} dari ${island.halls} balai tuntas${tag ? `, ${tag}` : ""}`}>
+      <SignText small={active ? "Sedang dijelajahi" : island.halls ? `${island.hallsDone}/${island.halls} balai tuntas` : island.name} strong={`Pulau ${island.subject}`} tag={tag} />
     </Sign>
   );
 }
@@ -729,6 +732,9 @@ export function WorldScene3D() {
   const camera = cameraFor(shot, islands, shotLayout, selectedExtent ? [selectedExtent] : [], size, mobile);
   const atWorld = shot.kind === "world";
   const activeId = scene.world?.islands.find((island) => island.current?.post)?.course.id ?? scene.world?.islands.find((island) => island.current)?.course.id ?? null;
+  // Work due soon shows on its island's sign, the same amber as the HUD's Tenggat.
+  const now = useNow();
+  const deadlineTags = useMemo(() => urgentTags(scene.world?.upcoming ?? [], now), [scene.world?.upcoming, now]);
   const narrow = useThree((t) => t.size.width < 600);
   const center = islands[0]?.position ?? [0, 0, 0];
   // Dunia already draws every island; the course data only fills the cards on
@@ -819,11 +825,14 @@ export function WorldScene3D() {
       {islands.map((island, index) => {
         const layout = layouts[index];
         // An older API sends no sketch: a stand-in until the course loads.
-        if (!layout) return <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} />;
+        if (!layout) return <SimpleIsland key={island.courseId} island={island} index={index} showSign={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} tag={deadlineTags.get(island.courseId)} />;
         return (
           <group key={island.courseId}>
             <DetailIsland layout={layout} position={island.position} scene={scene} near={island.courseId === shotCourse} />
-            <WorldSign island={island} show={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} />
+            {/* The island places itself; its sign needs the same position or it floats over the centre. */}
+            <group position={island.position}>
+              <WorldSign island={island} show={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} tag={deadlineTags.get(island.courseId)} />
+            </group>
           </group>
         );
       })}

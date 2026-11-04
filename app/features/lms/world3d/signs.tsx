@@ -35,11 +35,13 @@ export function Sign({ position, children, show: wanted, onClick, dark = false, 
   );
 }
 
-export function SignText({ small, strong }: { small: string; strong: string }) {
+export function SignText({ small, strong, tag }: { small: string; strong: string; tag?: string }) {
   return (
     <>
       <small className="block text-[10.5px] opacity-70">{small}</small>
       <strong className="block max-w-[14rem] truncate text-[13.5px] max-sm:text-[12.5px]">{strong}</strong>
+      {/* Work due soon, in the amber the HUD uses for it. */}
+      {tag && <span className="mt-1 inline-block rounded-full bg-[#fdf1d8] px-2 py-0.5 text-[10.5px] font-semibold text-[#855a00]">{tag}</span>}
     </>
   );
 }

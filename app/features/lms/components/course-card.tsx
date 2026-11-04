@@ -14,7 +14,7 @@ import {
 import { Progress, ProgressValue } from "~/components/ui/progress";
 import type { CourseSummary } from "../types";
 
-/** The one course card, used on the dashboard and on "Course saya". */
+/** The one course card, used on "Course saya". */
 export function CourseCard({ course }: { course: CourseSummary }) {
   const assessmentTotal =
     course.progress.assignments.total + course.progress.quizzes.total;

@@ -14,7 +14,6 @@ import {
   GraduationCap,
   Award,
   Globe2,
-  LayoutDashboard,
   LogOut,
   PencilRuler,
   type LucideIcon,
@@ -56,7 +55,6 @@ import type { StudentShellData } from "../types";
 const WorldStage = lazy(() => import("../world3d/stage"));
 
 const navigationIcons: Record<string, LucideIcon> = {
-  "/dashboard": LayoutDashboard,
   "/dunia": Globe2,
   "/lencana": Award,
   "/manage": PencilRuler,
@@ -66,7 +64,6 @@ const navigationIcons: Record<string, LucideIcon> = {
 // URLs do not start with /courses.
 function sectionFor(pathname: string) {
   if (pathname.startsWith("/manage")) return "/manage";
-  if (pathname === "/dashboard") return "/dashboard";
   if (pathname === "/dunia") return "/dunia";
   if (pathname === "/lencana") return "/lencana";
   return "/dunia";
@@ -74,7 +71,6 @@ function sectionFor(pathname: string) {
 
 function isAppPath(pathname: string) {
   return (
-    pathname === "/dashboard" ||
     pathname === "/dunia" ||
     pathname === "/lencana" ||
     pathname === "/courses" ||
@@ -131,7 +127,7 @@ function usePrefetchOnIntent(currentPathname: string) {
 // Once the browser is idle after the app has loaded: the pages a student opens
 // most get their code and data, and the other student pages their code (any id
 // matches the route), so no first visit waits for a download and then the data.
-const IDLE_PAGES = ["/dashboard", "/dunia", "/lencana"];
+const IDLE_PAGES = ["/dunia", "/lencana"];
 const IDLE_CODE = ["/courses/_", "/courses/_/kelas", "/courses/_/balai/_", "/lessons/_", "/assignments/_", "/quizzes/_"];
 
 function useIdlePrefetch() {
@@ -196,11 +192,11 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
         <SidebarHeader>
           <div className="flex h-12 items-center px-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
             <div className="shrink-0 group-data-[collapsible=icon]:hidden">
-              <Brand className="h-7" to="/dashboard" />
+              <Brand className="h-7" to="/dunia" />
             </div>
             <Link
-              to="/dashboard"
-              aria-label="NALAR Dashboard"
+              to="/dunia"
+              aria-label="NALAR, ke dunia"
               className="hidden size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground group-data-[collapsible=icon]:flex"
             >
               <GraduationCap className="size-4" />
@@ -317,7 +313,6 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
 }
 
 const shortLabels: Record<string, string> = {
-  "/dashboard": "Beranda",
   "/manage": "Kelola",
 };
 

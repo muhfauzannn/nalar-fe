@@ -6,7 +6,6 @@ import type {
   AssignmentData,
   CourseData,
   CourseSummary,
-  DashboardData,
   EarnedPoint,
   IslandData,
   LessonData,
@@ -37,7 +36,6 @@ async function studentRequest<T>(request: Request, operation: () => Promise<T>) 
 // assignments never show stale data, since their attempt and stage state changes
 // while the student works: only a prefetch made moments ago is reused (`fresh`).
 const prefetchable: [RegExp, (id: string) => string[], "recent" | "fresh"][] = [
-  [/^\/dashboard$/, () => ["/api/student/dashboard", "/api/student/points"], "recent"],
   [/^\/dunia$/, () => ["/api/student/world"], "recent"],
   [/^\/lencana$/, () => ["/api/student/points"], "recent"],
   [/^\/courses$/, () => ["/api/student/courses"], "recent"],
@@ -78,10 +76,6 @@ export const studentApi = {
   points: (request: Request) =>
     studentRequest(request, () =>
       http.getRecent<PointsData>("/api/student/points", forwardedRequestInit(request)),
-    ),
-  dashboard: (request: Request) =>
-    studentRequest(request, () =>
-      http.getRecent<DashboardData>("/api/student/dashboard", forwardedRequestInit(request)),
     ),
   courses: (request: Request) =>
     studentRequest(request, () =>

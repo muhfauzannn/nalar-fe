@@ -24,11 +24,11 @@ test.beforeAll(async () => {
   }
 });
 
-test("initial dashboard HTML includes the loader poster without needing JavaScript or another image request", () => {
+test("initial world HTML includes the loader poster without needing JavaScript or another image request", () => {
   const html = renderToStaticMarkup(
-    createElement(Loader, { pathname: "/dashboard", initial: true }),
+    createElement(Loader, { pathname: "/dunia", initial: true }),
   );
-  expect(html).toContain("Menyiapkan dashboard");
+  expect(html).toContain("Menyiapkan dunia");
   expect(html).toContain("data:image/png;base64,");
   expect(html).toContain('role="status"');
   expect(html).not.toContain("<canvas");

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Flag, List, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Clock, Flag, List, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
@@ -8,16 +8,20 @@ import { http } from "~/lib/http";
 import { cn } from "~/lib/utils";
 import { usePageReady } from "~/features/loading/context";
 
+import { DeadlineList, DeadlineSheet } from "../components/deadlines";
 import { BadgeMoment, ChestMoment, chestSeen, markBadgeSeen, markChestSeen, missionsJustDone, newBadges } from "../components/game-moments";
 import { JoinCourseSheet } from "../components/join-course-sheet";
 import { PostSheet } from "../components/post-sheet";
 import { WorldIslandCarousel } from "../components/world-island-carousel";
 import { LevelBar, LevelUpMoment, Missions, WeekTarget } from "../components/progress-widgets";
+import { useNow } from "../hooks/use-now";
+import { usePhone } from "../hooks/use-phone";
 import { useStudentId } from "../hooks/use-student-id";
 import { districtsOf, type Stop } from "../lib/districts";
 import { missionCopy, postNames } from "../lib/game";
 import type { BadgeProgress, CourseData, EarnedPoint, IslandData, PointsData, WorkflowStage, WorldData } from "../types";
 import { classroomUrl } from "./classroom-focus";
+import { deadlineHref, dockText, soonChip, splitDeadlines } from "./deadlines";
 import { useJoinSheet } from "./join";
 import { useWorldOverlay } from "./mode";
 import { useStageScene, type ChestState } from "./store";
@@ -69,7 +73,10 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
   const studentId = useStudentId();
   const ready = usePageReady();
   const [missionsOpen, setMissionsOpen] = useState(false);
+  const [deadlinesOpen, setDeadlinesOpen] = useState(false);
   const join = useJoinSheet();
+  const phone = usePhone();
+  const now = useNow();
   useStageScene({ world: data, shot: { kind: "world" } }, [data]);
   useEffect(() => {
     if (!ready || !studentId) return;
@@ -80,7 +87,16 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
   // With every hall finished there is no current post, but the island is still there to visit.
   const active = data.islands.find((island) => island.current?.post) ?? data.islands.find((island) => island.current) ?? data.islands[0] ?? null;
   const current = active?.current ?? null;
-  const href = active ? (current ? `/courses/${active.course.id}/balai/${current.assignmentId}` : `/courses/${active.course.id}`) : null;
+  // Work that is due soon (or late) comes before wherever the journey left off.
+  const upcoming = data.upcoming;
+  const soon = upcoming ? splitDeadlines(upcoming, now).soon : [];
+  const mostUrgent = soon[0] ?? null;
+  const islandNames = useMemo(() => new Map(data.islands.map((island) => [island.course.id, `Pulau ${island.course.subjectName}`])), [data.islands]);
+  const href = mostUrgent
+    ? deadlineHref(mostUrgent, true)
+    : active
+      ? (current ? `/courses/${active.course.id}/balai/${current.assignmentId}` : `/courses/${active.course.id}`)
+      : null;
   return (
     <Overlay>
       {studentId && <LevelUpMoment userId={studentId} points={data} />}
@@ -102,16 +118,45 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
             <Missions missions={data.missions} />
           </div>
         )}
+        {upcoming && upcoming.length > 0 ? (
+          <button type="button" aria-expanded={deadlinesOpen} onClick={() => setDeadlinesOpen((open) => !open)} className={cn("pointer-events-auto inline-flex items-center gap-2 rounded-2xl bg-white/93 px-3.5 py-2 text-sm font-semibold shadow-sm", deadlinesOpen && "bg-white ring-2 ring-[#4bd29f]", press)}>
+            <Clock className="size-4" aria-hidden="true" />
+            Tenggat · {upcoming.length}
+            {soon.length > 0 && <span className="rounded-full bg-[#fdf1d8] px-2 py-0.5 text-[11px] font-semibold text-[#855a00]">{soonChip(soon, now)}</span>}
+            {deadlinesOpen && !phone && <ChevronUp className="size-4" aria-hidden="true" />}
+          </button>
+        ) : upcoming ? (
+          <span className="pointer-events-auto inline-flex items-center gap-2 rounded-2xl bg-white/93 px-3.5 py-2 text-sm font-semibold text-[#5e5e72] shadow-sm">
+            <CircleCheck className="size-4" aria-hidden="true" />
+            Tidak ada tenggat
+          </span>
+        ) : null}
+        {deadlinesOpen && !phone && upcoming && (
+          <div className={cn(card, "flex w-[min(21.25rem,calc(100vw-1.5rem))] flex-col gap-3 p-4")}>
+            <p className="text-xs text-[#5e5e72]">Ketuk satu untuk terbang ke tempatnya.</p>
+            <DeadlineList items={upcoming} world3d islands={islandNames} compact onPick={() => setDeadlinesOpen(false)} />
+          </div>
+        )}
       </div>
+      {upcoming && <DeadlineSheet open={deadlinesOpen && phone} onOpenChange={setDeadlinesOpen} items={upcoming} world3d islands={islandNames} />}
       <Dock>
         <WorldIslandCarousel islands={data.islands} onJoin={() => join.open()} />
         <div className={cn(card, "flex w-full max-w-[26rem] items-center gap-3 p-3")}>
           <img src="/game/cat-avatar.webp" alt="" className="size-12 shrink-0 rounded-2xl bg-[#dff7ee] object-cover" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-[#5e5e72]">{!active ? "Belum ada pulau" : current ? "Lanjutkan perjalanan" : "Semua balai tuntas"}</p>
-            <p className="truncate text-[15px] font-bold">
-              {current?.post ? `Pos ${current.post.index} · ${postNames[current.post.stage]}` : current ? current.title : active ? `Pulau ${active.course.subjectName}` : "Gabung course dari gurumu"}
-            </p>
+            {mostUrgent ? (
+              <>
+                <p className="text-xs font-semibold text-[#855a00]">{dockText(mostUrgent, now)}</p>
+                <p className="truncate text-[15px] font-bold">{mostUrgent.title}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-[#5e5e72]">{!active ? "Belum ada pulau" : current ? "Lanjutkan perjalanan" : "Semua balai tuntas"}</p>
+                <p className="truncate text-[15px] font-bold">
+                  {current?.post ? `Pos ${current.post.index} · ${postNames[current.post.stage]}` : current ? current.title : active ? `Pulau ${active.course.subjectName}` : "Gabung course dari gurumu"}
+                </p>
+              </>
+            )}
           </div>
           {href ? (
             <Link to={href} data-press className="shrink-0 rounded-[14px] bg-[#4bd29f] px-4 py-3 text-sm font-bold text-[#04352a]">

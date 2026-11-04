@@ -1,29 +1,17 @@
-import { ApplicationLoader } from "~/features/loading/application-loader";
-import { useLocation } from "react-router";
-import type { Route } from "./+types/_app.dashboard";
-import {
-  DashboardPage,
-  studentApi,
-} from "~/features/lms";
+import { redirect } from "react-router";
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  // Poin Nalar is extra: the dashboard still opens when it cannot be read.
-  const [data, points] = await Promise.all([
-    studentApi.dashboard(request),
-    studentApi.points(request).catch(() => null),
-  ]);
-  return { data, points };
+import { ApplicationLoader } from "~/features/loading/application-loader";
+
+// There is no dashboard any more: the world is the home, and its Tenggat has
+// what the dashboard listed. Old links and bookmarks land there.
+export function clientLoader() {
+  return redirect("/dunia");
 }
 
 export function HydrateFallback() {
-  const { pathname } = useLocation();
-  return <ApplicationLoader pathname={pathname} initial />;
+  return <ApplicationLoader pathname="/dunia" initial />;
 }
 
-export function meta() {
-  return [{ title: "Dashboard Siswa | NALAR" }];
-}
-
-export default function DashboardRoute({ loaderData }: Route.ComponentProps) {
-  return <DashboardPage data={loaderData.data} points={loaderData.points} />;
+export default function DashboardRoute() {
+  return null;
 }

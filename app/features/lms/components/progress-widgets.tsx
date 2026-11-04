@@ -7,40 +7,9 @@ import { lastSeenLevel, markLevelSeen, missionCopy, weekdayShort } from "../lib/
 import type { PointsData } from "../types";
 import { LevelMoment } from "./game-moments";
 
-// Shared pieces of the canvas "Dashboard siswa" and "Dunia": the level ring,
+// Shared pieces of the canvas "Dunia" and its 2D page: the level bar,
 // the weekly target, missions and the level-up moment. Everything shown here
 // comes from Poin Nalar and completed stages, never the AI Offloading Index.
-
-export function LevelRing({ level, size = 112, className }: { level: PointsData["level"]; size?: number; className?: string }) {
-  const stroke = size * 0.09;
-  const radius = (size - stroke) / 2 - 2;
-  const circumference = 2 * Math.PI * radius;
-  const share = level.needed === 0 ? 0 : level.into / level.needed;
-  return (
-    <div className={cn("relative shrink-0", className)} style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="#ffffff" stroke="#d3c5f8" strokeWidth={stroke} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="#4bd29f"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${Math.max(0.001, share) * circumference} ${circumference}`}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-[#18153a]">
-        <span className="text-[0.6875rem] font-medium leading-none text-[#5e5e72]">Level</span>
-        <span className="font-heading font-bold leading-none tabular-nums" style={{ fontSize: size * 0.32 }}>
-          {level.level}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export function LevelBar({ level, className }: { level: PointsData["level"]; className?: string }) {
   return (

@@ -20,7 +20,7 @@ export function Brand({
 }: {
   className?: string;
   isDark?: boolean;
-  /** Where the logo goes. Inside the signed-in app it is the dashboard, not the landing page. */
+  /** Where the logo goes. Inside the signed-in app it is the world, not the landing page. */
   to?: string;
 }) {
   const size = cn("h-8 w-auto select-none", className);

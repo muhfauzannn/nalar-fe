@@ -7,7 +7,7 @@ import { clearRecentReads } from "./http";
  * The real session cookie belongs to the API origin, so the SSR server cannot
  * tell who is asking. Without a hint it sends the full landing page to a
  * signed-in student and only redirects after the browser has asked the API, so
- * the landing page shows for a moment before the dashboard. With the hint the
+ * the landing page shows for a moment before the app opens. With the hint the
  * server can redirect before it sends any HTML.
  *
  * It is not a credential and grants nothing: it only decides which page is

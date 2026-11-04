@@ -26,26 +26,6 @@ export type StudentShellData = {
   profile: StudentProfile;
 };
 
-export type DashboardData = {
-  user: { name: string };
-  profile: StudentProfile;
-  courses: CourseSummary[];
-  upcoming: Array<{
-    id: string;
-    type: "assignment" | "quiz";
-    title: string;
-    courseName: string;
-    dueAt: string | null;
-    status: string;
-  }>;
-  summary: {
-    activeCourses: number;
-    completedItems: number;
-    totalItems: number;
-    progress: number;
-  };
-};
-
 export type CourseData = {
   course: Omit<CourseSummary, "progress">;
   teachers: string[];
@@ -407,7 +387,20 @@ export type IslandSketch = {
   halls: Array<{ assignmentId: string; title: string; chestOpen: boolean; posts: PostStatus[] | null }>;
 };
 
+/** A quiz or an assignment still to do, with a due date: what the world's Tenggat lists. */
+export type UpcomingWork = {
+  id: string;
+  courseId: string;
+  type: "assignment" | "quiz";
+  title: string;
+  courseName: string;
+  dueAt: string;
+  status: string;
+};
+
 export type WorldData = PointsData & {
+  /** Soonest first. Missing from an older API: the world then has no Tenggat. */
+  upcoming?: UpcomingWork[];
   islands: Array<{
     course: { id: string; name: string; subjectName: string };
     /** Missing from an older API: the island is then drawn as a stand-in until its course loads. */

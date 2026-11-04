@@ -7,7 +7,6 @@ import type { LoadSnapshot } from "./readiness";
 
 const palette = brand("#d3c5f8", "#4bd29f");
 export function loadingTitle(pathname: string) {
-  if (pathname === "/dashboard") return "Menyiapkan dashboard";
   if (pathname.endsWith("/kelas")) return "Menyiapkan kelas";
   if (pathname === "/dunia") return "Menyiapkan dunia";
   if (pathname.startsWith("/lessons/")) return "Menyiapkan materi";
@@ -17,7 +16,7 @@ export function loadingTitle(pathname: string) {
 }
 
 export function ApplicationLoader({
-  pathname = "/dashboard",
+  pathname = "/dunia",
   state,
   initial = false,
   error,
