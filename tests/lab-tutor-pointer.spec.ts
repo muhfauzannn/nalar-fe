@@ -166,9 +166,10 @@ test("a new question takes the pointer away before the next answer", async ({ pa
 });
 
 test("the pointer stays a moment after the answer, then goes", async ({ page }) => {
-  await page.clock.install();
   const lab = await openLab(page);
   await lab.summon();
+  // Only now: a fake clock under the 3D scene keeps a slow CI machine from ever loading it.
+  await page.clock.install();
   await lab.ask("Gimana cara menggambar gelombang?", steps);
   lab.say("Putar engkol pelan-pelan dulu.");
   await expect(lab.ring).toHaveAttribute("data-part", "engkol");
