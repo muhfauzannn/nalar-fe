@@ -211,7 +211,9 @@ for (const key of ["gerak-parabola", "mesin-gelombang", "reaktor-tumbukan", "mik
     expect([...found.marked].sort()).toEqual([...found.parts].sort());
 
     // The backend sources sit beside this app in the repository; elsewhere this check is skipped.
-    const backend = await import("../../nalar-be/src/modules/ai-tutor/lab-tutor.config").catch(() => null);
+    // Held in a variable so a frontend-only checkout still typechecks.
+    const backendConfig = "../../nalar-be/src/modules/ai-tutor/lab-tutor.config";
+    const backend = await import(backendConfig).catch(() => null);
     test.skip(!backend, "nalar-be is not next to nalar-fe");
     const briefs = backend!.LAB_TUTOR_BRIEFS as Record<string, { parts: Record<string, string> }>;
     expect(Object.keys(briefs[key]!.parts).sort()).toEqual([...found.parts].sort());
