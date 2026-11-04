@@ -35,7 +35,7 @@ export async function assignmentAction(
   returnTo?: string,
 ) {
   if (!assignmentId)
-    throw new Response("Assignment tidak ditemukan", { status: 404 });
+    throw new Response("Tugas tidak ditemukan", { status: 404 });
   const formData = await request.formData();
   const intent = formData.get("intent");
   const submittedStage = formData.get("stage");
@@ -58,7 +58,7 @@ export async function assignmentAction(
       ) {
         return {
           error:
-            "Form assignment tidak valid. Muat ulang halaman lalu coba lagi.",
+            "Form tugas tidak valid. Muat ulang halaman lalu coba lagi.",
           code: "ASSIGNMENT_STAGE_INVALID" as const,
           draft:
             typeof submittedContent === "string" ? submittedContent : undefined,
@@ -76,9 +76,10 @@ export async function assignmentAction(
       clearWritingSignals(writingSignalsKey(submissionId, submittedStage));
       clearActivityDraft(assignmentDraftKey(submissionId, submittedStage));
       rememberEarned(assignmentId, completion.points);
-      // The post lights up on the hall, where the student sees the path move on.
+      // The post lights up on the hall, where the student sees the path move on. In the
+      // classroom the student stays at the book, until the last post: the chest is at the hall.
       const courseId = formData.get("courseId");
-      if (!returnTo && typeof courseId === "string" && courseId) {
+      if ((!returnTo || completion.submitted) && typeof courseId === "string" && courseId) {
         return redirect(
           `/courses/${courseId}/balai/${assignmentId}?nyala=${submittedStage}`,
         );
@@ -86,7 +87,7 @@ export async function assignmentAction(
     } else {
       return {
         error:
-          "Aksi assignment tidak dikenali. Muat ulang halaman lalu coba lagi.",
+          "Aksi tugas tidak dikenali. Muat ulang halaman lalu coba lagi.",
         code: "ASSIGNMENT_SUBMIT_CONFLICT" as const,
         draft:
           typeof submittedContent === "string" ? submittedContent : undefined,

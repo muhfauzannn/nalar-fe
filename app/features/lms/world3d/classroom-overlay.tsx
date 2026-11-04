@@ -99,6 +99,8 @@ export function ClassroomOverlay({
       ...changes,
     });
   const closeTo = at(null);
+  const firstLab = island.labs[0];
+  const taskLab = firstLab && { href: at("lab", { labId: firstLab.id }), title: LABS[firstLab.labKey]?.title ?? firstLab.labKey };
   const labOptions = island.labs.map((lab) => ({
     id: lab.id,
     title: LABS[lab.labKey]?.title ?? lab.labKey,
@@ -206,6 +208,7 @@ export function ClassroomOverlay({
                   data={assignment}
                   earned={earned}
                   embedded
+                  lab={taskLab}
                   returnTo={closeTo}
                   {...action}
                 />

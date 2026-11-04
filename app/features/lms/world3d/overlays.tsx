@@ -17,6 +17,7 @@ import { useStudentId } from "../hooks/use-student-id";
 import { districtsOf, type Stop } from "../lib/districts";
 import { missionCopy, postNames } from "../lib/game";
 import type { BadgeProgress, CourseData, EarnedPoint, IslandData, PointsData, WorkflowStage, WorldData } from "../types";
+import { classroomUrl } from "./classroom-focus";
 import { useJoinSheet } from "./join";
 import { useWorldOverlay } from "./mode";
 import { useStageScene, type ChestState } from "./store";
@@ -300,6 +301,8 @@ export function BalaiOverlay({
   const currentIndex = building.posts.findIndex((post) => post.status === "current");
   const done = building.posts.filter((post) => post.status === "done").length;
   const started = building.submissionStatus !== null;
+  // In the world the work happens at the classroom's book, with the tutor spirit beside it.
+  const workHref = classroomUrl(courseId, { focus: "tugas", assignmentId });
   const next = currentIndex >= 0 ? currentIndex : !started && building.open ? 0 : -1;
   return (
     <Overlay>
@@ -314,13 +317,13 @@ export function BalaiOverlay({
           {chest === "ready" ? (
             <button type="button" data-press onClick={() => setMoment("chest")} className="shrink-0 rounded-[14px] bg-[#4bd29f] px-4 py-3 text-sm font-bold text-[#04352a]">Buka peti</button>
           ) : next >= 0 || building.chestOpen ? (
-            <Link to={`/assignments/${assignmentId}`} data-press className="shrink-0 rounded-[14px] bg-[#18153a] px-4 py-3 text-sm font-bold text-white">
+            <Link to={workHref} data-press className="shrink-0 rounded-[14px] bg-[#18153a] px-4 py-3 text-sm font-bold text-white">
               {building.chestOpen ? "Lihat" : "Masuk pos"}
             </Link>
           ) : null}
         </div>
       </Dock>
-      <PostSheet building={building} stage={openPost} onOpenChange={(open) => !open && setOpenPost(null)} />
+      <PostSheet building={building} stage={openPost} href={workHref} onOpenChange={(open) => !open && setOpenPost(null)} />
       {moment === "chest" && <ChestMoment points={building.points} assignmentId={assignmentId} onClose={afterChest} />}
       {moment && moment !== "chest" && <BadgeMoment badge={moment.badge} onClose={() => afterBadge(moment.badge)} />}
       {points && studentId && !moment && <LevelUpMoment userId={studentId} points={points} />}

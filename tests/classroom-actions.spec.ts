@@ -246,6 +246,21 @@ test("completing a task stage stays in its book rather than redirecting to the h
   expect(drafts.readActivityDraft(key)).toBeUndefined();
 });
 
+test("the last post is not finished in the book: it lights up at the hall, where the chest is", async () => {
+  api.completeStage = async () => ({ currentStage: null, submitted: true, points: [] });
+  const result = await act(
+    request("&fokus=tugas&tugas=assignment-a", {
+      intent: "complete-stage",
+      submissionId: "submission-a",
+      courseId: "course-a",
+      stage: "5_reflection",
+      content: "Yang berubah dari drafku adalah caraku memeriksa.",
+    }),
+    "course-a",
+  );
+  expect((result as Response).headers.get("Location")).toBe("/courses/course-a/balai/assignment-a?nyala=5_reflection");
+});
+
 test("standalone quiz and assignment routes keep their existing redirects", async () => {
   api.startQuiz = async () => undefined;
   api.startAssignment = async () => undefined;

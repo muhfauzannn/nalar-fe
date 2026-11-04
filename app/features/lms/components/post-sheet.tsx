@@ -21,10 +21,13 @@ const postGuide: Record<WorkflowStage, string> = {
 export function PostSheet({
   building,
   stage,
+  href = `/assignments/${building.assignmentId}`,
   onOpenChange,
 }: {
   building: Building;
   stage: WorkflowStage | null;
+  /** Where the work is done. */
+  href?: string;
   onOpenChange: (open: boolean) => void;
 }) {
   const index = stage ? building.posts.findIndex((post) => post.stage === stage) : -1;
@@ -91,13 +94,13 @@ export function PostSheet({
               <p className="text-[0.8125rem] text-[#c6c1f1]">
                 {post.status === "done"
                   ? `Pos ini sudah menyala${post.points > 0 ? ` dan memberimu ${post.points} Poin Nalar` : ""}.`
-                  : `Pos menyala saat tahap ini selesai, dan jalur ke ${index < 4 ? `Pos ${index + 2}` : "peti balai"} terbuka.`}
+                  : `Pos menyala saat kamu menyelesaikannya, dan jalur ke ${index < 4 ? `Pos ${index + 2}` : "peti balai"} terbuka.`}
               </p>
             </div>
 
             {enterable ? (
               <Link
-                to={`/assignments/${building.assignmentId}`}
+                to={href}
                 className="mt-4 flex min-h-13 items-center justify-center rounded-[1.125rem] bg-[#4bd29f] font-bold text-[#04352a] transition-transform duration-150 active:scale-[0.98]"
               >
                 {post.status === "done" ? "Lihat tugas" : post.status === "current" ? "Masuk pos" : "Mulai tugas"}

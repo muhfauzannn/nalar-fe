@@ -5,7 +5,7 @@ import type { BadgeProgress, EarnedPoint, MissionId, ProcessPointKind, WorkflowS
 export const pointCopy: Record<ProcessPointKind, { title: string; detail: string }> = {
   independent_draft: {
     title: "Draf dari pikiranmu sendiri",
-    detail: "Sebagian besar draf Tahap 1 kamu ketik sendiri, bukan ditempel.",
+    detail: "Sebagian besar draf Pos 1 kamu ketik sendiri, bukan ditempel.",
   },
   hint_request: {
     title: "Minta petunjuk, bukan jawaban",
@@ -21,7 +21,7 @@ export const pointCopy: Record<ProcessPointKind, { title: string; detail: string
   },
   substantial_revision: {
     title: "Revisi yang sungguh-sungguh",
-    detail: "Seperempat atau lebih dari drafmu berubah di Tahap 4.",
+    detail: "Seperempat atau lebih dari drafmu berubah di Pos 4.",
   },
   specific_reflection: {
     title: "Refleksi yang spesifik",
@@ -29,7 +29,7 @@ export const pointCopy: Record<ProcessPointKind, { title: string; detail: string
   },
   journey_complete: {
     title: "Lima pos menyala",
-    detail: "Kamu menempuh semua tahap sampai refleksi.",
+    detail: "Kamu menempuh semua pos sampai refleksi.",
   },
 };
 

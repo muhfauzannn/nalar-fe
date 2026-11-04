@@ -183,6 +183,7 @@ export type AssignmentData = {
     submittedAt: string | null;
     stages: Array<{ stage: WorkflowStage; status: "locked" | "in_progress" | "completed" }>;
     artifacts: Array<{ stage: WorkflowStage; content: string; version: number }>;
+    tutorMessages?: Array<{ id: string; author: "student" | "tutor"; content: string }>;
     assessment: null | { score: string; feedback: string | null };
     offloading: OffloadingResult | null;
   };

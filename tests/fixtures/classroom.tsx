@@ -45,6 +45,21 @@ if (new URL(location.href).searchParams.get("pdf"))
     },
   ];
 
+// `?pos=<1-5>` has the task in progress at that post.
+const post = Number(new URL(location.href).searchParams.get("pos"));
+if (post)
+  assignment.submission = {
+    id: "submission-a",
+    status: "in_progress",
+    currentStage: stages[post - 1]!,
+    submittedAt: null,
+    stages: stages.map((stage, index) => ({ stage, status: index < post - 1 ? "completed" : index === post - 1 ? "in_progress" : "locked" })),
+    artifacts: stages.slice(0, post - 1).map((stage) => ({ stage, content: "Balok lebih mudah turun kalau bidangnya curam.", version: 1 })),
+    tutorMessages: new URL(location.href).searchParams.get("balasan") ? [{ id: "m1", author: "tutor", content: "Coba uraikan gaya berat." }] : [],
+    assessment: null,
+    offloading: null,
+  };
+
 // `?lab=<key>` puts another lab on the bench.
 const labKey = new URL(location.href).searchParams.get("lab");
 if (labKey) for (const lab of [...island.labs, ...lesson.labs]) lab.labKey = labKey;

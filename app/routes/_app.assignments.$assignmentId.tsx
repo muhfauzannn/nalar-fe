@@ -11,7 +11,7 @@ import {
 import { assignmentAction } from "~/features/lms/api/assignment-action";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-  if (!params.assignmentId) throw new Response("Assignment tidak ditemukan", { status: 404 });
+  if (!params.assignmentId) throw new Response("Tugas tidak ditemukan", { status: 404 });
   const data = await studentApi.assignment(request, params.assignmentId);
   return { ...data, earned: takeEarned(params.assignmentId) };
 }
@@ -26,7 +26,7 @@ export function HydrateFallback() {
 }
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "Assignment | NALAR" }];
+  return [{ title: "Tugas | NALAR" }];
 }
 
 export default function AssignmentRoute({ loaderData }: Route.ComponentProps) {

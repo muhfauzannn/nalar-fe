@@ -20,7 +20,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { enterSilentZone } from "~/features/game-feel";
@@ -52,13 +52,16 @@ import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { formatDateTime } from "../lib/format";
-import { pointCopy } from "../lib/game";
+import { pointCopy, postKinds, postNames } from "../lib/game";
 import type { AssignmentData, EarnedPoint, OffloadingLevel, OffloadingResult, WorkflowStage } from "../types";
 import { AccessNotice, contactTeacher, datedFact, noticeFacts, type Notice } from "../components/access-notice";
 import { AiTutorPanel } from "../components/ai-tutor-panel";
+import { EvaluationMarks } from "../components/evaluation-marks";
+import { PostTrack } from "../components/post-track";
 import { useHostedTutor } from "../components/tutor-host";
 import { useWritingSignals, writingSignalsKey } from "../hooks/use-writing-signals";
 import { assignmentDraftKey, readActivityDraft, writeActivityDraft } from "../lib/activity-drafts";
+import { marksReady } from "../lib/evaluation-marks";
 
 const stageCopy: Record<
   WorkflowStage,
@@ -72,40 +75,43 @@ const stageCopy: Record<
 > = {
   "1_independent_effort": {
     number: "01",
-    title: "Upaya mandiri",
+    title: postNames["1_independent_effort"],
     shortTitle: "Mandiri",
     prompt: "Tuliskan jawaban atau pemahaman awalmu",
     guidance: "Fokus pada cara berpikirmu saat ini. Jawaban belum harus sempurna.",
   },
   "2_guided_questioning": {
     number: "02",
-    title: "Pertanyaan terbimbing",
+    title: postNames["2_guided_questioning"],
     shortTitle: "Bertanya",
-    prompt: "Diskusikan pertanyaanmu bersama AI Tutor",
-    guidance: "Minta petunjuk atau umpan balik. Tutor akan menjaga agar pekerjaan tetap milikmu.",
+    prompt: "Diskusikan pertanyaanmu bersama NALAR",
+    guidance: "Minta petunjuk atau umpan balik. NALAR menjaga agar pekerjaan tetap milikmu.",
   },
   "3_ai_evaluation": {
     number: "03",
-    title: "Evaluasi jawaban AI",
+    title: postNames["3_ai_evaluation"],
     shortTitle: "Evaluasi",
     prompt: "Apa yang kuat, lemah, atau perlu diverifikasi dari bantuan AI?",
     guidance: "Jika tidak menggunakan AI, jelaskan alasan dan caramu memeriksa jawaban sendiri.",
   },
   "4_revision_finalization": {
     number: "04",
-    title: "Revisi dan finalisasi",
-    shortTitle: "Finalisasi",
-    prompt: "Tuliskan jawaban final assignment",
-    guidance: "Pastikan jawaban final menjawab instruksi dan rubrik yang tersedia.",
+    title: postNames["4_revision_finalization"],
+    shortTitle: "Revisi",
+    prompt: "Perbaiki drafmu menjadi jawaban final",
+    guidance: "Drafmu dari Pos 1 sudah ada di sini. Ubah yang perlu berubah, lalu periksa dengan rubrik.",
   },
   "5_reflection": {
     number: "05",
-    title: "Refleksi",
+    title: postNames["5_reflection"],
     shortTitle: "Refleksi",
     prompt: "Apa yang berubah dalam pemahaman dan proses belajarmu?",
-    guidance: "Bandingkan dengan upaya mandirimu di tahap 1.",
+    guidance: "Bandingkan draf awal dan jawaban finalmu di atas.",
   },
 };
+
+// The world's own call to action, as on the island's post sheet.
+const mintButton = "bg-brand-mint font-bold text-brand-mint-ink hover:bg-brand-mint/90";
 
 const terminalErrorCodes = new Set([
   "ASSIGNMENT_ENROLLMENT_INACTIVE",
@@ -123,9 +129,12 @@ export function AssignmentPage({
   earned = [],
   embedded = false,
   returnTo,
+  lab,
 }: {
   data: AssignmentData;
   embedded?: boolean;
+  /** The lab where Pos 3 can test what the tutor said. */
+  lab?: { href: string; title: string };
   returnTo?: string;
   earned?: EarnedPoint[];
   actionError?: string;
@@ -152,8 +161,8 @@ export function AssignmentPage({
         {embedded ? (
           <header className="flex flex-col gap-2">
             <h2 className="font-heading text-xl font-semibold">{loaderData.title}</h2>
-            <div className="text-sm leading-relaxed"><MathText>{loaderData.instructions}</MathText></div>
-            <p className="text-xs text-muted-foreground">{completedStages} dari 5 tahap selesai</p>
+            {!activeStage && <div className="text-sm leading-relaxed"><MathText>{loaderData.instructions}</MathText></div>}
+            <p className="text-xs text-muted-foreground">{completedStages} dari 5 pos menyala</p>
           </header>
         ) : <AssignmentHeader
           data={loaderData}
@@ -184,6 +193,7 @@ export function AssignmentPage({
             assignment={loaderData}
             working={working}
             actionDraft={actionStage === submission.currentStage ? actionDraft : undefined}
+            lab={lab}
           />
         ) : (
           <AssignmentUnavailable data={loaderData} message={actionError} />
@@ -232,16 +242,18 @@ function AssignmentHeader({
       ]}
       eyebrow={
         <>
-          <Badge variant="lavender">Assignment</Badge>
+          <Badge variant="lavender">Tugas</Badge>
           {finished && <Badge variant="mint">Sudah dikumpulkan</Badge>}
           {working && <Badge variant="outline">Sedang dikerjakan</Badge>}
         </>
       }
       title={data.title}
       description={
-        <span className="whitespace-pre-wrap">
-          <MathText>{data.instructions}</MathText>
-        </span>
+        working ? undefined : (
+          <span className="whitespace-pre-wrap">
+            <MathText>{data.instructions}</MathText>
+          </span>
+        )
       }
       meta={
         <>
@@ -264,7 +276,7 @@ function AssignmentHeader({
           {data.submission && !finished && (
             <span className="flex items-center gap-1.5 tabular-nums">
               <FileCheck2 className="size-4" aria-hidden="true" />
-              {completedStages} dari 5 tahap selesai
+              {completedStages} dari 5 pos menyala
             </span>
           )}
         </>
@@ -278,26 +290,10 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
     <section className="grid grid-flow-dense items-start gap-5 @5xl:grid-cols-12">
       <Card className="@5xl:col-span-8">
         <CardHeader>
-          <CardTitle>Lima tahap</CardTitle>
+          <CardTitle>Lima pos</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-x-5 sm:grid-cols-2">
-            {Object.values(stageCopy).map((stage, index) => (
-              <div
-                key={stage.number}
-                className={cn(
-                  "flex items-start gap-3 border-b py-4",
-                  index >= 3 && "sm:border-b-0",
-                  index === 4 && "sm:col-span-2",
-                )}
-              >
-                <span className="font-heading text-sm font-semibold text-muted-foreground tabular-nums">
-                  {stage.number}
-                </span>
-                <p className="font-medium">{stage.title}</p>
-              </div>
-            ))}
-          </div>
+          <PostTrack posts={(Object.keys(stageCopy) as WorkflowStage[]).map((stage) => ({ stage, status: "locked" }))} />
         </CardContent>
       </Card>
 
@@ -309,15 +305,15 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
           <RubricAccordion criteria={data.criteria} compact />
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <ShieldCheck className="size-3.5 shrink-0" aria-hidden="true" />
-            Hanya satu submission. Progres tersimpan per tahap.
+            Tugas ini dikumpulkan sekali. Progres tersimpan di setiap pos.
           </p>
         </CardContent>
         <CardFooter>
           <Form method="post" className="w-full">
             <input type="hidden" name="intent" value="start" />
-            <Button type="submit" className="w-full" disabled={working}>
+            <Button type="submit" className={cn("w-full", mintButton)} disabled={working}>
               {working && <Spinner data-icon="inline-start" />}
-              {working ? "Membuka assignment..." : "Mulai mengerjakan"}
+              {working ? "Membuka tugas..." : "Mulai dari Pos 1"}
               {!working && <ArrowRight data-icon="inline-end" />}
             </Button>
           </Form>
@@ -327,14 +323,17 @@ function AssignmentStartPanel({ data, working }: { data: AssignmentData; working
   );
 }
 
+// The desk: one sheet of work under the path it belongs to, with the task and the rubric at hand.
 function AssignmentWorkspace({
   assignment,
   working,
   actionDraft,
+  lab,
 }: {
   assignment: AssignmentData;
   working: boolean;
   actionDraft?: string;
+  lab?: { href: string; title: string };
 }) {
   const submission = assignment.submission;
   const guidedQuestioning = submission?.currentStage === "2_guided_questioning";
@@ -344,108 +343,46 @@ function AssignmentWorkspace({
       ? { key: `assignment:${submission.id}`, label: `Tugas ${assignment.title}`, target: { targetType: "assignment", targetId: submission.id } }
       : null,
   );
+  const completedCount = submission?.stages.filter((stage) => stage.status === "completed").length ?? 0;
+  // A post completed without leaving this page (the classroom's book) lights up here.
+  const [seenCount, setSeenCount] = useState(completedCount);
+  const lit = completedCount > seenCount ? submission?.stages[completedCount - 1]?.stage ?? null : null;
+  const onLit = useCallback(() => setSeenCount(completedCount), [completedCount]);
   if (!submission) return null;
-  const completedCount = submission.stages.filter((stage) => stage.status === "completed").length;
 
   return (
-    <div className="grid items-start gap-6 @7xl:grid-cols-[13.5rem_minmax(0,1fr)_23rem]">
-      <StageNavigator assignment={assignment} completedCount={completedCount} />
-      <div className="order-1 min-w-0 @7xl:order-2">
-        <ActiveStage assignment={assignment} working={working} actionDraft={actionDraft} />
-      </div>
-      <aside className="order-3 flex min-w-0 flex-col gap-5 @7xl:sticky @7xl:top-24">
-        {guidedQuestioning && !tutorHosted && (
-          <AiTutorPanel
-            target={{ targetType: "assignment", targetId: submission.id }}
-          />
-        )}
-        <Card>
-          <CardHeader>
-            <CardTitle>Rubrik penilaian</CardTitle>
-            <CardDescription>Gunakan sebagai checklist sebelum melanjutkan.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RubricAccordion criteria={assignment.criteria} />
-          </CardContent>
-        </Card>
-      </aside>
-    </div>
-  );
-}
-
-function StageNavigator({
-  assignment,
-  completedCount,
-}: {
-  assignment: AssignmentData;
-  completedCount: number;
-}) {
-  const submission = assignment.submission;
-  if (!submission) return null;
-  const progress = (completedCount / submission.stages.length) * 100;
-
-  return (
-    <aside
-      className="order-2 min-w-0 @7xl:order-1 @7xl:sticky @7xl:top-24"
-      aria-label="Tahapan assignment"
-    >
-      <Card size="sm">
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <section aria-label="Perjalanan tugas" className="rounded-3xl bg-brand-lavender-soft/60 px-2 py-4 @4xl:col-span-2 sm:px-4">
+        <PostTrack posts={submission.stages} lit={lit} onLit={onLit} />
+      </section>
+      <Card size="sm" className="@4xl:col-start-2 @4xl:row-start-2">
         <CardHeader>
-          <CardTitle>Alur assignment</CardTitle>
-          <CardDescription>Selesaikan tahap secara berurutan.</CardDescription>
+          <CardTitle>Soal</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          <Progress value={progress} aria-label="Progres assignment">
-            <ProgressLabel>Progres</ProgressLabel>
-            <ProgressValue>
-              {() => `${completedCount} dari 5 tahap selesai`}
-            </ProgressValue>
-          </Progress>
-          <ol className="flex flex-col">
-            {submission.stages.map((stage, index) => {
-              const active = stage.status === "in_progress";
-              const complete = stage.status === "completed";
-              return (
-                <li key={stage.stage} aria-current={active ? "step" : undefined}>
-                  {index > 0 && <Separator className="my-3" />}
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={cn(
-                        "flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-semibold transition-colors",
-                        complete && "border-brand-mint bg-brand-mint-soft text-brand-mint-foreground",
-                        active && "border-primary bg-primary text-primary-foreground",
-                        stage.status === "locked" && "border-border bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {complete ? (
-                        <Check className="size-4" aria-hidden="true" />
-                      ) : stage.status === "locked" ? (
-                        <LockKeyhole className="size-3.5" aria-hidden="true" />
-                      ) : (
-                        stageCopy[stage.stage].number
-                      )}
-                    </span>
-                    <div className="min-w-0">
-                      <p
-                        className={cn(
-                          "truncate text-sm",
-                          active ? "font-medium" : "text-muted-foreground",
-                        )}
-                      >
-                        {stageCopy[stage.stage].shortTitle}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {complete ? "Selesai" : active ? "Sedang dikerjakan" : "Terkunci"}
-                      </p>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+        <CardContent>
+          <div className="max-h-56 overflow-y-auto text-sm/relaxed whitespace-pre-wrap @4xl:max-h-[50vh]">
+            <MathText>{assignment.instructions}</MathText>
+          </div>
         </CardContent>
       </Card>
-    </aside>
+      <div className="min-w-0 @4xl:col-start-1 @4xl:row-span-3 @4xl:row-start-2">
+        <ActiveStage assignment={assignment} working={working} actionDraft={actionDraft} tutorHosted={tutorHosted} lighting={lit !== null} lab={lab} />
+      </div>
+      {guidedQuestioning && !tutorHosted && (
+        <div className="min-w-0 @4xl:col-start-2">
+          <AiTutorPanel target={{ targetType: "assignment", targetId: submission.id }} />
+        </div>
+      )}
+      <Card size="sm" className="@4xl:col-start-2">
+        <CardHeader>
+          <CardTitle>Rubrik</CardTitle>
+          <CardDescription>Periksa sebelum menyalakan pos.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RubricAccordion criteria={assignment.criteria} compact />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -453,15 +390,22 @@ function ActiveStage({
   assignment,
   working,
   actionDraft,
+  tutorHosted,
+  lighting,
+  lab,
 }: {
   assignment: AssignmentData;
   working: boolean;
   actionDraft?: string;
+  tutorHosted: boolean;
+  lighting: boolean;
+  lab?: { href: string; title: string };
 }) {
   const submission = assignment.submission;
   const stage = submission?.currentStage ?? "1_independent_effort";
-  // Writing a stage is a silent zone: no game sound or vibration until it is left.
-  useEffect(() => enterSilentZone(), [stage]);
+  // Writing a stage is a silent zone: no game sound or vibration until it is left. It starts
+  // once the post before it has finished lighting up.
+  useEffect(() => (lighting ? undefined : enterSilentZone()), [stage, lighting]);
   // Sinyal 1: only the two texts the student writes on their own are recorded.
   const recorded = stage === "1_independent_effort" || stage === "4_revision_finalization";
   const writing = useWritingSignals(writingSignalsKey(submission?.id ?? "none", stage));
@@ -469,35 +413,58 @@ function ActiveStage({
   if (!submission) return null;
   const copy = stageCopy[stage];
   const finalStage = stage === "5_reflection";
+  const rewards = postKinds[stage].map((kind) => pointCopy[kind].title).join(" · ");
+  const messages = submission.tutorMessages ?? [];
+  const marking = stage === "3_ai_evaluation" && messages.some((message) => message.author === "tutor");
 
   return (
-    <Card>
+    <Card className="rounded-[1.75rem]">
       <CardHeader className="border-b">
         <p className="mb-1 text-xs font-medium text-muted-foreground tabular-nums">
-          Tahap {Number(copy.number)} dari 5
+          Pos {Number(copy.number)} dari 5
         </p>
-        <CardTitle className="text-xl sm:text-2xl">{copy.title}</CardTitle>
+        <CardTitle className="font-heading text-xl font-bold sm:text-2xl">{copy.title}</CardTitle>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-6">
+        <EarlierWork key={stage} stage={stage} submission={submission} />
         {stage === "2_guided_questioning" ? (
           <div className="flex flex-col gap-5">
             <div>
               <p className="font-medium">{copy.prompt}</p>
               <p className="mt-1 text-sm/relaxed text-muted-foreground">{copy.guidance}</p>
+              {tutorHosted && <p className="mt-1 text-sm/relaxed text-muted-foreground">NALAR ada di kelas bersamamu. Panggil dari tombol tutor.</p>}
             </div>
+            <PostRewards rewards={rewards} />
             <Form method="post">
               <input type="hidden" name="intent" value="complete-stage" />
               <input type="hidden" name="submissionId" value={submission.id} />
               <input type="hidden" name="courseId" value={assignment.courseId} />
               <input type="hidden" name="stage" value={stage} />
               <input type="hidden" name="content" value="" />
-              <Button type="submit" disabled={working}>
+              <Button type="submit" disabled={working} className={mintButton}>
                 {working ? <Spinner data-icon="inline-start" /> : <ArrowRight data-icon="inline-end" />}
-                {working ? "Menyimpan tahap..." : "Selesai dan lanjutkan"}
+                {working ? "Menyalakan pos..." : "Nyalakan pos"}
               </Button>
             </Form>
           </div>
+        ) : marking ? (
+          <EvaluationMarks messages={messages} draftKey={assignmentDraftKey(submission.id, stage)} lab={lab}>
+            {({ content, marks }) => (
+              <Form method="post" className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <input type="hidden" name="intent" value="complete-stage" />
+                <input type="hidden" name="submissionId" value={submission.id} />
+                <input type="hidden" name="courseId" value={assignment.courseId} />
+                <input type="hidden" name="stage" value={stage} />
+                <input type="hidden" name="content" value={content} />
+                <PostRewards rewards={rewards} />
+                <Button type="submit" disabled={working || !marksReady(marks)} className={cn("w-full sm:w-auto sm:min-w-48 sm:shrink-0", mintButton)}>
+                  {working ? <Spinner data-icon="inline-start" /> : <ArrowRight data-icon="inline-end" />}
+                  {working ? "Menyalakan pos..." : "Nyalakan pos"}
+                </Button>
+              </Form>
+            )}
+          </EvaluationMarks>
         ) : (
           <Form
             method="post"
@@ -520,7 +487,7 @@ function ActiveStage({
                   required
                   minLength={10}
                   rows={stage === "4_revision_finalization" ? 15 : 10}
-                  defaultValue={actionDraft ?? readActivityDraft(assignmentDraftKey(submission.id, stage))}
+                  defaultValue={actionDraft ?? readActivityDraft(assignmentDraftKey(submission.id, stage)) ?? (stage === "4_revision_finalization" ? artifactOf(submission, "1_independent_effort") : undefined)}
                   onChange={(event) => writeActivityDraft(assignmentDraftKey(submission.id, stage), event.currentTarget.value)}
                   placeholder="Tulis jawabanmu…"
                   className="min-h-56 resize-y bg-background text-base leading-relaxed sm:min-h-64"
@@ -531,7 +498,7 @@ function ActiveStage({
                   <p className="flex gap-2 text-xs/relaxed text-muted-foreground">
                     <Activity className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                     <span>
-                      Di tahap ini NALAR mencatat cara kamu menulis: lama menulis, banyak teks yang
+                      Di pos ini NALAR mencatat cara kamu menulis: lama menulis, banyak teks yang
                       ditempel, jeda panjang, dan berapa kali kamu pindah tab. Isi ketikanmu per tombol
                       tidak direkam. Catatan ini dipakai untuk laporan refleksimu, bukan untuk nilai.
                     </span>
@@ -542,18 +509,16 @@ function ActiveStage({
               {finalStage && (
                 <Alert className="border-brand-lavender bg-brand-lavender-soft/50">
                   <ShieldCheck />
-                  <AlertTitle>Tahap terakhir</AlertTitle>
+                  <AlertTitle>Pos terakhir</AlertTitle>
                   <AlertDescription>
                     Setelah dikumpulkan, semua jawaban tidak bisa diubah.
                   </AlertDescription>
                 </Alert>
               )}
 
-              <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Tahap {copy.number} akan ditandai selesai setelah server mengonfirmasi.
-                </p>
-                <Button type="submit" disabled={working} className="sm:min-w-48">
+              <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <PostRewards rewards={rewards} />
+                <Button type="submit" disabled={working} className={cn("w-full sm:w-auto sm:min-w-48 sm:shrink-0", mintButton)}>
                   {working ? (
                     <Spinner data-icon="inline-start" />
                   ) : finalStage ? (
@@ -564,10 +529,10 @@ function ActiveStage({
                   {working
                     ? finalStage
                       ? "Mengumpulkan..."
-                      : "Menyimpan tahap..."
+                      : "Menyalakan pos..."
                     : finalStage
-                      ? "Kumpulkan assignment"
-                      : "Simpan & lanjut"}
+                      ? "Kumpulkan tugas"
+                      : "Nyalakan pos"}
                 </Button>
               </div>
             </FieldGroup>
@@ -575,6 +540,98 @@ function ActiveStage({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+type Submission = NonNullable<AssignmentData["submission"]>;
+
+// What this post can give, so the student knows what the path is asking for.
+function PostRewards({ rewards }: { rewards: string }) {
+  return (
+    <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+      <img src="/game/coin.webp" alt="" width={125} height={128} className="size-5 shrink-0" />
+      <span>{rewards}</span>
+    </p>
+  );
+}
+
+function artifactOf(submission: Submission, stage: WorkflowStage) {
+  return submission.artifacts.find((artifact) => artifact.stage === stage)?.content ?? "";
+}
+
+// What the earlier posts left behind: each post carries on the same work instead of starting blank.
+function EarlierWork({ stage, submission }: { stage: WorkflowStage; submission: Submission }) {
+  const draft = artifactOf(submission, "1_independent_effort");
+  if (stage === "3_ai_evaluation") {
+    const asked = submission.tutorMessages ?? [];
+    const answered = asked.some((message) => message.author === "tutor");
+    return (
+      <Accordion multiple defaultValue={["tutor"]}>
+        {!answered && (
+          <EarlierItem value="tutor" title="Percakapanmu dengan NALAR">
+            <TutorExchange messages={asked} />
+          </EarlierItem>
+        )}
+        <EarlierItem value="draft" title="Draf awalmu">
+          <EarlierText text={draft} />
+        </EarlierItem>
+      </Accordion>
+    );
+  }
+  if (stage === "4_revision_finalization") {
+    return (
+      <Accordion multiple defaultValue={["evaluation"]}>
+        <EarlierItem value="evaluation" title="Evaluasimu di Pos 3">
+          <EarlierText text={artifactOf(submission, "3_ai_evaluation")} />
+        </EarlierItem>
+        <EarlierItem value="draft" title="Draf awalmu, sebelum diubah">
+          <EarlierText text={draft} />
+        </EarlierItem>
+      </Accordion>
+    );
+  }
+  if (stage === "5_reflection") {
+    return (
+      <div className="grid gap-4 @3xl:grid-cols-2">
+        {[
+          { title: "Draf awalmu", text: draft },
+          { title: "Jawaban finalmu", text: artifactOf(submission, "4_revision_finalization") },
+        ].map((side) => (
+          <section key={side.title} aria-label={side.title} className="flex min-w-0 flex-col gap-2 rounded-2xl bg-muted/60 p-4">
+            <h3 className="text-sm font-medium">{side.title}</h3>
+            <EarlierText text={side.text} />
+          </section>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+function EarlierItem({ value, title, children }: { value: string; title: string; children: ReactNode }) {
+  return (
+    <AccordionItem value={value}>
+      <AccordionTrigger className="hover:no-underline">{title}</AccordionTrigger>
+      <AccordionContent>{children}</AccordionContent>
+    </AccordionItem>
+  );
+}
+
+function EarlierText({ text }: { text: string }) {
+  return <p className="max-h-64 overflow-y-auto text-sm/relaxed break-words whitespace-pre-wrap">{text}</p>;
+}
+
+function TutorExchange({ messages }: { messages: NonNullable<Submission["tutorMessages"]> }) {
+  if (messages.length === 0) return <p className="text-sm/relaxed text-muted-foreground">Kamu tidak bertanya ke NALAR di Pos 2.</p>;
+  return (
+    <ol className="flex max-h-80 flex-col gap-3 overflow-y-auto">
+      {messages.map((message) => (
+        <li key={message.id} data-author={message.author} className="text-sm/relaxed">
+          <p className="text-xs font-medium text-muted-foreground">{message.author === "tutor" ? "NALAR" : "Kamu"}</p>
+          <p className="break-words whitespace-pre-wrap">{message.content}</p>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -586,7 +643,7 @@ function RubricAccordion({
   compact?: boolean;
 }) {
   if (criteria.length === 0) {
-    return <p className="text-sm text-muted-foreground">Belum ada rubrik untuk assignment ini.</p>;
+    return <p className="text-sm text-muted-foreground">Belum ada rubrik untuk tugas ini.</p>;
   }
 
   return (
@@ -809,32 +866,32 @@ function AssignmentUnavailable({
       title: "Waktu pengerjaan telah berakhir",
       description:
         message ??
-        "Tahap yang sudah selesai tetap tersimpan, tetapi submission tidak dapat dilanjutkan setelah batas penutupan.",
+        "Pos yang sudah menyala tetap tersimpan, tetapi tugas tidak dapat dilanjutkan setelah batas penutupan.",
     };
   } else if (readOnly) {
     notice = {
       tone: "neutral",
       icon: inProgress ? LockKeyhole : Eye,
-      title: inProgress ? "Assignment hanya dapat dilihat" : "Course hanya dapat dilihat",
+      title: inProgress ? "Tugas hanya dapat dilihat" : "Course hanya dapat dilihat",
       description:
         message ??
-        `Enrollment atau course sedang tidak aktif, jadi ${inProgress ? "submission tidak bisa dilanjutkan" : "assignment ini tidak bisa dimulai"}.`,
+        `Enrollment atau course sedang tidak aktif, jadi ${inProgress ? "tugas tidak bisa dilanjutkan" : "tugas ini tidak bisa dimulai"}.`,
       hint: contactTeacher,
     };
   } else if (data.availability === "upcoming") {
     notice = {
       tone: "upcoming",
       icon: CalendarClock,
-      title: "Assignment belum dibuka",
-      description: message ?? "Kamu bisa mulai mengerjakan begitu assignment dibuka.",
+      title: "Tugas belum dibuka",
+      description: message ?? "Kamu bisa mulai mengerjakan begitu tugas dibuka.",
       facts: noticeFacts(datedFact("Dibuka", data.availableAt)),
     };
   } else {
     notice = {
       tone: "neutral",
       icon: CalendarX2,
-      title: "Assignment sudah ditutup",
-      description: message ?? "Assignment ini tidak lagi menerima submission baru.",
+      title: "Tugas sudah ditutup",
+      description: message ?? "Tugas ini tidak lagi menerima jawaban baru.",
       hint: contactTeacher,
     };
   }
@@ -852,9 +909,9 @@ function SubmissionResult({ assignment, returnTo }: { assignment: AssignmentData
       <div className="flex min-w-0 flex-col gap-5">
         <Alert className="border-brand-mint bg-brand-mint-soft/45">
           <CheckCircle2 />
-          <AlertTitle>{returned ? "Assignment sudah dinilai" : "Assignment berhasil dikumpulkan"}</AlertTitle>
+          <AlertTitle>{returned ? "Tugas sudah dinilai" : "Tugas berhasil dikumpulkan"}</AlertTitle>
           <AlertDescription>
-            Submission tersimpan pada {formatDateTime(submission.submittedAt)} dan kini hanya dapat dibaca.
+            Jawabanmu tersimpan pada {formatDateTime(submission.submittedAt)} dan kini hanya dapat dibaca.
           </AlertDescription>
         </Alert>
 
@@ -912,8 +969,8 @@ function SubmissionResult({ assignment, returnTo }: { assignment: AssignmentData
       <aside className="@7xl:sticky @7xl:top-24">
         <Card>
           <CardHeader>
-            <CardTitle>Ringkasan submission</CardTitle>
-            <CardDescription>Semua tahap telah dikunci.</CardDescription>
+            <CardTitle>Ringkasan tugas</CardTitle>
+            <CardDescription>Semua pos sudah dikunci.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {submission.stages.map((stage, index) => (
@@ -925,7 +982,7 @@ function SubmissionResult({ assignment, returnTo }: { assignment: AssignmentData
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{stageCopy[stage.stage].title}</p>
-                    <p className="text-xs text-muted-foreground">Selesai</p>
+                    <p className="text-xs text-muted-foreground">Menyala</p>
                   </div>
                 </div>
               </div>

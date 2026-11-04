@@ -6,6 +6,7 @@ import { announcePoints, awardChip, flyCoin, gameGsap, HAPTIC, haptic, playSound
 
 import { cn } from "~/lib/utils";
 import { padPositions, pointCopy, postNames } from "../lib/game";
+import { lightPad } from "./post-track";
 import type { EarnedPoint, IslandData, WorkflowStage } from "../types";
 
 type Building = IslandData["buildings"][number];
@@ -77,11 +78,8 @@ export function IslandJourney({
     timeline
       .from(pad, { scale: 0.86, duration: 0.14, ease: "power2.in" })
       .addLabel("act")
-      .add(() => { playSound("chord"); haptic(HAPTIC.award); })
-      .fromTo(pad.querySelector("[data-glow]"), { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.55, ease: "nalar.spring" })
-      .fromTo(pad.querySelector("[data-ring]"), { scale: 0.9, opacity: 0.9 }, { scale: 2.4, opacity: 0, duration: 0.7, ease: "power2.out" }, "<");
-    const crystal = pad.querySelector("[data-crystal]");
-    if (crystal) timeline.fromTo(crystal, { y: -36, opacity: 0, scale: 0.6 }, { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: "bounce.out" }, "<0.05");
+      .add(() => { playSound("chord"); haptic(HAPTIC.award); });
+    lightPad(timeline, pad);
     lit.awards.forEach((award, index) => {
       timeline.add(awardChip({ x: center.x, y: center.y - 34 - index * 30 }, award.points, pointCopy[award.kind].title), `act+=${0.15 + index * 0.18}`);
       timeline.add(flyCoin({ x: center.x, y: center.y - 20 }), `act+=${0.35 + index * 0.15}`);
