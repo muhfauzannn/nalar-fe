@@ -14,6 +14,7 @@ import { useNow } from "../hooks/use-now";
 import { pointCopy, postNames } from "../lib/game";
 import type { IslandSketch, PostStatus } from "../types";
 import { Classroom, preloadClassroom } from "./classroom";
+import { classroomUrl } from "./classroom-focus";
 import { urgentTags } from "./deadlines";
 import { HexBoard, STILL } from "./ground";
 import { Clickable, Sign, SignText } from "./signs";
@@ -316,8 +317,7 @@ const padIndexOf = (stage: string) => Math.max(0, STAGE_ORDER.indexOf(stage as (
 
 const HOUSES = ["homeA", "well", "homeB"];
 
-function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout; focused: boolean; scene: WorldScene; showSign: boolean; onGo: (href: string) => void }) {
-  const navigate = useNavigate();
+function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout; focused: boolean; scene: WorldScene; showSign: boolean; onGo: () => void }) {
   const center = hex(hall.center);
   const posts = hall.posts ?? STAGE_ORDER.map((stage) => ({ stage, status: "locked" as PostStatus }));
   const lit = focused && scene.lit?.assignmentId === hall.assignmentId ? scene.lit : null;
@@ -333,7 +333,7 @@ function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout;
   return (
     <group>
       <group position={center} rotation={[0, facing(center, [0, 0, 0]), 0]}>
-        <Clickable onClick={() => onGo(hall.href)} label={`Balai ${hall.title}`}>
+        <Clickable onClick={onGo} label={`Balai ${hall.title}`}>
           <Piece name={focused ? "castle" : "towerA"} scale={TILE * (focused ? 1.05 : 1.2)} />
         </Clickable>
       </group>
@@ -346,11 +346,11 @@ function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout;
               index={index}
               state={index === litIndex ? "current" : post.status}
               label={`Pos ${index + 1}: ${postNames[post.stage]}`}
-              onTap={() => (scene.shot.kind === "world" ? onGo(hall.href) : scene.onSelectPost ? scene.onSelectPost(post.stage) : navigate(hall.href))}
+              onTap={() => (scene.shot.kind !== "world" && scene.onSelectPost ? scene.onSelectPost(post.stage) : onGo())}
               register={(i, handles) => { pads.current[i] = handles; }}
             />
           ))}
-          <Chest position={hex(hall.chest, 0.02)} toward={center} state={chestState} onTap={() => (scene.chest?.assignmentId === hall.assignmentId ? scene.chest.onOpen() : onGo(hall.href))} />
+          <Chest position={hex(hall.chest, 0.02)} toward={center} state={chestState} onTap={() => (scene.chest?.assignmentId === hall.assignmentId ? scene.chest.onOpen() : onGo())} />
           {/* DOM over the canvas shows even when the world is hidden: not in the classroom. */}
           {catIndex >= 0 && scene.shot.kind !== "classroom" && (
             <group ref={catRef} position={padPositions[catIndex]}>
@@ -366,7 +366,7 @@ function HallGroup({ hall, focused, scene, showSign, onGo }: { hall: HallLayout;
       ) : (
         <QuietPads pads={posts.map((post, index) => ({ p: padPositions[index]!, done: post.status === "done" }))} />
       )}
-      <Sign position={[center[0], focused ? 6.4 : 4.6, center[2]]} show={showSign} minor={!focused} onClick={() => onGo(hall.href)} dark={focused} label={`Balai ${hall.title}, ${done} dari 5 pos menyala`}>
+      <Sign position={[center[0], focused ? 6.4 : 4.6, center[2]]} show={showSign} minor={!focused} onClick={onGo} dark={focused} label={`Balai ${hall.title}, ${done} dari 5 pos menyala`}>
         <SignText small={`Balai · ${done}/5 pos`} strong={hall.title} />
       </Sign>
     </group>
@@ -518,16 +518,18 @@ function Grow({ show, children }: { show: boolean; children: ReactNode }) {
 function DetailIsland({ layout, position, scene, near }: { layout: IslandLayout; position: Vec3; scene: WorldScene; near: boolean }) {
   const navigate = useNavigate();
   const shot = scene.shot;
-  const atWorld = shot.kind === "world";
+  // Anywhere on the island leads to the class, so the whole island is one
+  // button, except inside a hall or the room itself, where posts and the chest
+  // keep their own taps.
+  const wholeIsland = shot.kind === "world" || shot.kind === "island" || shot.kind === "place";
   useEffect(() => {
-    if (atWorld) return () => { document.body.style.cursor = ""; };
-  }, [atWorld]);
+    if (wholeIsland) return () => { document.body.style.cursor = ""; };
+  }, [wholeIsland]);
   const seed = seedOf(layout.courseId);
   const onIsland = shot.kind === "island" && shot.courseId === layout.courseId;
   const focusHall = shot.kind === "hall" && shot.courseId === layout.courseId ? shot.assignmentId : layout.nextHall;
-  // On the world map the whole island opens its course first. Once focused,
-  // its buildings and posts resume their own destinations.
-  const go = (href: string) => navigate(atWorld ? `/courses/${layout.courseId}` : href);
+  // Every building, post, sign and the island itself opens the class.
+  const go = () => navigate(classroomUrl(layout.courseId));
   const curves = useMemo(() => pathCurves(layout, seed), [layout, seed]);
   // Nothing grows on the paths.
   const free = useMemo(() => {
@@ -540,9 +542,9 @@ function DetailIsland({ layout, position, scene, near }: { layout: IslandLayout;
   return (
     <group
       position={position}
-      onClick={atWorld ? (event) => { event.stopPropagation(); go(`/courses/${layout.courseId}`); } : undefined}
-      onPointerOver={atWorld ? (event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; } : undefined}
-      onPointerOut={atWorld ? () => { document.body.style.cursor = ""; } : undefined}
+      onClick={wholeIsland ? (event) => { event.stopPropagation(); go(); } : undefined}
+      onPointerOver={wholeIsland ? (event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; } : undefined}
+      onPointerOut={wholeIsland ? () => { document.body.style.cursor = ""; } : undefined}
     >
       <HexBoard tiles={layout.tiles} seed={seed} dressing={near ? "full" : "light"} />
       <CobblePaths curves={curves} seed={seed} near={near} />
@@ -553,16 +555,15 @@ function DetailIsland({ layout, position, scene, near }: { layout: IslandLayout;
       {layout.places.map((place) => {
         const at = hex(place.tile);
         const piece = PLACE_PIECE[place.place];
-        const href = `/courses/${layout.courseId}?tempat=${place.place}`;
         const { done, total } = place;
         return (
           <group key={place.place}>
             <group position={at} rotation={[0, place.tile[0] === 0 && place.tile[1] === 0 ? 0 : facing(at, [0, 0, 0]), 0]}>
-              <Clickable onClick={() => go(href)} label={piece.label}>
+              <Clickable onClick={go} label={piece.label}>
                 {place.place === "lab" ? <Windmill scale={piece.scale} /> : <Piece name={piece.name} scale={piece.scale} />}
               </Clickable>
             </group>
-            <Sign position={[at[0], place.place === "library" ? 4 : 3.6, at[2]]} show={onIsland} minor onClick={() => go(href)} label={`${piece.label}, ${done} dari ${total} selesai`}>
+            <Sign position={[at[0], place.place === "library" ? 4 : 3.6, at[2]]} show={onIsland} minor onClick={go} label={`${piece.label}, ${done} dari ${total} selesai`}>
               <SignText small={piece.label} strong={`${done}/${total} selesai`} />
             </Sign>
           </group>
@@ -589,7 +590,7 @@ const LANDMARKS = ["watermill", "market", "church", "windmill", "castle"];
 function SimpleIsland({ island, index, showSign, active, tag }: { island: WorldIsland; index: number; showSign: boolean; active: boolean; tag?: string }) {
   const navigate = useNavigate();
   const seed = seedOf(island.courseId);
-  const go = () => navigate(`/courses/${island.courseId}`);
+  const go = () => navigate(classroomUrl(island.courseId));
   return (
     <group position={island.position}>
       <Clickable onClick={go} label={`Pulau ${island.subject}`}>
@@ -781,9 +782,9 @@ export function WorldScene3D() {
       live = false;
     };
   }, [wantRoom, room]);
-  // The classroom's model is fetched while the student is on an island, before it is needed.
+  // The classroom's model is fetched while the student is in the world or on an island, before it is needed.
   useEffect(() => {
-    if (shot.kind === "island" || shot.kind === "place") preloadClassroom();
+    if (shot.kind === "world" || shot.kind === "island" || shot.kind === "place") preloadClassroom();
   }, [shot.kind]);
   return (
     <>
@@ -831,7 +832,7 @@ export function WorldScene3D() {
             <DetailIsland layout={layout} position={island.position} scene={scene} near={island.courseId === shotCourse} />
             {/* The island places itself; its sign needs the same position or it floats over the centre. */}
             <group position={island.position}>
-              <WorldSign island={island} show={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} onClick={() => navigate(`/courses/${island.courseId}`)} height={8} tag={deadlineTags.get(island.courseId)} />
+              <WorldSign island={island} show={atWorld && (!mobile || island.courseId === selectedCourseId)} active={island.courseId === activeId} onClick={() => navigate(classroomUrl(island.courseId))} height={8} tag={deadlineTags.get(island.courseId)} />
             </group>
           </group>
         );

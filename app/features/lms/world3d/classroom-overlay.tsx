@@ -134,7 +134,7 @@ export function ClassroomOverlay({
     <TutorHostProvider host={host}>
     <Overlay>
       <TopBar
-        back={focus ? closeTo : `/courses/${courseId}?tempat=library`}
+        back={focus ? closeTo : "/dunia"}
         backLabel={focus ? "Kembali melihat kelas" : undefined}
         reserveRight={Boolean(focus)}
         crumbs={[

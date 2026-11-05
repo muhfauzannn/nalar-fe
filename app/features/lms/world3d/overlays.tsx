@@ -95,7 +95,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
   const href = mostUrgent
     ? deadlineHref(mostUrgent, true)
     : active
-      ? (current ? `/courses/${active.course.id}/balai/${current.assignmentId}` : `/courses/${active.course.id}`)
+      ? classroomUrl(active.course.id)
       : null;
   return (
     <Overlay>
@@ -193,8 +193,6 @@ export function IslandOverlay({ course, island }: { course: CourseData; island: 
     { detail: { course, island }, shot: valid ? { kind: "place", courseId, place: valid } : { kind: "island", courseId } },
     [course, island, valid],
   );
-  const halls = stops.filter((stop) => stop.place === "hall");
-  const placesHere = (Object.keys(placeName) as PlaceKey[]).filter((key) => stops.some((stop) => stop.place === key));
   return (
     <Overlay>
       <TopBar back={valid ? `/courses/${courseId}` : "/dunia"} crumbs={[{ label: "Dunia", to: "/dunia" }, valid ? { label: `Pulau ${course.course.subjectName}`, to: `/courses/${courseId}` } : { label: `Pulau ${course.course.subjectName}` }, ...(valid ? [{ label: placeName[valid] }] : [])]} />
@@ -213,18 +211,11 @@ export function IslandOverlay({ course, island }: { course: CourseData; island: 
             <p className="text-sm text-[#5e5e72]">Gurumu belum menerbitkan materi atau tugas.</p>
           </div>
         ) : (
-          <div className="flex max-w-[40rem] flex-wrap justify-center gap-1.5">
-            {placesHere.map((key) => (
-              <Link key={key} to={`/courses/${courseId}?tempat=${key}`} className={cn("pointer-events-auto rounded-full bg-white/95 px-3.5 py-2 text-[13px] font-semibold shadow-[0_4px_14px_rgba(24,21,58,.15)]", press)}>
-                {placeName[key]}
-              </Link>
-            ))}
-            {halls.map((hall) => (
-              <Link key={hall.key} to={hall.href} className={cn("pointer-events-auto max-w-[16rem] truncate rounded-full bg-[#18153a] px-3.5 py-2 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(24,21,58,.15)]", press)}>
-                Balai · {hall.title}
-              </Link>
-            ))}
-          </div>
+          // Everything on the island opens the class, so one door instead of a chip per place.
+          <Link to={classroomUrl(courseId)} data-press className={cn(card, "flex w-full max-w-[26rem] items-center justify-center gap-2 bg-[#18153a] px-4 py-3.5 text-sm font-bold text-white", press)}>
+            Masuk kelas
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </Link>
         )}
         <Link to={`/courses/${courseId}/daftar`} className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold shadow-sm">
           <List className="size-3.5" aria-hidden="true" />

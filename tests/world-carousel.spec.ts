@@ -23,8 +23,8 @@ test("the carousel presents one course with previous and next controls", () => {
     { id: "course-b", subjectName: "Fisika", name: "Kelas B" },
   ].map((course) => ({ course })) as WorldData["islands"];
   const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(WorldIslandCarousel, { islands })));
-  expect(html).toContain('href="/courses/course-a"');
-  expect(html).not.toContain('href="/courses/course-b"');
+  expect(html).toContain('href="/courses/course-a/kelas"');
+  expect(html).not.toContain('href="/courses/course-b/kelas"');
   expect(html).toContain('aria-label="Pulau sebelumnya"');
   expect(html).toContain('aria-label="Pulau berikutnya"');
   expect(html).toContain("Kelas A");

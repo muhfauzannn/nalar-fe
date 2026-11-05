@@ -57,7 +57,7 @@ test("nothing due says so, and the dock is the usual one", async ({ page }) => {
   await expect(page.getByText("Tidak ada tenggat")).toBeVisible();
   await expect(pill(page)).toHaveCount(0);
   await expect(page.getByText("Lanjutkan perjalanan")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Terbang" })).toHaveAttribute("href", "/courses/c1/balai/a1");
+  await expect(page.getByRole("link", { name: "Terbang" })).toHaveAttribute("href", "/courses/c1/kelas");
 });
 
 test("an older API that sends no deadlines leaves the HUD as it was", async ({ page }) => {

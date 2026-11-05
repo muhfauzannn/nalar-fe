@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { cn } from "~/lib/utils";
 import type { WorldData } from "../types";
 import { moveWorldCarousel, useWorldCarousel } from "../world3d/carousel";
+import { classroomUrl } from "../world3d/classroom-focus";
 
 /**
  * One focused island at a time, with keyboard and touch alternatives to swiping.
@@ -28,7 +29,7 @@ export function WorldIslandCarousel({ islands, className, onJoin }: { islands: W
       {!island && onJoin ? (
         <button type="button" onClick={onJoin} className={slot} aria-label="Gabung course baru">{label}</button>
       ) : (
-        <Link to={island ? `/courses/${island.course.id}` : "/courses/join"} className={slot} aria-label={island ? `Buka pulau ${island.course.subjectName}, ${island.course.name}` : "Gabung course baru"}>{label}</Link>
+        <Link to={island ? classroomUrl(island.course.id) : "/courses/join"} className={slot} aria-label={island ? `Masuk kelas Pulau ${island.course.subjectName}, ${island.course.name}` : "Gabung course baru"}>{label}</Link>
       )}
       <button type="button" onClick={() => moveWorldCarousel(1, count)} aria-label="Pulau berikutnya" className="grid size-11 shrink-0 place-items-center rounded-full active:bg-[#ece7fb]"><ChevronRight className="size-5" aria-hidden="true" /></button>
     </nav>
