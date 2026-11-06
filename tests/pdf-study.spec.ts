@@ -540,7 +540,8 @@ test("committed ink remains anchored on zoom and rotation, and a zoom never cost
   await page.getByRole("button", { name: "Perbesar PDF" }).click();
   await expect(page.getByRole("button", { name: "Putar PDF" })).toBeEnabled();
   await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
-  await expect(page.getByTestId("tutor-cursor")).toHaveCount(0);
+  // Zooming is not leaving the page: the tutor is still explaining, so its hand stays up.
+  await expect(page.getByTestId("tutor-cursor")).toHaveCount(1);
   const scaled = await page.getByTestId("tutor-highlight").boundingBox();
   const scaledPaper = await page.getByTestId("pdf-page").boundingBox();
   expect((scaled!.x - scaledPaper!.x) / scaledPaper!.width).toBeCloseTo(

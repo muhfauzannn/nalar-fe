@@ -185,16 +185,20 @@ function parseAction(value: unknown, context: PdfViewContext): PdfAction {
       return { x: p.x, y: p.y };
     });
   }
-  const pathBox = points
+  // The model often marks a diagram by its corners instead of x/y/width/height.
+  const corners = points ?? (["highlight", "rectangle", "ellipse"].includes(kind) && Array.isArray(value.points)
+    ? value.points.filter((p): p is PdfPoint => record(p) && unit(p.x) && unit(p.y))
+    : []);
+  const pathBox = corners.length >= 2
     ? {
-        x: Math.min(...points.map((p) => p.x)),
-        y: Math.min(...points.map((p) => p.y)),
+        x: Math.min(...corners.map((p) => p.x)),
+        y: Math.min(...corners.map((p) => p.y)),
         width:
-          Math.max(...points.map((p) => p.x)) -
-          Math.min(...points.map((p) => p.x)),
+          Math.max(...corners.map((p) => p.x)) -
+          Math.min(...corners.map((p) => p.x)),
         height:
-          Math.max(...points.map((p) => p.y)) -
-          Math.min(...points.map((p) => p.y)),
+          Math.max(...corners.map((p) => p.y)) -
+          Math.min(...corners.map((p) => p.y)),
       }
     : null;
   const rangeBox = rects ? {
@@ -203,8 +207,7 @@ function parseAction(value: unknown, context: PdfViewContext): PdfAction {
     width: Math.max(...rects.map((r) => r.x + r.width)) - Math.min(...rects.map((r) => r.x)),
     height: Math.max(...rects.map((r) => r.y + r.height)) - Math.min(...rects.map((r) => r.y)),
   } : null;
-  const rect = rangeBox ?? pathBox ??
-    block ?? {
+  const rect = rangeBox ?? (block && !points ? block : pathBox) ?? {
       x: kind === "text" ? 0 : value.x,
       y: kind === "text" ? 0 : value.y,
       width: value.width ?? 0,
@@ -230,7 +233,8 @@ function parseAction(value: unknown, context: PdfViewContext): PdfAction {
     throw new Error("Ukuran tindakan kosong.");
   if (kind === "arrow" && box.width === 0 && box.height === 0)
     throw new Error("Panah harus memiliki panjang.");
-  const text = kind === "text" ? shorten(value.text, 100) : undefined;
+  // A note whose words landed in its caption is still a note.
+  const text = kind === "text" ? shorten(value.text, 100) ?? shorten(value.caption, 100) : undefined;
   if (kind === "text" && !text) throw new Error("Catatan harus berisi teks.");
   return {
     kind,

@@ -96,6 +96,18 @@ test("a bad step is left out and the rest of the plan still shows", () => {
   }
 });
 
+test("a diagram marked by its corners, and a note written in its caption, still show", () => {
+  const [box, note] = parsePdfGuidance({ ...payload(), actions: [
+    { kind: "rectangle", points: [{ x: 0.1, y: 0.3 }, { x: 0.4, y: 0.5 }] },
+    { kind: "text", caption: "3 dari 8 potong" },
+  ] }, context, "turn-1").actions;
+  expect([box.x, box.y]).toEqual([0.1, 0.3]);
+  expect(box.width).toBeCloseTo(0.3);
+  expect(box.height).toBeCloseTo(0.2);
+  expect(box.points).toBeUndefined();
+  expect(note.text).toBe("3 dari 8 potong");
+});
+
 test("a plan with no usable step is refused, and more than eight steps are cut to eight", () => {
   for (const actions of [[], undefined, [{ kind: "highlight", blockId: "p9-b1" }], [{ kind: "execute" }]]) {
     expect(() => parsePdfGuidance({ ...payload(), actions }, context, "turn-1")).toThrow();
