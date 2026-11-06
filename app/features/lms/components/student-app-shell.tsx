@@ -187,7 +187,7 @@ export function StudentAppShell({ data }: { data: StudentShellData }) {
     .toUpperCase();
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
           <div className="flex h-12 items-center px-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
