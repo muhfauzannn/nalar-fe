@@ -455,17 +455,19 @@
   94% { transform: translateY(0) rotate(0); }
 }
 
-/* Keep the desktop workspace on its 3D surface; give touch-sized screens room to work. */
+/* Keep the desktop workspace on its 3D surface; give touch-sized screens room to work.
+   --reserve-right / --reserve-bottom: the strip the tutor's bubble floats over (board-clearance.ts);
+   the surface leaves it free instead of lying under the bubble. */
 .classroom-surface {
   left: var(--surface-left);
   top: var(--surface-top);
-  width: var(--surface-width);
-  height: var(--surface-height);
+  width: calc(var(--surface-width) - var(--reserve-right, 0px));
+  height: calc(var(--surface-height) - var(--reserve-bottom, 0px));
 }
 
 @media (max-width: 767px), (max-height: 500px) {
   .classroom-surface {
-    inset: 4.25rem 0.75rem 0.75rem;
+    inset: 4.25rem calc(0.75rem + var(--reserve-right, 0px)) calc(0.75rem + var(--reserve-bottom, 0px)) 0.75rem;
     width: auto;
     height: auto;
     border-radius: 0.75rem;

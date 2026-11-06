@@ -43,6 +43,11 @@ export const bubbleTall = "h-[min(30rem,calc(100%-7.5rem))]";
 // While the tutor points at a part of a lab the bubble folds down to its latest line and the
 // composer, so the part it points at (often on the right, under the bubble) stays in view.
 const bubbleCompact = "h-[min(13.5rem,calc(100%-7.5rem))]";
+// Under 768px the bubble docks to the bottom of the screen, full width, instead of floating at the top
+// right; the station above it makes room (board-clearance.ts). `bubbleDockTall` is the height of a bubble
+// that holds a conversation (the hint bubble keeps the height of its text).
+export const bubbleDock = "max-md:top-auto max-md:bottom-2 max-md:left-2 max-md:right-2 sm:max-md:right-2 max-md:w-auto";
+export const bubbleDockTall = "max-md:h-[min(21rem,48%)]";
 
 /**
  * `boardTutor`: the board is showing a PDF. Its tutor (board-study.tsx) holds the
@@ -67,10 +72,13 @@ export function SpiritTutor({
       {focus && <SpiritCorner open={open} />}
       {open && !boardTutor && (
         <section
+          ref={spirit.setBubble}
           aria-label="Tutor AI"
           className={cn(
             bubbleClass,
+            bubbleDock,
             source && (pointing ? bubbleCompact : bubbleTall),
+            source && bubbleDockTall,
             source && "transition-[height] duration-200 motion-reduce:transition-none",
           )}
         >

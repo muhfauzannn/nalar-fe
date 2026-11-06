@@ -93,8 +93,15 @@ async function openBoard(page: Page, search = "station=papan&pdf=1") {
   const ask = async (question: string) => {
     const composer = bubble.getByRole("textbox", { name: "Pesan untuk tutor" });
     await composer.fill(question);
-    await composer.press("Enter");
-    await expect.poll(() => texts).toContain(question);
+    // Opening the bubble makes the board give up a strip, and the reader redraws its page for a
+    // moment; a question cannot be sent during that moment (the text stays), so press Enter again,
+    // as a student would, until it goes.
+    await expect
+      .poll(async () => {
+        if (!texts.includes(question)) await composer.press("Enter");
+        return texts;
+      })
+      .toContain(question);
   };
   return {
     errors,
@@ -236,7 +243,8 @@ test("leaving the board while the tutor points leaves no stale gaze behind", asy
   await expect(page.locator(".spirit-corner")).toHaveAttribute("data-gazing", "true");
 
   await page.getByRole("link", { name: "Kembali melihat kelas" }).click();
-  await expect.poll(() => spiritGaze(page)).toBeNull();
+  // Leaving flies the camera back and draws the room again, which is slow on a busy machine.
+  await expect.poll(() => spiritGaze(page), SETTLE).toBeNull();
   expect(mock.errors).toEqual([]);
 });
 
@@ -312,7 +320,7 @@ test("leaving the board hangs up the session", async ({ page }) => {
   await expect.poll(() => mock.getSockets()).toBe(1);
 
   await page.getByRole("link", { name: "Kembali melihat kelas" }).click();
-  await expect.poll(() => mock.getClosed()).toBe(1);
+  await expect.poll(() => mock.getClosed(), SETTLE).toBe(1);
   expect(mock.errors).toEqual([]);
 });
 

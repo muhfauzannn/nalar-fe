@@ -10,7 +10,13 @@ export type SpiritMood = "idle" | "listening" | "thinking" | "speaking";
 /** A point on the screen, in the page's client pixels. */
 export type SpiritGaze = { x: number; y: number };
 
-const state = { mood: "idle" as SpiritMood, level: () => 0, open: false, gaze: null as SpiritGaze | null };
+const state = {
+  mood: "idle" as SpiritMood,
+  level: () => 0,
+  open: false,
+  gaze: null as SpiritGaze | null,
+  bubble: null as HTMLElement | null,
+};
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((listener) => listener());
 
@@ -31,6 +37,15 @@ export const spirit = {
     state.gaze = point;
     if (was !== (point !== null)) notify();
   },
+  /**
+   * The conversation bubble while it is on screen (null otherwise). Whichever tutor draws
+   * it registers it here, so the station underneath can make room for it.
+   */
+  setBubble(element: HTMLElement | null) {
+    if (state.bubble === element) return;
+    state.bubble = element;
+    notify();
+  },
   setOpen(open: boolean) {
     if (state.open === open) return;
     state.open = open;
@@ -48,6 +63,11 @@ const subscribe = (listener: () => void) => {
 
 export function useSpiritOpen() {
   return useSyncExternalStore(subscribe, () => state.open, () => false);
+}
+
+/** The tutor's bubble element while it is open, for the station that has to leave room for it. */
+export function useSpiritBubble() {
+  return useSyncExternalStore(subscribe, () => state.bubble, () => null);
 }
 
 /** Whether the spirit is looking at something the tutor points at. */

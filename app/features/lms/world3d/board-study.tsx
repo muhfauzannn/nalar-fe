@@ -16,9 +16,8 @@ import type { PdfViewContext } from "../lib/pdf-tutor";
 import type { LessonData } from "../types";
 import { spiritMoodFor, voiceStateFor } from "./board-tutor";
 import { useWorldOverlay } from "./mode";
-import { useBubbleClearance } from "./board-clearance";
 import { spirit, useSpiritOpen } from "./spirit-store";
-import { BubbleHeader, bubbleClass, bubbleTall } from "./spirit-tutor";
+import { BubbleHeader, bubbleClass, bubbleDock, bubbleDockTall, bubbleTall } from "./spirit-tutor";
 
 // The PDF on the classroom board, read by the tutor spirit: the same tutor as the
 // lesson page's study room (it sees the open page, points at it and writes on it),
@@ -57,8 +56,6 @@ export function BoardStudy({ resource }: { resource: Resource }) {
   const open = useSpiritOpen();
   const overlay = useWorldOverlay();
   const reader = useRef<HTMLDivElement>(null);
-  const [bubble, setBubble] = useState<HTMLElement | null>(null);
-  const clearance = useBubbleClearance(reader, bubble);
   const { status, disconnect, readLevel } = tutor;
 
   // The spirit acts out what the tutor is doing.
@@ -75,8 +72,7 @@ export function BoardStudy({ resource }: { resource: Resource }) {
 
   return (
     <>
-      {/* With the bubble open the reader makes room for it, so the page is not read from under it. */}
-      <div ref={reader} data-board-reader="" className="h-full" style={{ paddingRight: clearance.right, paddingBottom: clearance.bottom }}>
+      <div ref={reader} data-board-reader="" className="h-full">
         <PdfReader
           resourceId={resource.id}
           title={resource.title}
@@ -92,7 +88,7 @@ export function BoardStudy({ resource }: { resource: Resource }) {
       {open && overlay
         ? createPortal(
             <div className="contents text-[#18153a] [color-scheme:light]">
-              <PdfBubble tutor={tutor} context={context} onElement={setBubble} />
+              <PdfBubble tutor={tutor} context={context} />
             </div>,
             overlay,
           )
@@ -101,15 +97,7 @@ export function BoardStudy({ resource }: { resource: Resource }) {
   );
 }
 
-function PdfBubble({
-  tutor,
-  context,
-  onElement,
-}: {
-  tutor: PdfTutor;
-  context: PdfViewContext | null;
-  onElement: (element: HTMLElement | null) => void;
-}) {
+function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContext | null }) {
   const [draft, setDraft] = useState("");
   const connecting = tutor.status === "connecting";
   const voiceStart: VoiceStart = tutor.voice
@@ -121,12 +109,12 @@ function PdfBubble({
         : { kind: "start", disabled: !context, onStart: () => void tutor.startVoice() };
 
   return (
-    // On a narrow screen the bubble sits at the bottom and the reader keeps the part above it (board-clearance.ts);
-    // from tablet width up it stands beside the page, which gives up that strip.
+    // The board's surface leaves room for the bubble (board-clearance.ts): the page sits beside it from tablet
+    // width up, and above it on a narrower screen, where the bubble docks at the bottom.
     <section
-      ref={onElement}
+      ref={spirit.setBubble}
       aria-label="Tutor AI"
-      className={cn(bubbleClass, bubbleTall, "max-md:top-auto max-md:bottom-2 max-md:h-[min(21rem,48%)] max-md:w-[calc(100%-1rem)]")}
+      className={cn(bubbleClass, bubbleDock, bubbleTall, bubbleDockTall)}
     >
       <BubbleHeader label={`Membaca halaman ${context?.page ?? "…"}`}>
         {tutor.guidance || tutor.cursorCue ? (
