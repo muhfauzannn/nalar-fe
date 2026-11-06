@@ -1,10 +1,10 @@
 import { useGLTF } from "@react-three/drei";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { STILL } from "./ground";
-import { spirit, type SpiritMood } from "./spirit-store";
+import { spirit, useSpiritGazing, type SpiritMood } from "./spirit-store";
 
 // The AI tutor as a small magical spirit (scripts/world/build-tutor-spirit.mjs):
 // a crystal heart with a face, two rune rings, feather wings and sparkle motes.
@@ -58,10 +58,20 @@ function useSpiritModel() {
   }, [scene]);
 }
 
-/** The spirit itself, animated from the shared mood. Its origin is the crystal's centre. */
-export function TutorSpirit({ phase = 0 }: { phase?: number }) {
+/** How far the spirit turns to face a spot (rad), reached when the spot is a few hundred pixels away. */
+const GAZE_YAW = 0.8;
+const GAZE_PITCH = 0.5;
+const GAZE_REACH = 280;
+
+/**
+ * The spirit itself, animated from the shared mood. Its origin is the crystal's centre.
+ * `follows`: the spirit sits centred in a canvas of its own, so it can turn its face toward
+ * the spot the tutor points at (`spirit.lookAt`), measured from the middle of that canvas.
+ */
+export function TutorSpirit({ phase = 0, follows = false }: { phase?: number; follows?: boolean }) {
   const model = useSpiritModel();
-  const live = useRef({ ringA: 0, ringB: 0, speedA: MOTION.idle.ringA, speedB: MOTION.idle.ringB, flap: MOTION.idle.flap, beat: MOTION.idle.beat, motes: MOTION.idle.motes, glow: MOTION.idle.glow, clock: phase, beatPhase: 0 });
+  const canvas = useThree((state) => state.gl.domElement);
+  const live = useRef({ ringA: 0, ringB: 0, speedA: MOTION.idle.ringA, speedB: MOTION.idle.ringB, flap: MOTION.idle.flap, beat: MOTION.idle.beat, motes: MOTION.idle.motes, glow: MOTION.idle.glow, clock: phase, beatPhase: 0, yaw: 0, pitch: 0, gaze: 0 });
 
   useFrame((_, rawDelta) => {
     if (STILL) return;
@@ -79,8 +89,24 @@ export function TutorSpirit({ phase = 0 }: { phase?: number }) {
     l.beatPhase += delta * l.beat;
     const t = l.clock;
 
+    // Facing the spot it points at: the idle sway gives way to a turn toward the point,
+    // and the face turns back to the front when the tutor puts its hand down.
+    const target = follows ? spirit.get().gaze : null;
+    let wantYaw = 0;
+    let wantPitch = 0;
+    if (target) {
+      const box = canvas.getBoundingClientRect();
+      wantYaw = Math.tanh((target.x - (box.left + box.width / 2)) / GAZE_REACH) * GAZE_YAW;
+      wantPitch = Math.tanh((target.y - (box.top + box.height / 2)) / GAZE_REACH) * GAZE_PITCH;
+    }
+    const turn = 1 - Math.exp(-delta * 7);
+    l.yaw += (wantYaw - l.yaw) * turn;
+    l.pitch += (wantPitch - l.pitch) * turn;
+    l.gaze += ((target ? 1 : 0) - l.gaze) * turn;
+
     model.root.position.y = Math.sin(t * 1.6) * 0.035;
-    model.root.rotation.y = Math.sin(t * 0.45) * 0.28;
+    model.root.rotation.y = Math.sin(t * 0.45) * 0.28 * (1 - l.gaze) + l.yaw;
+    model.root.rotation.x = l.pitch;
     l.ringA += delta * l.speedA;
     l.ringB += delta * l.speedB;
     model.ringA.rotation.set(0.42, l.ringA, 0);
@@ -116,12 +142,14 @@ export function TutorSpirit({ phase = 0 }: { phase?: number }) {
  * and the room has stopped rendering. Clicking it opens or closes the tutor.
  */
 export function SpiritCorner({ open }: { open: boolean }) {
+  const gazing = useSpiritGazing();
   return (
     <button
       type="button"
       onClick={() => spirit.toggle()}
       aria-label={open ? "Tutup tutor" : "Panggil tutor"}
       aria-expanded={open}
+      data-gazing={gazing}
       className="spirit-corner pointer-events-auto absolute right-2 top-1 z-30 size-[92px] rounded-full outline-none transition-transform duration-150 active:scale-[0.95] focus-visible:ring-2 focus-visible:ring-[#a594f5] sm:right-4"
     >
       <span aria-hidden="true" className="absolute inset-3 rounded-full bg-[radial-gradient(circle,rgba(165,148,245,.45),rgba(165,148,245,0)_70%)]" />
@@ -134,7 +162,7 @@ export function SpiritCorner({ open }: { open: boolean }) {
       >
         <hemisphereLight args={["#fff7ee", "#8b7fd0", 1.3]} />
         <directionalLight position={[1.5, 2, 2]} intensity={1.4} color="#fff0dc" />
-        <TutorSpirit phase={1.3} />
+        <TutorSpirit phase={1.3} follows />
       </Canvas>
     </button>
   );

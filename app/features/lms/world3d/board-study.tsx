@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { cn } from "~/lib/utils";
@@ -16,6 +16,7 @@ import type { PdfViewContext } from "../lib/pdf-tutor";
 import type { LessonData } from "../types";
 import { spiritMoodFor, voiceStateFor } from "./board-tutor";
 import { useWorldOverlay } from "./mode";
+import { useBubbleClearance } from "./board-clearance";
 import { spirit, useSpiritOpen } from "./spirit-store";
 import { BubbleHeader, bubbleClass, bubbleTall } from "./spirit-tutor";
 
@@ -28,11 +29,36 @@ import { BubbleHeader, bubbleClass, bubbleTall } from "./spirit-tutor";
 type Resource = LessonData["resources"][number];
 type PdfTutor = ReturnType<typeof usePdfTutor>;
 
+// While the tutor's cursor is up, the spirit turns its face toward the spot the cursor
+// points at. The cursor glides (and the page can scroll under it), so the spot is read
+// from the cursor itself every frame; the spirit eases toward it and turns back to the
+// front when the cursor goes away. Reduced motion keeps the spirit still.
+function useSpiritGaze(root: RefObject<HTMLElement | null>, pointing: boolean) {
+  useEffect(() => {
+    if (!pointing || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let frame = 0;
+    const follow = () => {
+      const tip = root.current?.querySelector("[data-tutor-pointer]")?.getBoundingClientRect();
+      // the arrow's tip is a few pixels inside the corner of its box
+      spirit.lookAt(tip ? { x: tip.left + 3, y: tip.top + 3 } : null);
+      frame = requestAnimationFrame(follow);
+    };
+    follow();
+    return () => {
+      cancelAnimationFrame(frame);
+      spirit.lookAt(null);
+    };
+  }, [root, pointing]);
+}
+
 export function BoardStudy({ resource }: { resource: Resource }) {
   const [context, setContext] = useState<PdfViewContext | null>(null);
   const tutor = usePdfTutor(resource.id, context);
   const open = useSpiritOpen();
   const overlay = useWorldOverlay();
+  const reader = useRef<HTMLDivElement>(null);
+  const [bubble, setBubble] = useState<HTMLElement | null>(null);
+  const clearance = useBubbleClearance(reader, bubble);
   const { status, disconnect, readLevel } = tutor;
 
   // The spirit acts out what the tutor is doing.
@@ -40,6 +66,7 @@ export function BoardStudy({ resource }: { resource: Resource }) {
     spirit.setMood(spiritMoodFor(status), readLevel);
   }, [status, readLevel]);
   useEffect(() => () => spirit.setMood("idle"), []);
+  useSpiritGaze(reader, tutor.pointerVisible);
 
   // Closing the bubble hangs up: no microphone or Live session stays open behind it.
   useEffect(() => {
@@ -48,21 +75,24 @@ export function BoardStudy({ resource }: { resource: Resource }) {
 
   return (
     <>
-      <PdfReader
-        resourceId={resource.id}
-        title={resource.title}
-        fitContainer
-        guidance={tutor.guidance}
-        revealedSteps={tutor.revealedSteps}
-        cursorCue={tutor.cursorCue}
-        pointerVisible={tutor.pointerVisible}
-        onPresentationTiming={tutor.onPresentationTiming}
-        onContext={setContext}
-      />
+      {/* With the bubble open the reader makes room for it, so the page is not read from under it. */}
+      <div ref={reader} data-board-reader="" className="h-full" style={{ paddingRight: clearance.right, paddingBottom: clearance.bottom }}>
+        <PdfReader
+          resourceId={resource.id}
+          title={resource.title}
+          fitContainer
+          guidance={tutor.guidance}
+          revealedSteps={tutor.revealedSteps}
+          cursorCue={tutor.cursorCue}
+          pointerVisible={tutor.pointerVisible}
+          onPresentationTiming={tutor.onPresentationTiming}
+          onContext={setContext}
+        />
+      </div>
       {open && overlay
         ? createPortal(
             <div className="contents text-[#18153a] [color-scheme:light]">
-              <PdfBubble tutor={tutor} context={context} />
+              <PdfBubble tutor={tutor} context={context} onElement={setBubble} />
             </div>,
             overlay,
           )
@@ -71,7 +101,15 @@ export function BoardStudy({ resource }: { resource: Resource }) {
   );
 }
 
-function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContext | null }) {
+function PdfBubble({
+  tutor,
+  context,
+  onElement,
+}: {
+  tutor: PdfTutor;
+  context: PdfViewContext | null;
+  onElement: (element: HTMLElement | null) => void;
+}) {
   const [draft, setDraft] = useState("");
   const connecting = tutor.status === "connecting";
   const voiceStart: VoiceStart = tutor.voice
@@ -83,10 +121,12 @@ function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContex
         : { kind: "start", disabled: !context, onStart: () => void tutor.startVoice() };
 
   return (
-    // On a phone the bubble sits at the bottom, so the top of the page, where the tutor points, stays in view.
+    // On a narrow screen the bubble sits at the bottom and the reader keeps the part above it (board-clearance.ts);
+    // from tablet width up it stands beside the page, which gives up that strip.
     <section
+      ref={onElement}
       aria-label="Tutor AI"
-      className={cn(bubbleClass, bubbleTall, "max-sm:top-auto max-sm:bottom-2 max-sm:h-[min(21rem,48%)]")}
+      className={cn(bubbleClass, bubbleTall, "max-md:top-auto max-md:bottom-2 max-md:h-[min(21rem,48%)] max-md:w-[calc(100%-1rem)]")}
     >
       <BubbleHeader label={`Membaca halaman ${context?.page ?? "…"}`}>
         {tutor.guidance || tutor.cursorCue ? (

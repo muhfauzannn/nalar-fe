@@ -144,6 +144,149 @@ test("the spirit reads the PDF on the board, answers in the bubble and points at
   expect(mock.errors).toEqual([]);
 });
 
+test("the spirit looks at the spot the tutor points at, and faces front again when the pointer goes", async ({ page }) => {
+  const mock = await openBoard(page);
+  await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  await mock.summon();
+  await mock.ask("Apa itu pembilang?");
+  const corner = page.locator(".spirit-corner");
+  await expect(corner).toHaveAttribute("data-gazing", "false");
+
+  const context = (await mock.call("read-1", "get_pdf_context")) as Context;
+  const drawn = await mock.call(
+    "draw-1",
+    "present_pdf_guidance",
+    mock.guidance(context, [{ kind: "highlight", blockId: context.blocks[1]!.id }]),
+  );
+  expect(drawn.ok).toBe(true);
+  await expect(page.locator("[data-tutor-pointer]")).toBeVisible();
+  await expect(corner).toHaveAttribute("data-gazing", "true");
+
+  await mock.bubble.getByRole("button", { name: "Bersihkan" }).click();
+  await expect(page.locator("[data-tutor-pointer]")).toHaveCount(0);
+  await expect(corner).toHaveAttribute("data-gazing", "false");
+  expect(mock.errors).toEqual([]);
+});
+
+// Where the spirit is looking, read from the app's own store (the same module instance the page runs).
+const spiritGaze = (page: Page) =>
+  page.evaluate(async () => {
+    const path = "/app/features/lms/world3d/spirit-store.ts";
+    const { spirit } = await import(/* @vite-ignore */ path);
+    return spirit.get().gaze as { x: number; y: number } | null;
+  });
+
+// The tip of the tutor's arrow on the screen, as the spirit is meant to read it.
+const arrowTip = (page: Page) =>
+  page.locator("[data-tutor-pointer]").evaluate((arrow) => {
+    const box = arrow.getBoundingClientRect();
+    return { x: box.left + 3, y: box.top + 3 };
+  });
+
+test("the spirit's gaze stays on the arrow's tip as the cursor moves from line to line", async ({ page }) => {
+  const mock = await openBoard(page);
+  await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  await mock.summon();
+  await mock.ask("Apa itu pembilang?");
+  expect(await spiritGaze(page)).toBeNull();
+
+  const context = (await mock.call("read-1", "get_pdf_context")) as Context;
+  const { actions: _actions, ...identity } = mock.guidance(context, []);
+  const seen: Array<{ x: number; y: number }> = [];
+  for (const [index, block] of [context.blocks[0]!, context.blocks[1]!].entries()) {
+    const moved = await mock.call(`cursor-${index}`, "move_pdf_cursor", { ...identity, blockId: block.id, caption: "Lihat ini" });
+    expect(moved.ok).toBe(true);
+    // The cursor glides for a moment; once it rests, the gaze is on its tip.
+    await expect
+      .poll(async () => {
+        const [gaze, tip] = [await spiritGaze(page), await arrowTip(page)];
+        return gaze ? Math.hypot(gaze.x - tip.x, gaze.y - tip.y) : Infinity;
+      })
+      .toBeLessThan(2);
+    seen.push((await spiritGaze(page))!);
+  }
+  // Two different lines, two different places to look at.
+  expect(Math.abs(seen[0]!.y - seen[1]!.y)).toBeGreaterThan(10);
+  expect(mock.errors).toEqual([]);
+});
+
+test("closing the bubble while the tutor points puts the spirit's gaze away", async ({ page }) => {
+  const mock = await openBoard(page);
+  await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  await mock.summon();
+  await mock.ask("Apa itu pembilang?");
+  const context = (await mock.call("read-1", "get_pdf_context")) as Context;
+  await mock.call("draw-1", "present_pdf_guidance", mock.guidance(context, [{ kind: "highlight", blockId: context.blocks[1]!.id }]));
+  await expect(page.locator(".spirit-corner")).toHaveAttribute("data-gazing", "true");
+  expect(await spiritGaze(page)).not.toBeNull();
+
+  await mock.bubble.getByRole("button", { name: "Tutup tutor" }).click();
+  await expect(page.locator(".spirit-corner")).toHaveAttribute("data-gazing", "false");
+  expect(await spiritGaze(page)).toBeNull();
+  expect(mock.errors).toEqual([]);
+});
+
+test("leaving the board while the tutor points leaves no stale gaze behind", async ({ page }) => {
+  const mock = await openBoard(page);
+  await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  await mock.summon();
+  await mock.ask("Apa itu pembilang?");
+  const context = (await mock.call("read-1", "get_pdf_context")) as Context;
+  await mock.call("draw-1", "present_pdf_guidance", mock.guidance(context, [{ kind: "highlight", blockId: context.blocks[1]!.id }]));
+  await expect(page.locator(".spirit-corner")).toHaveAttribute("data-gazing", "true");
+
+  await page.getByRole("link", { name: "Kembali melihat kelas" }).click();
+  await expect.poll(() => spiritGaze(page)).toBeNull();
+  expect(mock.errors).toEqual([]);
+});
+
+// The bubble floats over the board; the reader must make room for it instead of lying under it.
+const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+
+for (const [name, viewport] of [
+  ["a desktop", { width: 1280, height: 960 }],
+  ["a tablet", { width: 768, height: 1024 }],
+  ["a phone", { width: 390, height: 844 }],
+] as const) {
+  test(`the open bubble leaves the PDF and its controls uncovered on ${name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const mock = await openBoard(page);
+    const reader = page.locator("[data-board-reader] > *");
+    await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+    const wide = (await reader.boundingBox())!;
+
+    await mock.summon();
+    // The bubble grows in with a transform; measure it once it has settled.
+    await expect.poll(() => mock.bubble.evaluate((element) => getComputedStyle(element).transform)).toBe("none");
+    await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+    const bubble = (await mock.bubble.boundingBox())!;
+    const shrunk = (await reader.boundingBox())!;
+
+    // The reader lies beside or above the bubble, not under it, and it still has room to read.
+    expect(overlap(shrunk, bubble)).toBe(false);
+    expect(shrunk.width).toBeGreaterThanOrEqual(240);
+    expect(shrunk.height).toBeGreaterThanOrEqual(200);
+    // ... and it gave up exactly one of the two directions.
+    expect(shrunk.width < wide.width || shrunk.height < wide.height).toBe(true);
+
+    // Every toolbar control is on screen and clear of the bubble (the download one is a link, some are disabled on page 1).
+    for (const label of ["Halaman sebelumnya", "Halaman berikutnya", "Perkecil PDF", "Perbesar PDF", "Putar PDF", "Unduh PDF"]) {
+      const box = await page.locator(`[aria-label="${label}"]`).boundingBox();
+      expect(box, label).not.toBeNull();
+      expect(overlap(box!, bubble), `${label} under the bubble`).toBe(false);
+      expect(box!.x + box!.width, `${label} off screen`).toBeLessThanOrEqual(viewport.width);
+    }
+
+    // Closing the bubble gives the room back.
+    await mock.bubble.getByRole("button", { name: "Tutup tutor" }).click();
+    await expect(mock.bubble).toHaveCount(0);
+    await expect.poll(async () => (await reader.boundingBox())!.width).toBeCloseTo(wide.width, 0);
+    await expect.poll(async () => (await reader.boundingBox())!.height).toBeCloseTo(wide.height, 0);
+    expect(mock.errors).toEqual([]);
+  });
+}
+
 test("closing the bubble hangs up the session, and the next question opens a new one", async ({ page }) => {
   const mock = await openBoard(page);
   await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
