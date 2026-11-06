@@ -324,29 +324,68 @@ for (const [name, viewport] of [
   });
 }
 
-test("the dock's thread is see-through and fades out toward the top, more of it when expanded", async ({ page }) => {
+// A long answer, the kind the tutor really gives: four lines or so in the dock.
+const LONG_ANSWER =
+  "Pembilang adalah angka yang ada di atas garis pecahan. Angka itu menunjukkan berapa bagian yang kita ambil dari keseluruhan. Misalnya pada dua per lima, pembilangnya adalah dua, artinya kita mengambil dua bagian dari lima bagian yang sama besar. Coba tebak, kalau tiga per empat, berapa pembilangnya?";
+
+test("the tutor's words stay readable over the page: backed, light-on-dark-proof, at the bottom of the fading window", async ({ page }) => {
   const mock = await openBoard(page);
   await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
   await mock.summon();
   await mock.ask("Apa itu pembilang?");
-  mock.send({ serverContent: { outputTranscription: { text: "Pembilang adalah angka di atas garis." }, turnComplete: true } });
+  mock.send({ serverContent: { outputTranscription: { text: LONG_ANSWER }, turnComplete: true } });
   const thread = mock.bubble.getByLabel("Transkrip percakapan saat ini");
-  await expect(thread.locator('[data-author="tutor"]')).toHaveText("Pembilang adalah angka di atas garis.");
+  const answer = thread.locator('[data-author="tutor"] [data-slot="bubble-content"]');
+  await expect(answer).toContainText("berapa pembilangnya?");
 
-  const look = () =>
-    thread.evaluate((element) => {
+  // where the window stops fading, read from its real mask: "black N%" means the top (100 - N)% fades
+  const fadeShare = async () => {
+    const mask = await thread.evaluate((element) => getComputedStyle(element).maskImage || getComputedStyle(element).webkitMaskImage);
+    const solid = /(\d+(?:\.\d+)?)%/.exec(mask ?? "");
+    return solid ? 1 - Number(solid[1]) / 100 : 1;
+  };
+  const readable = async () => {
+    const frame = (await thread.boundingBox())!;
+    const box = (await answer.boundingBox())!;
+    const look = await answer.evaluate((element) => {
       const style = getComputedStyle(element);
-      return { mask: style.maskImage || style.webkitMaskImage, background: style.backgroundColor, height: element.getBoundingClientRect().height };
+      return { background: style.backgroundColor, colour: style.color };
     });
-  const slim = await look();
-  // a gradient mask that goes from solid at the bottom to nothing at the top, over a see-through background
-  expect(slim.mask).toContain("linear-gradient");
-  expect(slim.mask).toContain("to top");
-  expect(alpha(slim.background)).toBeLessThan(1);
+    // 1.5rem of the window is tucked behind the dock's base; the top part of the window is the fade.
+    const fadeEnds = frame.y + frame.height * (await fadeShare());
+    const visibleEnds = frame.y + frame.height - 24;
+    return { box, fadeEnds, visibleEnds, look };
+  };
+  const dark = (colour: string) => (colour.match(/\d+/g) ?? []).slice(0, 3).every((part) => Number(part) < 90);
 
-  await mock.bubble.getByRole("button", { name: "Perluas percakapan" }).click();
-  await expect.poll(async () => (await look()).height).toBeGreaterThan(slim.height * 1.5);
-  expect((await look()).mask).toContain("linear-gradient");
+  for (const mode of ["slim", "expanded"] as const) {
+    if (mode === "expanded") await mock.bubble.getByRole("button", { name: "Perluas percakapan" }).click();
+    // light and dark theme alike: the answer sits on its own light backing, in dark text
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((name) => document.documentElement.classList.toggle("dark", name === "dark"), theme);
+      await expect.poll(async () => (await readable()).box.height).toBeGreaterThan(60);
+      const { box, fadeEnds, visibleEnds, look } = await readable();
+      // see-through, but light enough to read on: an almost opaque white
+      expect(alpha(look.background), `${mode}/${theme} backing`).toBeGreaterThan(0.85);
+      expect(alpha(look.background)).toBeLessThan(1);
+      expect(dark(look.colour), `${mode}/${theme} text colour ${look.colour}`).toBe(true);
+      // the whole answer is below the fade and above the dock's base
+      expect(box.y, `${mode}/${theme} answer under the fade`).toBeGreaterThanOrEqual(fadeEnds - 1);
+      expect(box.y + box.height, `${mode}/${theme} answer under the dock`).toBeLessThanOrEqual(visibleEnds + 1);
+    }
+  }
+
+  // The window is a gradient fading toward the top; its empty space lets the page under it be clicked and selected.
+  const frame = await thread.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { mask: style.maskImage || style.webkitMaskImage, events: style.pointerEvents };
+  });
+  expect(frame.mask).toContain("linear-gradient");
+  expect(frame.mask).toContain("to top");
+  // only the top quarter at most fades: the lines being read are not in it
+  expect(await fadeShare()).toBeLessThanOrEqual(0.25);
+  expect(await fadeShare()).toBeGreaterThan(0.05);
+  expect(frame.events).toBe("none");
   expect(mock.errors).toEqual([]);
 });
 

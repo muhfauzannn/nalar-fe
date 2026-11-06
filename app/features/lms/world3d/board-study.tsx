@@ -117,6 +117,7 @@ function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContex
         className={expanded ? threadFull : threadSlim}
         hideWhenEmpty={!expanded}
         dense={!expanded}
+        floating
         label="Transkrip percakapan saat ini"
         messages={tutor.messages}
         liveQuestion={tutor.inputTranscript}

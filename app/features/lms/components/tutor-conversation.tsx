@@ -52,6 +52,7 @@ export function TutorThread({
   className,
   hideWhenEmpty = false,
   dense = false,
+  floating = false,
 }: {
   label: string;
   messages: TutorThreadMessage[];
@@ -64,6 +65,12 @@ export function TutorThread({
   hideWhenEmpty?: boolean;
   /** A small window: tighter spacing, so a question and the start of its answer fit together. */
   dense?: boolean;
+  /**
+   * The thread floats over a page, in a window that fades toward the top: the tutor's lines get their own
+   * light backing so they stay readable over whatever is behind, and the latest line sits at the bottom of
+   * the window instead of the student's question being pinned to its top.
+   */
+  floating?: boolean;
 }) {
   const isEmpty = messages.length === 0 && !liveQuestion && !liveAnswer && !thinking;
   if (isEmpty && hideWhenEmpty) return null;
@@ -77,26 +84,26 @@ export function TutorThread({
         <MessageScrollerProvider autoScroll>
           <MessageScroller>
             <MessageScrollerViewport>
-              <MessageScrollerContent className={dense ? "gap-2 px-3 py-2" : "gap-5 px-4 py-4"}>
+              <MessageScrollerContent className={cn(dense ? "gap-2 px-3 py-2" : "gap-5 px-4 py-4", floating && "justify-end")}>
                 {messages.map((message) => (
                   <MessageScrollerItem
                     key={message.id}
                     messageId={message.id}
-                    scrollAnchor={message.author === "student"}
+                    scrollAnchor={!floating && message.author === "student"}
                   >
-                    <Line author={message.author}>{message.content}</Line>
+                    <Line author={message.author} backed={floating}>{message.content}</Line>
                   </MessageScrollerItem>
                 ))}
                 {liveQuestion ? (
-                  <MessageScrollerItem scrollAnchor>
-                    <Line author="student" live>
+                  <MessageScrollerItem scrollAnchor={!floating}>
+                    <Line author="student" live backed={floating}>
                       {liveQuestion}
                     </Line>
                   </MessageScrollerItem>
                 ) : null}
                 {liveAnswer ? (
                   <MessageScrollerItem>
-                    <Line author="tutor">{liveAnswer}</Line>
+                    <Line author="tutor" backed={floating}>{liveAnswer}</Line>
                   </MessageScrollerItem>
                 ) : thinking ? (
                   <MessageScrollerItem>
@@ -113,20 +120,26 @@ export function TutorThread({
   );
 }
 
+// A tutor line with its own light backing (and a fixed dark text, whatever the theme), for a thread that floats over a page.
+const backedLine =
+  "*:data-[slot=bubble-content]:rounded-2xl *:data-[slot=bubble-content]:bg-[rgba(255,255,255,.93)] *:data-[slot=bubble-content]:px-3 *:data-[slot=bubble-content]:py-2 *:data-[slot=bubble-content]:text-[#18153a] *:data-[slot=bubble-content]:shadow-sm *:data-[slot=bubble-content]:ring-1 *:data-[slot=bubble-content]:ring-[#e4def8]";
+
 function Line({
   author,
   live,
+  backed,
   children,
 }: {
   author: TutorThreadMessage["author"];
   live?: boolean;
+  backed?: boolean;
   children: string;
 }) {
   const student = author === "student";
   return (
     <Message align={student ? "end" : "start"} data-author={author}>
       <MessageContent>
-        <Bubble align={student ? "end" : "start"} variant={student ? "secondary" : "ghost"}>
+        <Bubble align={student ? "end" : "start"} variant={student ? "secondary" : "ghost"} className={cn(backed && !student && backedLine)}>
           <BubbleContent className={cn("text-sm/relaxed", live && "text-muted-foreground")}>
             <MathText>{children}</MathText>
           </BubbleContent>

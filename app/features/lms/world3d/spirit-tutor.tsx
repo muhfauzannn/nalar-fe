@@ -41,12 +41,15 @@ const tutorModeItems: Array<{ label: string; value: AiTutorMode }> = [
 // default, with a small window onto the thread; expanding it makes that window taller.
 export const dockClass =
   "spirit-bubble pointer-events-none absolute inset-x-2 bottom-3 z-30 mx-auto flex w-auto max-w-[40rem] flex-col text-[#18153a]";
-// The thread fades out toward the top and softly at the sides, and tucks 1.5rem behind the base (-mb-6 / pb-6), so the base's rounded corners do not show the page through.
+// The thread has no panel of its own: each line carries its own backing (see TutorThread `floating`), so only the
+// text is opaque and the page shows through everywhere else. The window fades out over its top fifth (older
+// lines), not over the lines being read, which sit at its bottom. Its empty space does not catch the pointer, so
+// the page under it can still be selected and clicked. It tucks 1.5rem behind the base (-mb-6 / pb-6).
 const threadFade =
-  "pointer-events-auto -mb-6 shrink-0 rounded-t-[22px] bg-[rgba(250,248,255,.8)] pb-6 [mask-image:linear-gradient(to_top,black_55%,transparent),linear-gradient(to_right,transparent,black_7%,black_93%,transparent)] [mask-composite:intersect] [-webkit-mask-image:linear-gradient(to_top,black_55%,transparent),linear-gradient(to_right,transparent,black_7%,black_93%,transparent)] [-webkit-mask-composite:source-in]";
+  "pointer-events-none -mb-6 shrink-0 pb-6 [&_[data-slot=message-scroller-item]]:pointer-events-auto [&_button]:pointer-events-auto [mask-image:linear-gradient(to_top,black_78%,transparent)] [-webkit-mask-image:linear-gradient(to_top,black_78%,transparent)]";
 /** The slim window onto the thread, and the tall one: the same thread, just more of it. */
-export const threadSlim = cn(threadFade, "h-[8.5rem]");
-export const threadFull = cn(threadFade, "h-[min(24rem,60dvh)]");
+export const threadSlim = cn(threadFade, "h-[min(12rem,27dvh)]");
+export const threadFull = cn(threadFade, "h-[min(26rem,62dvh)]");
 
 /** The dock's base: the tutor's controls and the composer, a little see-through over the page. */
 export function DockBase({ children }: { children: ReactNode }) {
@@ -156,6 +159,7 @@ function SpiritChat({ source }: { source: TutorSource }) {
         className={expanded ? threadFull : threadSlim}
         hideWhenEmpty={!expanded}
         dense={!expanded}
+        floating
         label="Percakapan dengan tutor"
         messages={tutor.messages.filter((message) => message.author !== "system")}
         liveQuestion={tutor.inputTranscript}
