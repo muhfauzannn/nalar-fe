@@ -33,7 +33,6 @@ export type PdfAction = PdfRect & {
 export type PdfGuidance = {
   resourceId: string;
   page: number;
-  revision: number;
   turnId: string;
   caption: string;
   holdSeconds?: number;
@@ -42,7 +41,7 @@ export type PdfGuidance = {
 
 export type PdfCursorCue = Omit<PdfGuidance, "actions"> & PdfPoint;
 
-/** Cursor-only steps use the same grounding and viewport checks as annotations. */
+/** Cursor-only steps use the same checks as annotations. */
 export function parsePdfCursor(raw: unknown, context: PdfViewContext, turnId: string): PdfCursorCue {
   if (!record(raw)) throw new Error("Target cursor tidak valid.");
   const guidance = parsePdfGuidance({ ...raw, actions: [{
@@ -52,17 +51,40 @@ export function parsePdfCursor(raw: unknown, context: PdfViewContext, turnId: st
   return { ...identity, x: actions[0].x, y: actions[0].y };
 }
 
-/** Durations are supplied by the model; omitted values support older Live sessions. */
+/** Durations are supplied by the model; one it got wrong just means the default reading time. */
 export function parsePdfHoldSeconds(value: unknown): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 1 || value > 20)
-    throw new Error("holdSeconds harus berupa angka antara 1 dan 20 detik.");
-  return value;
+  return typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 20 ? value : undefined;
 }
 
 /** Steps follow the tutor's words instead of fixed reading times. */
 export function pdfGuidanceFollowsSpeech(guidance: PdfGuidance | null) {
   return !!guidance?.actions.some((action) => action.say);
+}
+
+/** Where the tutor's hand is now: the step its words have reached, or a lone cursor cue. */
+export function pdfPointerTarget(
+  guidance: PdfGuidance | null,
+  revealedSteps: number | null,
+  cursorCue: PdfCursorCue | null,
+  page: number,
+): PdfPoint | null {
+  if (cursorCue?.page === page) return { x: cursorCue.x, y: cursorCue.y };
+  if (guidance?.page !== page) return null;
+  const onPage = guidance.actions.filter((action, index) =>
+    action.kind !== "text" && (revealedSteps === null || index < revealedSteps));
+  const action = revealedSteps === null ? onPage[0] : onPage.at(-1);
+  if (!action) return null;
+  return action.points?.[0] ?? { x: action.x + action.width / 2, y: action.y + action.height / 2 };
+}
+
+/**
+ * How far to scroll so a spot on the page comes into view, or null when it is in view already.
+ * `at` is the spot's position inside the scroll area's visible box, `size` that box's length.
+ * The spot lands in the upper part, clear of the bubble that may sit at the bottom.
+ */
+export function pdfScrollDelta(at: number, size: number) {
+  if (at >= size * 0.12 && at <= size * 0.72) return null;
+  return at - size * 0.35;
 }
 
 export function pdfActionHoldSeconds(guidance: PdfGuidance, index: number) {
@@ -113,179 +135,149 @@ export function intersects(a: PdfRect, b: PdfRect) {
   );
 }
 
-/** Validate the ENTIRE tool batch before mutating anything. Model output is untrusted. */
+/** Longest text the model may hand over; anything longer is cut, not refused. */
+const shorten = (value: unknown, length: number) =>
+  typeof value === "string" && value.trim() ? value.trim().slice(0, length) : undefined;
+
+function parseAction(value: unknown, context: PdfViewContext): PdfAction {
+  if (
+    !record(value) ||
+    ![
+      "point",
+      "highlight",
+      "arrow",
+      "rectangle",
+      "ellipse",
+      "text",
+      "path",
+    ].includes(String(value.kind))
+  )
+    throw new Error("Jenis tindakan tidak valid.");
+  const kind = value.kind as PdfAction["kind"];
+  const holdSeconds = parsePdfHoldSeconds(value.holdSeconds);
+  const caption = shorten(value.caption, 120);
+  const say = shorten(value.say, 80);
+  const block = context.blocks.find((b) => b.id === value.blockId) ?? null;
+  let rects: PdfRect[] | undefined;
+  if (block && kind === "highlight" && (value.quote !== undefined || value.startOffset !== undefined)) {
+    const start = typeof value.quote === "string" ? block.text.indexOf(value.quote) : value.startOffset;
+    const end = typeof value.quote === "string" && typeof start === "number"
+      ? start + value.quote.length : value.endOffset;
+    // Words the model misquoted, or a text layer still being redrawn: the whole block it named
+    // is the next best thing, so the step still shows.
+    if (typeof start === "number" && typeof end === "number" && Number.isInteger(start) &&
+        Number.isInteger(end) && start >= 0 && end > start && end <= block.text.length) {
+      const measured = context.resolveTextRange?.(block.id, start, end);
+      if (measured?.length) rects = measured;
+    }
+  }
+  let points: PdfPoint[] | undefined;
+  if (kind === "path" || (kind === "arrow" && value.points !== undefined)) {
+    if (
+      !Array.isArray(value.points) ||
+      value.points.length < 2 ||
+      value.points.length > (kind === "arrow" ? 2 : 40)
+    )
+      throw new Error("Jumlah titik garis tidak valid.");
+    points = value.points.map((p) => {
+      if (!record(p) || !unit(p.x) || !unit(p.y))
+        throw new Error("Titik garis di luar halaman.");
+      return { x: p.x, y: p.y };
+    });
+  }
+  const pathBox = points
+    ? {
+        x: Math.min(...points.map((p) => p.x)),
+        y: Math.min(...points.map((p) => p.y)),
+        width:
+          Math.max(...points.map((p) => p.x)) -
+          Math.min(...points.map((p) => p.x)),
+        height:
+          Math.max(...points.map((p) => p.y)) -
+          Math.min(...points.map((p) => p.y)),
+      }
+    : null;
+  const rangeBox = rects ? {
+    x: Math.min(...rects.map((r) => r.x)),
+    y: Math.min(...rects.map((r) => r.y)),
+    width: Math.max(...rects.map((r) => r.x + r.width)) - Math.min(...rects.map((r) => r.x)),
+    height: Math.max(...rects.map((r) => r.y + r.height)) - Math.min(...rects.map((r) => r.y)),
+  } : null;
+  const rect = rangeBox ?? pathBox ??
+    block ?? {
+      x: kind === "text" ? 0 : value.x,
+      y: kind === "text" ? 0 : value.y,
+      width: value.width ?? 0,
+      height: value.height ?? 0,
+    };
+  if (![rect.x, rect.y, rect.width, rect.height].every(unit))
+    throw new Error("Target tidak ada di halaman ini. Panggil get_pdf_context, lalu ulangi sekali.");
+  const box =
+    kind === "point" && block
+      ? {
+          x: block.x + block.width / 2,
+          y: block.y + block.height / 2,
+          width: 0,
+          height: 0,
+        }
+      : (rect as PdfRect);
+  if (box.x + box.width > 1.001 || box.y + box.height > 1.001)
+    throw new Error("Tindakan keluar dari halaman.");
+  if (
+    ["highlight", "rectangle", "ellipse"].includes(kind) &&
+    (box.width <= 0 || box.height <= 0)
+  )
+    throw new Error("Ukuran tindakan kosong.");
+  if (kind === "arrow" && box.width === 0 && box.height === 0)
+    throw new Error("Panah harus memiliki panjang.");
+  const text = kind === "text" ? shorten(value.text, 100) : undefined;
+  if (kind === "text" && !text) throw new Error("Catatan harus berisi teks.");
+  return {
+    kind,
+    ...(caption !== undefined ? { caption } : {}),
+    ...(holdSeconds !== undefined ? { holdSeconds } : {}),
+    ...(say !== undefined ? { say } : {}),
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height,
+    ...(text !== undefined ? { text, placement: "side" as const } : {}),
+    ...(points ? { points } : {}),
+    ...(rects ? { rects } : {}),
+  };
+}
+
+/**
+ * Model output is untrusted, so nothing it sends reaches the page unchecked. But a teacher who
+ * fumbles one step keeps pointing: a bad step is left out and the others stay. Only a plan for
+ * a page the student no longer has open, or one with no usable step, is refused. Coordinates
+ * are relative to the page, so scrolling, zooming or selecting never invalidates a plan.
+ */
 export function parsePdfGuidance(
   raw: unknown,
   context: PdfViewContext,
   turnId: string,
 ): PdfGuidance {
-  if (
-    !record(raw) ||
-    raw.resourceId !== context.resourceId ||
-    raw.page !== context.page ||
-    raw.revision !== context.revision ||
-    raw.turnId !== turnId
-  ) {
-    throw new Error(
-      "Konteks atau giliran sudah berubah. Panggil get_pdf_context lagi.",
-    );
+  if (!record(raw) || raw.page !== context.page)
+    throw new Error("Halaman yang dibuka siswa sudah berubah. Panggil get_pdf_context, lalu ulangi sekali.");
+  if (!Array.isArray(raw.actions) || !raw.actions.length)
+    throw new Error("Tidak ada tindakan untuk ditampilkan.");
+  const actions: PdfAction[] = [];
+  let firstError: unknown = null;
+  for (const value of raw.actions.slice(0, 8)) {
+    try {
+      actions.push(parseAction(value, context));
+    } catch (error) {
+      firstError ??= error;
+    }
   }
-  if (
-    typeof raw.caption !== "string" ||
-    !raw.caption.trim() ||
-    raw.caption.length > 120 ||
-    !Array.isArray(raw.actions) ||
-    raw.actions.length < 1 ||
-    raw.actions.length > 8
-  ) {
-    throw new Error("Caption atau jumlah tindakan tidak valid.");
-  }
+  if (!actions.length) throw firstError;
   const holdSeconds = parsePdfHoldSeconds(raw.holdSeconds);
-  const actions = raw.actions.map((value): PdfAction => {
-    if (
-      !record(value) ||
-      ![
-        "point",
-        "highlight",
-        "arrow",
-        "rectangle",
-        "ellipse",
-        "text",
-        "path",
-      ].includes(String(value.kind))
-    )
-      throw new Error("Jenis tindakan tidak valid.");
-    const kind = value.kind as PdfAction["kind"];
-    const actionHoldSeconds = parsePdfHoldSeconds(value.holdSeconds);
-    if (value.caption !== undefined && (typeof value.caption !== "string" ||
-        !value.caption.trim() || value.caption.length > 120))
-      throw new Error("Caption tindakan harus berisi 1–120 karakter.");
-    if (value.say !== undefined && (typeof value.say !== "string" ||
-        !value.say.trim() || value.say.length > 80))
-      throw new Error("say harus berisi 1–80 karakter: kata pertama yang akan diucapkan.");
-    const block =
-      value.blockId === undefined
-        ? null
-        : context.blocks.find((b) => b.id === value.blockId);
-    if (value.blockId !== undefined && !block)
-      throw new Error("Block tidak ditemukan pada halaman ini.");
-    let rects: PdfRect[] | undefined;
-    if (value.startOffset !== undefined || value.endOffset !== undefined || value.quote !== undefined) {
-      if (!block || kind !== "highlight") throw new Error("Rentang teks memerlukan highlight dan blockId.");
-      const start = value.quote !== undefined && typeof value.quote === "string"
-        ? block.text.indexOf(value.quote) : value.startOffset;
-      const end = typeof value.quote === "string" && typeof start === "number"
-        ? start + value.quote.length : value.endOffset;
-      if (typeof start !== "number" || typeof end !== "number" ||
-          !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > block.text.length)
-        throw new Error("Rentang teks tidak valid. Gunakan quote persis dari block atau offset 0-based.");
-      rects = context.resolveTextRange?.(block.id, start, end);
-      if (!rects?.length) throw new Error("Rentang teks belum tersedia. Gunakan blockId tanpa offset.");
-    }
-    let points: PdfPoint[] | undefined;
-    if (kind === "path" || (kind === "arrow" && value.points !== undefined)) {
-      if (
-        !Array.isArray(value.points) ||
-        value.points.length < 2 ||
-        value.points.length > (kind === "arrow" ? 2 : 40)
-      )
-        throw new Error("Jumlah titik garis tidak valid.");
-      points = value.points.map((p) => {
-        if (!record(p) || !unit(p.x) || !unit(p.y))
-          throw new Error("Titik garis di luar halaman.");
-        return { x: p.x, y: p.y };
-      });
-    }
-    const pathBox = points
-      ? {
-          x: Math.min(...points.map((p) => p.x)),
-          y: Math.min(...points.map((p) => p.y)),
-          width:
-            Math.max(...points.map((p) => p.x)) -
-            Math.min(...points.map((p) => p.x)),
-          height:
-            Math.max(...points.map((p) => p.y)) -
-            Math.min(...points.map((p) => p.y)),
-        }
-      : null;
-    const rangeBox = rects ? {
-      x: Math.min(...rects.map((r) => r.x)),
-      y: Math.min(...rects.map((r) => r.y)),
-      width: Math.max(...rects.map((r) => r.x + r.width)) - Math.min(...rects.map((r) => r.x)),
-      height: Math.max(...rects.map((r) => r.y + r.height)) - Math.min(...rects.map((r) => r.y)),
-    } : null;
-    const rect = rangeBox ?? pathBox ??
-      block ?? {
-        x: kind === "text" ? 0 : value.x,
-        y: kind === "text" ? 0 : value.y,
-        width: value.width ?? 0,
-        height: value.height ?? 0,
-      };
-    if (![rect.x, rect.y, rect.width, rect.height].every(unit))
-      throw new Error("Koordinat harus berada dalam halaman (0..1).");
-    const box =
-      kind === "point" && block
-        ? {
-            x: block.x + block.width / 2,
-            y: block.y + block.height / 2,
-            width: 0,
-            height: 0,
-          }
-        : (rect as PdfRect);
-    if (box.x + box.width > 1.001 || box.y + box.height > 1.001)
-      throw new Error("Tindakan keluar dari halaman.");
-    if (
-      ["highlight", "rectangle", "ellipse"].includes(kind) &&
-      (box.width <= 0 || box.height <= 0)
-    )
-      throw new Error("Ukuran tindakan kosong.");
-    if (kind === "arrow" && box.width === 0 && box.height === 0)
-      throw new Error("Panah harus memiliki panjang.");
-    if (
-      kind === "text" &&
-      (typeof value.text !== "string" ||
-        !value.text.trim() ||
-        value.text.length > 100)
-    )
-      throw new Error("Catatan harus berisi 1–100 karakter.");
-    const anchor = points?.[0] ?? {
-      x: box.x + box.width / 2,
-      y: box.y + box.height / 2,
-    };
-    if (kind !== "text" && (
-      context.viewport.width <= 0 ||
-      context.viewport.height <= 0 ||
-      !intersects({ ...anchor, width: 0, height: 0 }, context.viewport) ||
-      (points &&
-        !points.every((p) =>
-          intersects({ ...p, width: 0, height: 0 }, context.viewport),
-        ))
-    )) {
-      throw new Error(
-        "Target di luar area terlihat. Minta siswa menggulir terlebih dahulu.",
-      );
-    }
-    return {
-      kind,
-      ...(value.caption !== undefined ? { caption: value.caption as string } : {}),
-      ...(actionHoldSeconds !== undefined ? { holdSeconds: actionHoldSeconds } : {}),
-      ...(value.say !== undefined ? { say: (value.say as string).trim() } : {}),
-      x: box.x,
-      y: box.y,
-      width: box.width,
-      height: box.height,
-      ...(kind === "text" ? { text: value.text as string } : {}),
-      ...(kind === "text" ? { placement: "side" as const } : {}),
-      ...(points ? { points } : {}),
-      ...(rects ? { rects } : {}),
-    };
-  });
   return {
     resourceId: context.resourceId,
     page: context.page,
-    revision: context.revision,
     turnId,
-    caption: raw.caption,
+    caption: shorten(raw.caption, 120) ?? actions.find((action) => action.caption)?.caption ?? "Lihat bagian ini",
     ...(holdSeconds !== undefined ? { holdSeconds } : {}),
     actions,
   };

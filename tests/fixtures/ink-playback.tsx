@@ -19,7 +19,6 @@ function Fixture() {
     setGuidance({
       resourceId: "fixture",
       page: 1,
-      revision: 1,
       turnId: crypto.randomUUID(),
       caption: "Perhatikan setiap goresannya",
       actions,
@@ -83,7 +82,7 @@ function Fixture() {
         ])}>Guide two parts</button>
         {[0.2, 0.7].map((x, index) => (
           <button key={x} onClick={() => setCursorCue({
-            resourceId: "fixture", page: 1, revision: 1, turnId: "cursor-turn",
+            resourceId: "fixture", page: 1, turnId: "cursor-turn",
             x, y: 0.5, caption: index ? "Perhatikan penyebut" : "Perhatikan pembilang",
           })}>Move cursor {index + 1}</button>
         ))}

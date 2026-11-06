@@ -25,6 +25,11 @@ const LOOKAHEAD = 2;
 // early. Speech never goes faster than about this many (normalized) characters a second,
 // which gives each word an earliest time. Measured on the tutor voice: about 14 per second.
 const MAX_CHARS_PER_SECOND = 15;
+// The tutor often rephrases what it planned to say, and a step must not wait for words that
+// will never come: a teacher's hand keeps moving. The first step gets about three seconds of
+// speech, each later one about seven, then it shows anyway.
+const FIRST_STEP_PATIENCE = 45;
+const NEXT_STEP_PATIENCE = 100;
 
 export class SpokenCues {
   private readonly cues: Array<string | null>;
@@ -33,6 +38,8 @@ export class SpokenCues {
   // Where each transcript piece ends in `heard`, and the stretch of audio it was spoken over.
   private spans: Array<{ end: number; from: number | null; to: number | null }> = [];
   private searchFrom = 0;
+  // Where in `heard` the newest step appeared.
+  private lastStepAt = 0;
   revealed: number;
 
   constructor(says: Array<string | undefined>) {
@@ -62,9 +69,17 @@ export class SpokenCues {
       const found = this.nextMatch();
       if (!found) break;
       this.searchFrom = found.position + 1;
+      this.lastStepAt = found.position;
       this.revealed = this.withFollowers(found.step + 1);
       releases.push({ revealed: this.revealed, at: this.timeAt(found.position) });
       if (this.done) break;
+    }
+    while (!this.done) {
+      const due = this.lastStepAt + (this.revealed ? NEXT_STEP_PATIENCE : FIRST_STEP_PATIENCE);
+      if (this.heard.length < due) break;
+      this.lastStepAt = due;
+      this.revealed = this.withFollowers(this.revealed + 1);
+      releases.push({ revealed: this.revealed, at: this.timeAt(due) });
     }
     return releases;
   }

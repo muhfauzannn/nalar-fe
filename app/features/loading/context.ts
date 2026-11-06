@@ -26,11 +26,13 @@ export function useRequiredPageAsset(
   name: string,
   ready: boolean,
   failure?: string | null,
+  enabled = true,
 ) {
   const session = usePageReadiness();
   useLayoutEffect(() => {
+    if (!enabled) return;
     if (failure) session?.fail(failure);
     else session?.setResource(name, ready);
     return () => session?.removeResource(name);
-  }, [session, name, ready, failure]);
+  }, [session, name, ready, failure, enabled]);
 }

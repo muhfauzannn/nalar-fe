@@ -77,6 +77,7 @@ export function BoardStudy({ resource }: { resource: Resource }) {
           resourceId={resource.id}
           title={resource.title}
           fitContainer
+          blockPageLoading={false}
           guidance={tutor.guidance}
           revealedSteps={tutor.revealedSteps}
           cursorCue={tutor.cursorCue}

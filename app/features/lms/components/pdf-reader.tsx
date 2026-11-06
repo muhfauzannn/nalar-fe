@@ -11,11 +11,15 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { studentResourceFileUrl } from "~/lib/files";
 import { cn } from "~/lib/utils";
 import {
   clampUnit,
+  pdfPointerTarget,
+  pdfScrollDelta,
+  rotatePoint,
   rotateRect,
   type PdfBlock,
   type PdfCursorCue,
@@ -38,6 +42,7 @@ type Props = {
   resourceId: string;
   title: string;
   fitContainer?: boolean;
+  blockPageLoading?: boolean;
   guidance: PdfGuidance | null;
   revealedSteps?: number | null;
   cursorCue?: PdfCursorCue | null;
@@ -46,7 +51,7 @@ type Props = {
   onContext: (context: PdfViewContext | null) => void;
 };
 
-export function PdfReader({ resourceId, title, fitContainer = false, guidance, revealedSteps = null, cursorCue, pointerVisible = true, onContext, onPresentationTiming }: Props) {
+export function PdfReader({ resourceId, title, fitContainer = false, blockPageLoading = true, guidance, revealedSteps = null, cursorCue, pointerVisible = true, onContext, onPresentationTiming }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -58,7 +63,7 @@ export function PdfReader({ resourceId, title, fitContainer = false, guidance, r
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [firstRendered, setFirstRendered] = useState<string | null>(null);
-  useRequiredPageAsset(`pdf:${resourceId}`, firstRendered === resourceId, firstRendered !== resourceId ? error : null);
+  useRequiredPageAsset(`pdf:${resourceId}`, firstRendered === resourceId, firstRendered !== resourceId ? error : null, blockPageLoading);
   const [selection, setSelection] = useState<PdfSelection | null>(null);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const scrollHost = useRef<HTMLDivElement>(null);
@@ -339,6 +344,28 @@ export function PdfReader({ resourceId, title, fitContainer = false, guidance, r
     onContext(null);
   }, [onContext]);
 
+  // The tutor may point anywhere on the page. A page taller than the board is partly out of
+  // sight, so it glides to the spot the hand is going to, the way a student's eyes would.
+  const pointerSpot = pointerVisible && !loading ? pdfPointerTarget(guidance ?? null, revealedSteps, cursorCue ?? null, page) : null;
+  const pointerX = pointerSpot?.x;
+  const pointerY = pointerSpot?.y;
+  useEffect(() => {
+    const host = scrollHost.current;
+    const sheet = pageHost.current;
+    if (!host || !sheet || pointerX === undefined || pointerY === undefined) return;
+    const spot = rotatePoint({ x: pointerX, y: pointerY }, effectiveRotation);
+    const pageBox = sheet.getBoundingClientRect();
+    const hostBox = host.getBoundingClientRect();
+    const left = pdfScrollDelta(pageBox.left - hostBox.left + spot.x * pageBox.width, hostBox.width);
+    const top = pdfScrollDelta(pageBox.top - hostBox.top + spot.y * pageBox.height, hostBox.height);
+    if (left === null && top === null) return;
+    host.scrollBy({
+      left: left ?? 0,
+      top: top ?? 0,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [pointerX, pointerY, effectiveRotation]);
+
   const readSelection = useCallback(() => {
     const host = pageHost.current;
     const selected = window.getSelection();
@@ -424,7 +451,7 @@ export function PdfReader({ resourceId, title, fitContainer = false, guidance, r
   };
 
   return (
-    <div className={cn("flex min-w-0 flex-col", fitContainer && "h-full")}>
+    <div className={cn("flex min-w-0 flex-col", fitContainer && "h-full")} aria-busy={loading && !error}>
       <div
         className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2"
         role="toolbar"
@@ -548,12 +575,27 @@ export function PdfReader({ resourceId, title, fitContainer = false, guidance, r
           </div>
         ) : null}
         {loading && !error ? (
-          <div
-            role="status"
-            className="absolute inset-x-0 top-8 flex items-center justify-center gap-2 text-sm text-muted-foreground"
-          >
-            <Spinner /> Menyiapkan halaman…
-          </div>
+          blockPageLoading ? (
+            <div
+              role="status"
+              className="absolute inset-x-0 top-8 flex items-center justify-center gap-2 text-sm text-muted-foreground"
+            >
+              <Spinner /> Menyiapkan halaman…
+            </div>
+          ) : (
+            <div role="status" className="absolute inset-0 overflow-hidden p-5">
+              <span className="sr-only">Menyiapkan halaman…</span>
+              <div aria-hidden="true" className="mx-auto flex h-full max-w-xl flex-col gap-4 rounded-sm border bg-white p-6 sm:p-10 [&_[data-slot=skeleton]]:motion-reduce:animate-none">
+                <Skeleton className="mb-3 h-7 w-3/5 shrink-0" />
+                {["w-full", "w-full", "w-4/5", "w-full", "w-2/3"].map((width, index) => (
+                  <Skeleton key={index} className={cn("h-3 shrink-0", width)} />
+                ))}
+                <Skeleton className="my-3 min-h-16 flex-1" />
+                <Skeleton className="h-3 w-full shrink-0" />
+                <Skeleton className="h-3 w-4/5 shrink-0" />
+              </div>
+            </div>
+          )
         ) : null}
         <div className="flex min-w-full w-max justify-center p-5">
           <div
@@ -573,13 +615,13 @@ export function PdfReader({ resourceId, title, fitContainer = false, guidance, r
             <PdfTutorOverlay
               guidance={guidance?.page === page ? guidance : null}
               revealedSteps={revealedSteps}
-              cursorCue={!loading && cursorCue?.page === page && cursorCue.revision === revision.current ? cursorCue : null}
+              cursorCue={!loading && cursorCue?.page === page ? cursorCue : null}
               pointerVisible={pointerVisible}
               onPresentationTiming={onPresentationTiming}
               selection={selection}
               rotation={effectiveRotation}
               size={size}
-              showCursor={!loading && guidance?.revision === revision.current}
+              showCursor={!loading}
             />
           </div>
         </div>

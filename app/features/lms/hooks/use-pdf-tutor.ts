@@ -108,8 +108,9 @@ export function usePdfTutor(
   const generationTailPending = useRef(false);
   const visualFailures = useRef(0);
   const responseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const turn = useRef<{ id: string; revision: number } | null>(null);
-  const groundedTurn = useRef<string | null>(null);
+  const turn = useRef<{ id: string } | null>(null);
+  // The page the pointer belongs to: only leaving it puts the hand down, not scrolling or zooming.
+  const pointerPage = useRef<string | null>(null);
   const speechFrames = useRef(0);
   const speakingInput = useRef(false);
   const transcriptRef = useRef("");
@@ -251,7 +252,6 @@ export function usePdfTutor(
     replacingTurn.current = false;
     if (responseTimer.current) clearTimeout(responseTimer.current);
     turn.current = null;
-    groundedTurn.current = null;
     speakingInput.current = false;
     transcriptRef.current = "";
     outputRef.current = "";
@@ -355,10 +355,8 @@ export function usePdfTutor(
     setRecoveryNotice(null);
     toolContinuation.current = false;
     markProgress();
-    // While the next page loads there is no view yet; get_pdf_context grounds the turn later.
-    turn.current = { id: crypto.randomUUID(), revision: contextRef.current?.revision ?? -1 };
+    turn.current = { id: crypto.randomUUID() };
     turnCount.current++;
-    groundedTurn.current = null;
     transcriptRef.current = "";
     outputRef.current = "";
     speakingInput.current = true;
@@ -492,51 +490,43 @@ export function usePdfTutor(
         if (!call.id || cancelledCalls.current.has(call.id)) continue;
         let response: Record<string, unknown>;
         try {
-          const view = contextRef.current;
           const active = turn.current;
           if (!active || active.id !== requestedTurnId) throw new Error("Tunggu pertanyaan baru siswa.");
+          // Zooming or turning the page leaves no view for a moment: wait it out.
+          await waitUntil(() => !!contextRef.current, Date.now() + 4_000, { pollMs: 40 });
+          const view = contextRef.current;
           if (!view)
-            throw new Error("Halaman PDF sedang dimuat. Coba lagi sebentar.");
+            throw new Error("Halaman PDF sedang dimuat. Panggil get_pdf_context, lalu ulangi sekali.");
           if (call.name === "get_pdf_context") {
-            // The student may have turned the page mid-answer: ground on what is open now.
-            active.revision = view.revision;
             // A changed page is resent by sendView itself. The same page is resent only every few
             // turns, in case conversation truncation dropped it: one image is up to ~200 KB of
             // uplink, seconds on a slow phone connection, before the tutor can answer.
             // Return context as the tool response, without appending a second user
             // message in the middle of a blocking function call.
             sendView(session, view, turnCount.current - imageTurn.current >= 3, false);
-            groundedTurn.current = active.id;
             response = contextForModel(view, active.id);
             trace("context-read");
           } else if (call.name === "present_pdf_guidance" || call.name === "move_pdf_cursor") {
             if (visualFailures.current >= 2 || recoveryAttempts.current > 0)
               throw new Error("Lanjutkan penjelasan tanpa tool visual pada giliran ini.");
-            if (groundedTurn.current !== active.id)
-              throw new Error(
-                "Panggil get_pdf_context pada giliran ini dahulu.",
-              );
-            if (active.revision !== view.revision)
-              throw new Error(
-                "Tampilan PDF berubah. Panggil get_pdf_context lagi sebelum menandai halaman.",
-              );
             // Model generation can run ahead of real playback. Keep the next visual
             // step behind the audio already queued for the previous reference.
             pendingGuidanceCall.current = call.id;
             const callId = call.id;
             const current = () => generation.current === sessionGeneration &&
               turn.current?.id === active.id && !cancelledCalls.current.has(callId);
-            const quiet = await waitUntil(
+            const leftPage = () => !!contextRef.current && contextRef.current.page !== view.page;
+            // A long sentence still playing is no reason to drop the step: it shows after the wait.
+            await waitUntil(
               () => Date.now() >= visualReadyAt.current && (!voiceRef.current || !playing.current),
               Math.max(Date.now(), visualReadyAt.current) + 20_000,
-              { pollMs: 40, cancelled: () => !current() || contextRef.current?.revision !== view.revision },
+              { pollMs: 40, cancelled: () => !current() || leftPage() },
             );
-            if (!quiet || !current()) throw new Error("Langkah dibatalkan atau audio sebelumnya belum selesai.");
-            if (contextRef.current?.revision !== view.revision)
-              throw new Error("Tampilan berubah saat menunggu audio. Panggil get_pdf_context lagi.");
+            if (!current()) throw new Error("Langkah dibatalkan.");
+            const latest = contextRef.current ?? view;
             const cursorOnly = call.name === "move_pdf_cursor";
-            const nextCursor = cursorOnly ? parsePdfCursor(call.args, view, active.id) : null;
-            const next = cursorOnly ? null : parsePdfGuidance(call.args, view, active.id);
+            const nextCursor = cursorOnly ? parsePdfCursor(call.args, latest, active.id) : null;
+            const next = cursorOnly ? null : parsePdfGuidance(call.args, latest, active.id);
             // Cursor-only steps preserve the drawing and its playback progress.
             pendingGuidanceCall.current = call.id;
             pointerTurn.current = active.id;
@@ -561,19 +551,17 @@ export function usePdfTutor(
             if (
               generation.current !== sessionGeneration ||
               turn.current?.id !== active.id ||
-              contextRef.current?.revision !== view.revision ||
+              leftPage() ||
               cancelledCalls.current.has(call.id) ||
               pendingGuidanceCall.current !== call.id
             )
-              throw new Error("Tindakan dibatalkan karena konteks berubah.");
+              throw new Error("Halaman berubah saat menunjuk. Panggil get_pdf_context, lalu ulangi sekali.");
             if (next) committedGuidance.current = next;
             committedCursor.current = nextCursor;
             pendingGuidanceCall.current = null;
             response = {
               ok: true,
               page: view.page,
-              revision: view.revision,
-              turnId: active.id,
             };
             trace(cursorOnly ? "cursor-moved" : "guidance-presented");
           } else {
@@ -588,15 +576,16 @@ export function usePdfTutor(
             setGuidance(committedGuidance.current);
             setCursorCue(committedCursor.current);
           }
-          if (call.name === "present_pdf_guidance" || call.name === "move_pdf_cursor") visualFailures.current++;
+          const reason = caught instanceof Error ? caught.message : "Tindakan tidak valid.";
+          if (call.name === "present_pdf_guidance" || call.name === "move_pdf_cursor") {
+            visualFailures.current++;
+            report({ event: "visual_rejected", phase: "live", reason: `${call.name}: ${reason}` });
+          }
           response = {
             ok: false,
             continueWithExplanation: true,
-            responseInstruction: "Tindakan visual gagal. Tetap jawab pertanyaan siswa dengan penjelasan dan contoh. Jangan ulangi tool visual yang gagal; gunakan konteks yang sudah tersedia.",
-            error:
-              caught instanceof Error
-                ? caught.message
-                : "Tindakan tidak valid.",
+            responseInstruction: "Jangan meminta maaf dan jangan menyebut penunjuk kepada siswa. Lanjutkan penjelasan seperti biasa.",
+            error: reason,
           };
           trace("tool-rejected");
         }
@@ -708,7 +697,7 @@ export function usePdfTutor(
         if (!playing.current) setStatus(microphoneRef.current ? "listening" : "paused");
       }
     },
-    [beginTurn, cancelTurn, commitTurn, hearCues, markProgress, sendView, settlePointer, startCues, stopCues, trace],
+    [beginTurn, cancelTurn, commitTurn, hearCues, markProgress, report, sendView, settlePointer, startCues, stopCues, trace],
   );
 
   const startMicrophone = useCallback(async () => {
@@ -1050,7 +1039,6 @@ export function usePdfTutor(
         const imageKey = `${view.resourceId}:${view.fingerprint}:${view.page}`;
         const includeImage = imageKey !== lastImage.current || turnCount.current - imageTurn.current >= 3;
         session.sendClientContent(pdfQuestionContent(view, active.id, content, includeImage));
-        groundedTurn.current = active.id;
         if (includeImage) {
           lastImage.current = imageKey;
           imageTurn.current = turnCount.current;
@@ -1075,8 +1063,6 @@ export function usePdfTutor(
     if (!session || !view || !active || !question || hasAnswer.current || recoveryAttempts.current >= 1) return false;
     recoveryAttempts.current++;
     try {
-      active.revision = view.revision;
-      groundedTurn.current = active.id;
       toolContinuation.current = false;
       // Invalidate an old rendering task before retriggering the same request.
       pendingGuidanceCall.current = null;
@@ -1163,11 +1149,15 @@ export function usePdfTutor(
       return;
     // Turning, zooming or scrolling the PDF is not an interruption: the tutor keeps
     // talking and only the student's voice or the stop button cuts it off. Ink stays
-    // anchored to its own page (the reader shows it only there); drawing on the new
-    // view requires get_pdf_context again (see present_pdf_guidance).
+    // anchored to its own page (the reader shows it only there), and the pointer stays up
+    // unless the student left that page.
     trace("context-changed");
-    hidePointer();
-    visualReadyAt.current = 0;
+    const openPage = context ? `${context.resourceId}:${context.page}` : pointerPage.current;
+    if (openPage !== pointerPage.current) {
+      pointerPage.current = openPage;
+      hidePointer();
+      visualReadyAt.current = 0;
+    }
     // Invalidate locally immediately; coalesce rapid scroll/resize updates on the wire.
     const timer = setTimeout(() => {
       if (
