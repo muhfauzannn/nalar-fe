@@ -133,6 +133,7 @@ export type QuizEditorData = {
     availableAt: string | null;
     dueAt: string | null;
     closesAt: string | null;
+    aiAssistantEnabled?: boolean;
     timeLimitMinutes: number | null;
   };
   questions: ManagedQuestion[];

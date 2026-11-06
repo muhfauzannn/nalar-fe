@@ -5,7 +5,9 @@ import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
 import { ActionButton, ChoiceChips, Float, FeedbackPill, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
 import { LabPointer } from "./lab-pointer";
+import { LabStoryPanel, useLabStory } from "./lab-story";
 import { BURST, CELLS, CHALLENGES, fmt, flowOf, judge, SALT, stateOf, volumeOf, type ChallengeId, type Guess, type State } from "./osmosis/model";
+import { STORY } from "./osmosis/story";
 import { bloodOutline, CONE, HEIGHT, ONION, ONION_CELLS, PIPETTE_ART, RING_AXIS, ringAt, roundRect, saltAtZ, scatter, SCOPE_ART, VIEW, WIDTH } from "./osmosis/scene";
 
 // Lab "Mikroskop osmosis" (Biologi SMA). Set the salt on the dropper's scale
@@ -17,6 +19,7 @@ const SIZE: [number, number] = [WIDTH, HEIGHT];
 const IONS = scatter(240, 7);
 const ARROWS = 12;
 const snapSalt = (value: number) => Math.min(SALT.max, Math.max(SALT.min, Math.round(value / SALT.step) * SALT.step));
+const MISSION_IDS = CHALLENGES.map((item) => item.id);
 const pct = (salt: number) => `${fmt(salt, 2)} %`;
 
 const STATE_TEXT: Record<State, string> = {
@@ -28,7 +31,7 @@ const STATE_TEXT: Record<State, string> = {
   plasmolisis: "plasmolisis",
 };
 
-export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void }) {
+export function OsmosisLab({ solved, onSolve, onState, story: told }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void; story?: boolean }) {
   const firstOpen = CHALLENGES.findIndex((challenge) => !solved.includes(challenge.id));
   const [active, setActive] = useState(firstOpen === -1 ? 0 : firstOpen);
   const challenge = CHALLENGES[active]!;
@@ -46,7 +49,8 @@ export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onS
   const { done, feedback, setFeedback, miss, win } = useMissions(solved, onSolve);
   const svg = useRef<SVGSVGElement>(null);
   const live = useRef({ volume, target: 1, burst, cell });
-  const locked = challenge.lock !== undefined;
+  const story = useLabStory(STORY, { on: told, ids: MISSION_IDS, done, goTo: reset });
+  const locked = challenge.lock !== undefined && !story.touring;
 
   const target = Math.min(volumeOf(cell, applied), BURST + 0.2);
   live.current.target = target;
@@ -55,6 +59,7 @@ export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onS
   const flow = flowOf(cell, applied);
   const ring = useMemo(() => ringAt(salt), [salt]);
   useLabState(onState, [
+    story.summary,
     `Misi ${active + 1} dari ${CHALLENGES.length} (${challenge.id}): ${challenge.story}`,
     `Sel ${cell === "darah" ? "darah merah" : "bawang merah"}; cincin pipet di ${salt === 0 ? "air suling" : pct(salt)}; larutan di kaca ${applied === 0 ? "air suling" : pct(applied)}`,
     `Di lensa: sel ${STATE_TEXT[state]}, volume ${burst ? "—" : `${Math.round(Math.min(volume, BURST) * 100)} %`}${busy ? " (sedang menyesuaikan)" : ""}`,
@@ -202,12 +207,12 @@ export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onS
     return { x, y, angle, opacity: arrowAlpha * fade };
   });
 
-  const canDrop = (!challenge.predict || guess !== null) && !busy;
+  const canDrop = (!challenge.predict || guess !== null) && !busy && !story.reading;
   const stateTone = state === "pecah" || state === "plasmolisis" || state === "mengkerut" ? "bad" : state === "menggembung" ? "plain" : "good";
 
   return (
     <div className={`osmosis-lab ${labCard}`} data-theme="light">
-      <MissionStrip missions={CHALLENGES} active={active} done={done} story={challenge.story} onChoose={reset} />
+      <MissionStrip missions={CHALLENGES} active={active} done={done} story={story.strip ?? challenge.story} onChoose={(index) => (story.leave(), reset(index))} onReplay={story.replay} />
 
       <div className="relative">
         <svg ref={svg} className="iso-svg touch-none select-none" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`Mikroskop. Sel ${cell === "darah" ? "darah merah" : "bawang merah"} dalam larutan garam ${pct(applied)}: ${STATE_TEXT[state]}, volume ${Math.round(Math.min(volume, BURST) * 100)} persen.`}>
@@ -392,6 +397,8 @@ export function OsmosisLab({ solved, onSolve, onState }: { solved: string[]; onS
         </div>
         <span className="sr-only" aria-live="polite">{STATE_TEXT[state]}</span>
       </div>
+
+      <LabStoryPanel panel={story.panel} />
 
       {/* phone: the same control at full size */}
       <div className="border-t border-[#efebf9] px-3 py-2.5 sm:hidden">

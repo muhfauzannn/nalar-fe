@@ -1,4 +1,4 @@
-import { Check, Lock } from "lucide-react";
+import { BookOpen, Check, Lock } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { announcePoints, flyCoin, HAPTIC, haptic, playSound } from "~/features/game-feel";
@@ -13,7 +13,7 @@ export const fmt = (value: number, digits = 1) => value.toFixed(digits).replace(
 
 export type Feedback = { ok: boolean; text: string; points?: number } | null;
 
-export function MissionStrip({ missions, active, done, story, onChoose }: { missions: Array<{ id: string }>; active: number; done: string[]; story: string; onChoose: (index: number) => void }) {
+export function MissionStrip({ missions, active, done, story, onChoose, onReplay }: { missions: Array<{ id: string }>; active: number; done: string[]; story: string; onChoose: (index: number) => void; onReplay?: () => void }) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[#efebf9] px-3 py-2.5 sm:px-4">
       <div className="flex gap-1.5" role="tablist" aria-label="Misi">
@@ -35,6 +35,11 @@ export function MissionStrip({ missions, active, done, story, onChoose }: { miss
         ))}
       </div>
       <p className="min-w-0 flex-1 text-[13.5px] font-semibold leading-snug text-[#18153a]">{story}</p>
+      {onReplay ? (
+        <button type="button" onClick={onReplay} aria-label="Putar ulang cerita" title="Putar ulang cerita" className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-[#18153a] ring-1 ring-[#e4def8] transition-transform duration-150 active:scale-[0.94]">
+          <BookOpen className="size-4" aria-hidden="true" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -189,5 +194,6 @@ export function inPlane(p: [number, number], origin: [number, number], ex: [numb
   return [(dx * ez[1] - dy * ez[0]) / det, (ex[0] * dy - ex[1] * dx) / det];
 }
 
-// `relative`: the tutor's pointer (lab-pointer.tsx) is drawn over the card.
-export const labCard = "iso relative overflow-hidden rounded-[22px] border border-[#e9e4f8] bg-[#fbfaf7]";
+// `relative`: the tutor's pointer (lab-pointer.tsx) is drawn over the card. `overflow-clip`, not
+// hidden: the story panel (lab-story.tsx) sticks to the bottom of whatever scrolls the card.
+export const labCard = "iso relative overflow-clip rounded-[22px] border border-[#e9e4f8] bg-[#fbfaf7]";

@@ -227,7 +227,7 @@ export function QuizAttempt({ data, working, embedded = false }: { data: QuizDat
   const activeQuestion = reviewing ? undefined : data.questions[activeStep];
   // In the classroom the tutor spirit takes the question instead of a panel here.
   const tutorHosted = useHostedTutor(
-    activeQuestion && attempt
+    data.quiz.aiAssistantEnabled !== false && activeQuestion && attempt
       ? {
           key: `quiz:${attempt.id}:${activeQuestion.id}`,
           label: `Kuis, soal ${activeStep + 1}`,
@@ -374,7 +374,7 @@ export function QuizAttempt({ data, working, embedded = false }: { data: QuizDat
           </div>
         </section>
 
-        {!reviewing && activeQuestion && !tutorHosted && (
+        {data.quiz.aiAssistantEnabled !== false && !reviewing && activeQuestion && !tutorHosted && (
           <aside
             className="order-3 min-w-0 @7xl:sticky @7xl:top-24"
             aria-label="Tutor untuk soal aktif"

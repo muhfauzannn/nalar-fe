@@ -6,8 +6,10 @@ import { cn } from "~/lib/utils";
 
 import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
-import { useLabState } from "./lab-ui";
+import { labCard, MissionStrip, useLabState } from "./lab-ui";
 import { LabPointer } from "./lab-pointer";
+import { LabStoryPanel, useLabStory } from "./lab-story";
+import { STORY } from "./parabola/story";
 import {
   ANGLE,
   BALL_RADIUS,
@@ -69,7 +71,9 @@ const speedToT = (speed: number) => (speed - SPEED.min) / (SPEED.max - SPEED.min
 const tToSpeed = (t: number) => Math.round((SPEED.min + Math.min(1, Math.max(0, t)) * (SPEED.max - SPEED.min)) * 2) / 2;
 const clampAngle = (a: number) => Math.min(ANGLE.max, Math.max(ANGLE.min, Math.round(a)));
 
-export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void }) {
+const MISSION_IDS = CHALLENGES.map((item) => item.id);
+
+export function ParabolaLab({ solved, onSolve, onState, story: told }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void; story?: boolean }) {
   const firstOpen = CHALLENGES.findIndex((challenge) => !solved.includes(challenge.id));
   const [active, setActive] = useState(firstOpen === -1 ? 0 : firstOpen);
   const challenge = CHALLENGES[active]!;
@@ -85,7 +89,9 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
   const [firedMasses, setFiredMasses] = useState<Mass[]>([]);
   const [touched, setTouched] = useState({ angle: false, speed: false });
   const [landing, setLanding] = useState<{ x: number; range: number; hit: boolean } | null>(null);
+  const story = useLabStory(STORY, { on: told, ids: MISSION_IDS, done, goTo: choose });
   useLabState(onState, [
+    story.summary,
     `Misi ${active + 1} dari ${CHALLENGES.length} (${challenge.id}): ${challenge.story}`,
     `Sudut laras ${angle}°, kecepatan awal ${speed} m/s, bola ${mass} kg`,
     challenge.id === "berat-ringan" && `Tebakan siswa: ${prediction ?? "belum menebak"}; bola yang sudah ditembakkan: ${firedMasses.join(" dan ") || "belum ada"} kg`,
@@ -181,7 +187,7 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
     let text = "";
     if (challenge.id === "kenai-benteng") {
       solvedNow = hit;
-      text = hit ? "Tepat kena benteng!" : missHint(fired, challenge.target).text;
+      text = hit ? "Tepat di bendera benteng!" : missHint(fired, challenge.target).text;
     } else if (challenge.id === "dua-sudut") {
       if (hit) {
         const before = hitAngles.find((a) => Math.abs(a - fired.angle) >= TWO_ANGLES_APART);
@@ -320,32 +326,11 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
   const angleHandle = handleAt(angle);
   const speedHandle = powderHandleAt(speedToT(speed));
   const loaded = RACK.cups.find((cup) => cup.mass === mass)!;
-  const canFire = phase !== "flying" && !(challenge.id === "berat-ringan" && !prediction);
+  const canFire = phase !== "flying" && !story.reading && !(challenge.id === "berat-ringan" && !prediction);
 
   return (
-    <div className="parabola-lab iso relative overflow-hidden rounded-[22px] border border-[#e9e4f8] bg-[#fbfaf7]" data-theme="light">
-      {/* mission strip: which of the three, and the one-line story */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#efebf9] px-3 py-2.5 sm:px-4">
-        <div className="flex gap-1.5" role="tablist" aria-label="Misi">
-          {CHALLENGES.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={index === active}
-              aria-label={`Misi ${index + 1}${done.includes(item.id) ? ", selesai" : ""}`}
-              onClick={() => choose(index)}
-              className={cn(
-                "grid size-8 place-items-center rounded-full text-sm font-bold transition-transform duration-150 active:scale-[0.94]",
-                index === active ? "bg-[#18153a] text-white" : done.includes(item.id) ? "bg-[#e6f8f0] text-[#14704b]" : "bg-white text-[#18153a] ring-1 ring-[#e4def8]",
-              )}
-            >
-              {done.includes(item.id) ? <Check className="size-4" aria-hidden="true" /> : index + 1}
-            </button>
-          ))}
-        </div>
-        <p className="min-w-0 flex-1 text-[13.5px] font-semibold leading-snug text-[#18153a]">{challenge.story}</p>
-      </div>
+    <div className={`parabola-lab ${labCard}`} data-theme="light">
+      <MissionStrip missions={CHALLENGES} active={active} done={done} story={story.strip ?? challenge.story} onChoose={(index) => (story.leave(), choose(index))} onReplay={story.replay} />
 
       <div className="relative">
         <svg ref={svg} className="iso-svg touch-none select-none" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`Meriam di tebing. Sudut ${angle} derajat, kecepatan ${fmt(speed)} meter per detik, bola ${mass} kilogram.`}>
@@ -519,6 +504,7 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
               role="slider"
               tabIndex={0}
               aria-label="Sudut tembak"
+              data-lab-act="laras"
               aria-valuemin={ANGLE.min}
               aria-valuemax={ANGLE.max}
               aria-valuenow={angle}
@@ -541,6 +527,7 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
               role="slider"
               tabIndex={0}
               aria-label="Mesiu (kecepatan awal)"
+              data-lab-act="mesiu"
               aria-valuemin={SPEED.min}
               aria-valuemax={SPEED.max}
               aria-valuenow={speed}
@@ -618,6 +605,8 @@ export function ParabolaLab({ solved, onSolve, onState }: { solved: string[]; on
           </Float>
         ) : null}
       </div>
+
+      <LabStoryPanel panel={story.panel} />
 
       {/* on a phone the handles are small under a finger: the same controls, full size */}
       <div className="grid grid-cols-[1fr_1fr] gap-x-3 gap-y-2 border-t border-[#efebf9] px-3 py-2.5 sm:hidden">

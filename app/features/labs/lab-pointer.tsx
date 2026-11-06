@@ -77,13 +77,13 @@ export function LabPointer() {
                 transform: above ? "translateY(-100%)" : undefined,
               }}
             >
-              NALAR · {pointed.caption}
+              {pointed.story ? pointed.caption : `NALAR · ${pointed.caption}`}
             </span>
           ) : null}
         </>
       ) : null}
       <span className="sr-only" role="status">
-        {pointed?.caption ? `Tutor menunjuk: ${pointed.caption}` : ""}
+        {pointed?.caption ? `${pointed.story ? "Lihat" : "Tutor menunjuk"}: ${pointed.caption}` : ""}
       </span>
     </div>
   );

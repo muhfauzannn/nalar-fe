@@ -308,7 +308,9 @@ export function ClassroomOverlay({
           </nav>
         </Dock>
       )}
-      <SpiritTutor source={tutorSource} focus={focus} boardTutor={pdfOnBoard !== null} />
+      {!(focus === "kuis" && quiz?.quiz.aiAssistantEnabled === false) && (
+        <SpiritTutor source={tutorSource} focus={focus} boardTutor={pdfOnBoard !== null} />
+      )}
     </Overlay>
     {/* The real lab, off screen for a moment: its picture goes on the bench's screen in the room. Never while the
         student is at the bench itself: a second copy of the lab would give the tutor two of every part to point at. */}

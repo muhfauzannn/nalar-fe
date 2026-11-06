@@ -186,6 +186,7 @@ function QuizStartPanel({ data, working }: { data: QuizData; working: boolean })
       ? `Timer ${data.quiz.timeLimitMinutes} menit berjalan setelah kamu mulai`
       : null,
     "Jawaban tersimpan otomatis",
+    data.quiz.aiAssistantEnabled === false ? "AI Assistant dinonaktifkan oleh guru untuk kuis ini" : null,
   ].filter((rule): rule is string => rule !== null);
 
   return (

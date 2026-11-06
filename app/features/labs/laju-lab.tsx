@@ -5,6 +5,8 @@ import "./iso/iso.css";
 import { Dots, Line, Solid } from "./iso/react/draw";
 import { ActionButton, ChoiceChips, Float, FeedbackPill, inPlane, labCard, MissionStrip, PhoneSlider, pagePoint, useLabState, useMissions, viewPoint } from "./lab-ui";
 import { LabPointer } from "./lab-pointer";
+import { LabStoryPanel, useLabStory } from "./lab-story";
+import { STORY } from "./laju/story";
 import { CATALYST_MASS, CHALLENGES, CONC, DOUBLE_BAND, EA, EA_CATALYST, effectiveShare, FAST_TARGET, fmt, judge, rateOf, SAFE_TEMP, speedOf, TEMP, type ChallengeId, type Mix } from "./laju/model";
 import {
   at,
@@ -59,7 +61,9 @@ function oneIn(share: number) {
   return fmt(n, 0);
 }
 
-export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void }) {
+const MISSION_IDS = CHALLENGES.map((item) => item.id);
+
+export function LajuLab({ solved, onSolve, onState, story: told }: { solved: string[]; onSolve: (challenge: ChallengeId) => Promise<number>; onState?: (summary: string) => void; story?: boolean }) {
   const firstOpen = CHALLENGES.findIndex((challenge) => !solved.includes(challenge.id));
   const [active, setActive] = useState(firstOpen === -1 ? 0 : firstOpen);
   const challenge = CHALLENGES[active]!;
@@ -87,7 +91,9 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
   const band = challenge.id === "gandakan-suhu" ? gaugeBand(DOUBLE_BAND.min, DOUBLE_BAND.max) : challenge.id === "cepat-tapi-aman" ? gaugeBand(FAST_TARGET, 32) : "";
   const glow = glowOf(mix.temp);
   const hot = challenge.id === "cepat-tapi-aman" && mix.temp > SAFE_TEMP;
+  const story = useLabStory(STORY, { on: told, ids: MISSION_IDS, done, goTo: choose });
   useLabState(onState, [
+    story.summary,
     `Misi ${active + 1} dari ${CHALLENGES.length} (${challenge.id}): ${challenge.story}`,
     `Suhu ${mix.temp} K, konsentrasi ${fmt(mix.conc, 2)} M, katalis ${mix.catalyst ? "dicelupkan" : "tidak dipakai"}; pengukur menunjukkan laju ${fmt(rate)}× campuran awal`,
     challenge.predict && `Tebakan siswa: ${guess ?? "belum menebak"}`,
@@ -311,7 +317,7 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
 
   return (
     <div className={`laju-lab ${labCard}`} data-theme="light">
-      <MissionStrip missions={CHALLENGES} active={active} done={done} story={challenge.story} onChoose={choose} />
+      <MissionStrip missions={CHALLENGES} active={active} done={done} story={story.strip ?? challenge.story} onChoose={(index) => (story.leave(), choose(index))} onReplay={story.replay} />
 
       <div className="relative">
         <svg ref={svg} className="iso-svg touch-none select-none" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`Reaktor tumbukan. Suhu ${mix.temp} kelvin, konsentrasi ${fmt(mix.conc, 2)} molar, ${mix.catalyst ? "pakai" : "tanpa"} katalis. Laju ${fmt(rate)} kali.`}>
@@ -567,6 +573,8 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
       </div>
 
       {/* phone: the same controls at full size */}
+      <LabStoryPanel panel={story.panel} />
+
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[#efebf9] px-3 py-2.5 sm:hidden">
         <PhoneSlider label="Suhu" value={mix.temp} min={TEMP.min} max={TEMP.max} step={TEMP.step} unit=" K" locked={locked.temp} onChange={setTemp} />
         <PhoneSlider label="Konsentrasi" value={mix.conc} min={CONC.min} max={CONC.max} step={CONC.step} unit=" M" digits={2} locked={locked.conc} onChange={setConc} />
@@ -599,7 +607,7 @@ export function LajuLab({ solved, onSolve, onState }: { solved: string[]; onSolv
         <span className="flex-1" />
         <FeedbackPill feedback={feedback} />
         <span data-lab-part="reaksikan" className="inline-flex">
-          <ActionButton onClick={react} disabled={!canRun || measuring}>
+          <ActionButton onClick={react} disabled={!canRun || measuring || story.reading}>
             <span className="flex items-center gap-1.5">
               <FlaskConical className={measuring ? "size-4 animate-pulse" : "size-4"} aria-hidden="true" /> {measuring ? "Mengukur…" : "Reaksikan"}
             </span>

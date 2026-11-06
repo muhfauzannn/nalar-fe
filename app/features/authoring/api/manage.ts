@@ -186,6 +186,7 @@ export const manageApi = {
       title?: string;
       instructions?: string;
       moduleId?: string | null;
+      aiAssistantEnabled?: boolean;
       timeLimitMinutes?: number | null;
       status?: WorkStatus;
     },

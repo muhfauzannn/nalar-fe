@@ -59,6 +59,7 @@ export type CourseData = {
     dueAt: string | null;
     closesAt: string | null;
     status: string;
+    aiAssistantEnabled?: boolean;
     timeLimitMinutes: number | null;
     attemptStatus: string | null;
     attemptStartedAt: string | null;
@@ -224,6 +225,7 @@ export type QuizData = {
     availableAt: string | null;
     dueAt: string | null;
     closesAt: string | null;
+    aiAssistantEnabled?: boolean;
     timeLimitMinutes: number | null;
     courseId: string;
     courseName: string;

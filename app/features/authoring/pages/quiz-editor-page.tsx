@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { EmptyIllustration } from "~/components/ui/empty";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
@@ -271,7 +272,7 @@ function QuizSettingsCard({ data }: { data: QuizEditorData }) {
       <CardContent>
         <fetcher.Form
           method="post"
-          key={`${quiz.title}|${quiz.instructions}|${quiz.timeLimitMinutes}|${quiz.availableAt}|${quiz.dueAt}|${quiz.closesAt}`}
+          key={`${quiz.title}|${quiz.instructions}|${quiz.timeLimitMinutes}|${quiz.aiAssistantEnabled}|${quiz.availableAt}|${quiz.dueAt}|${quiz.closesAt}`}
           className="flex flex-col gap-5"
         >
           <input type="hidden" name="intent" value="quiz-update" />
@@ -290,6 +291,13 @@ function QuizSettingsCard({ data }: { data: QuizEditorData }) {
               maxLength={5000}
               defaultValue={quiz.instructions ?? ""}
             />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="quiz-ai-assistant" className="font-semibold">
+              <Checkbox id="quiz-ai-assistant" name="aiAssistantEnabled" value="on" defaultChecked={quiz.aiAssistantEnabled !== false} />
+              Izinkan AI Assistant
+            </FieldLabel>
+            <FieldDescription>Siswa dapat memanggil tutor AI saat mengerjakan kuis ini. Matikan untuk kuis tanpa bantuan AI.</FieldDescription>
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>

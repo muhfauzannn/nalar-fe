@@ -260,6 +260,7 @@ export async function quizEditorAction({ request, params }: Args) {
         manageApi.updateQuiz(request, quizId, {
           title: text(form, "title"),
           instructions: text(form, "instructions"),
+          aiAssistantEnabled: flag(form, "aiAssistantEnabled"),
           // A locked time-limit input is disabled, hence absent from the form.
           ...(form.has("timeLimitMinutes")
             ? { timeLimitMinutes: minutes(form, "timeLimitMinutes") }

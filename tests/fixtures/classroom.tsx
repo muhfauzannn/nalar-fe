@@ -45,6 +45,8 @@ if (new URL(location.href).searchParams.get("pdf"))
     },
   ];
 
+quiz.quiz.aiAssistantEnabled = new URL(location.href).searchParams.get("quizAi") !== "off";
+
 // `?pos=<1-5>` has the task in progress at that post.
 const post = Number(new URL(location.href).searchParams.get("pos"));
 if (post)

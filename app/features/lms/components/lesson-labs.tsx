@@ -56,7 +56,7 @@ function LessonLab({
           {lab.solved.length} dari {entry.challenges} tantangan
         </span>
       </div>
-      <entry.Component solved={lab.solved} onSolve={solve} onState={onLabState ? onState : undefined} />
+      <entry.Component solved={lab.solved} onSolve={solve} onState={onLabState ? onState : undefined} story />
     </div>
   );
 }

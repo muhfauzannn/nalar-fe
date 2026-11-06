@@ -6,10 +6,11 @@ import { useSyncExternalStore } from "react";
 // lives in the spirit's bubble and the lab in its station, so they meet here, the way the
 // spirit's mood does (world3d/spirit-store.ts): the tutor writes, the lab draws.
 
-export type LabPointerStep = { part: string; say: string | null; caption: string | null };
+/** `story`: the lab's own story is pointing (lab-story.tsx), not the tutor. */
+export type LabPointerStep = { part: string; say: string | null; caption: string | null; story?: boolean };
 export type LabPointerPlan = { steps: LabPointerStep[] };
 /** What the lab draws right now: a ring on the part marked `data-lab-part={part}`. */
-export type LabPointed = { part: string; caption: string | null };
+export type LabPointed = { part: string; caption: string | null; story?: boolean };
 
 export const MAX_POINTER_STEPS = 4;
 
@@ -47,7 +48,7 @@ let state = EMPTY;
 
 const currentOf = (steps: LabPointerStep[], revealed: number): LabPointed | null => {
   const step = revealed > 0 ? steps[revealed - 1] : undefined;
-  return step ? { part: step.part, caption: step.caption } : null;
+  return step ? { part: step.part, caption: step.caption, story: step.story } : null;
 };
 
 function set(next: State) {

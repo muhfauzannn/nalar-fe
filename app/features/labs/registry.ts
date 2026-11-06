@@ -12,6 +12,8 @@ export type LabProps = {
   onSolve: (challenge: string) => Promise<number>;
   /** The lab's state in one line, for the AI tutor beside it. */
   onState?: (summary: string) => void;
+  /** Tells the lab's story (story.ts). Off when the lab is only mounted for its picture. */
+  story?: boolean;
 };
 
 // `parts` are the `data-lab-part` ids in a lab's markup: what its tutor may point at (see
