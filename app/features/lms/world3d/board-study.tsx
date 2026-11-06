@@ -16,8 +16,8 @@ import type { PdfViewContext } from "../lib/pdf-tutor";
 import type { LessonData } from "../types";
 import { spiritMoodFor, voiceStateFor } from "./board-tutor";
 import { useWorldOverlay } from "./mode";
-import { spirit, useSpiritExpanded, useSpiritOpen } from "./spirit-store";
-import { BubbleHeader, DockBase, dockClass, threadFull, threadSlim } from "./spirit-tutor";
+import { spirit, useSpiritOpen } from "./spirit-store";
+import { BubbleHeader, bubbleClass, bubbleTall, useBubbleStyle } from "./spirit-tutor";
 
 // The PDF on the classroom board, read by the tutor spirit: the same tutor as the
 // lesson page's study room (it sees the open page, points at it and writes on it),
@@ -72,7 +72,7 @@ export function BoardStudy({ resource }: { resource: Resource }) {
 
   return (
     <>
-      <div ref={reader} data-board-reader="" className="h-full">
+      <div ref={reader} className="contents">
         <PdfReader
           resourceId={resource.id}
           title={resource.title}
@@ -81,7 +81,6 @@ export function BoardStudy({ resource }: { resource: Resource }) {
           revealedSteps={tutor.revealedSteps}
           cursorCue={tutor.cursorCue}
           pointerVisible={tutor.pointerVisible}
-          endRoom={open}
           onPresentationTiming={tutor.onPresentationTiming}
           onContext={setContext}
         />
@@ -100,7 +99,7 @@ export function BoardStudy({ resource }: { resource: Resource }) {
 
 function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContext | null }) {
   const [draft, setDraft] = useState("");
-  const expanded = useSpiritExpanded();
+  const placed = useBubbleStyle("tall");
   const connecting = tutor.status === "connecting";
   const voiceStart: VoiceStart = tutor.voice
     ? { kind: "active" }
@@ -111,13 +110,26 @@ function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContex
         : { kind: "start", disabled: !context, onStart: () => void tutor.startVoice() };
 
   return (
-    // The dock floats over the page and moves nothing; its thread is see-through and fades toward the top.
-    <section aria-label="Tutor AI" className={dockClass}>
+    // On a phone the bubble sits at the bottom, so the top of the page, where the tutor points, stays in view.
+    <section
+      aria-label="Tutor AI"
+      style={placed}
+      className={cn(bubbleClass, bubbleTall, "max-sm:top-auto max-sm:bottom-2 max-sm:h-[min(21rem,48%)]")}
+    >
+      <BubbleHeader label={`Membaca halaman ${context?.page ?? "…"}`}>
+        {tutor.guidance || tutor.cursorCue ? (
+          <button
+            type="button"
+            onClick={tutor.stopExplanation}
+            className="rounded-full px-2.5 py-1 text-xs font-semibold text-[#5e5e72] transition-transform duration-150 hover:bg-[#efebfb] active:scale-[0.94]"
+          >
+            Bersihkan
+          </button>
+        ) : null}
+      </BubbleHeader>
+      <PdfTutorNotes guidance={tutor.guidance} revealedSteps={tutor.revealedSteps} />
       <TutorThread
-        className={expanded ? threadFull : threadSlim}
-        hideWhenEmpty={!expanded}
-        dense={!expanded}
-        floating
+        className="flex-1"
         label="Transkrip percakapan saat ini"
         messages={tutor.messages}
         liveQuestion={tutor.inputTranscript}
@@ -131,20 +143,7 @@ function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContex
           </>
         }
       />
-      <DockBase>
-      <BubbleHeader label={`Membaca halaman ${context?.page ?? "…"}`}>
-        {tutor.guidance || tutor.cursorCue ? (
-          <button
-            type="button"
-            onClick={tutor.stopExplanation}
-            className="rounded-full px-2.5 py-1 text-xs font-semibold text-[#5e5e72] transition-transform duration-150 hover:bg-[#efebfb] active:scale-[0.94]"
-          >
-            Bersihkan
-          </button>
-        ) : null}
-      </BubbleHeader>
-      <PdfTutorNotes guidance={tutor.guidance} revealedSteps={tutor.revealedSteps} slim={!expanded} />
-      <div className="p-2 pt-1">
+      <div className="border-t border-[#ebe6fb] p-3">
         {tutor.voice ? (
           <VoiceBar
             state={voiceStateFor(tutor.status)}
@@ -168,7 +167,6 @@ function PdfBubble({ tutor, context }: { tutor: PdfTutor; context: PdfViewContex
           voice={voiceStart}
         />
       </div>
-      </DockBase>
     </section>
   );
 }

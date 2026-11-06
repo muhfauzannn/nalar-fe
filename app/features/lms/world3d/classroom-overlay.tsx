@@ -27,7 +27,6 @@ import { BoardStudy } from "./board-study";
 import { boardPdf } from "./board-tutor";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { card, Dock, Overlay, press, TopBar } from "./overlays";
-import { useSpiritOpen } from "./spirit-store";
 import { SpiritTutor } from "./spirit-tutor";
 import { useStageScene } from "./store";
 
@@ -400,9 +399,6 @@ function StationWorkspace({
   const navigate = useNavigate();
   const panel = useRef<HTMLElement>(null);
   const entered = useRef(false);
-  // The tutor's dock floats over the bottom of the station without moving it; while it is open the
-  // station can scroll a little past its end, so what is at the bottom is reachable above the dock.
-  const dockOpen = useSpiritOpen();
   useEffect(() => {
     if (rect) setLastRect(rect);
   }, [rect]);
@@ -457,7 +453,6 @@ function StationWorkspace({
       )}
     >
       {children}
-      {dockOpen && !pdf ? <div aria-hidden="true" className="h-36 shrink-0" /> : null}
     </section>
   );
 }

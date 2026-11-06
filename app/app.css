@@ -495,15 +495,15 @@
   }
 }
 
-/* The classroom tutor's dock rises from the bottom edge. */
+/* The classroom tutor's bubble grows out of the spirit above it. */
 .spirit-bubble {
-  transform-origin: bottom center;
+  transform-origin: top right;
   transition: opacity 180ms ease-out, transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 @starting-style {
   .spirit-bubble {
     opacity: 0;
-    transform: scale(0.98) translateY(10px);
+    transform: scale(0.94) translateY(-6px);
   }
 }
 @media (prefers-reduced-motion: reduce) {

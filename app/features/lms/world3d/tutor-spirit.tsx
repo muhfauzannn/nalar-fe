@@ -1,10 +1,11 @@
 import { useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type PointerEvent } from "react";
 import * as THREE from "three";
 
 import { STILL } from "./ground";
-import { spirit, useSpiritGazing, type SpiritMood } from "./spirit-store";
+import { loadSpot, pxToSpot, saveSpot, SPIRIT_SIZE } from "./spirit-spot";
+import { spirit, useSpiritGazing, useSpiritSpot, type SpiritMood } from "./spirit-store";
 
 // The AI tutor as a small magical spirit (scripts/world/build-tutor-spirit.mjs):
 // a crystal heart with a face, two rune rings, feather wings and sparkle motes.
@@ -137,20 +138,118 @@ export function TutorSpirit({ phase = 0, follows = false }: { phase?: number; fo
   return <primitive object={model.root} />;
 }
 
+// A drag moves the spirit; a press that hardly moves is a click, which opens or closes the tutor.
+const DRAG_FROM = 6;
+const KEY_STEP = 24;
+
 /**
  * The spirit in a small view of its own, for when the student is at a station
  * and the room has stopped rendering. Clicking it opens or closes the tutor.
+ * Dragging it moves it (Alt + arrow keys too) to whatever part of the screen the
+ * student wants to keep clear: the conversation bubble hangs from it wherever it
+ * goes (spirit-spot.ts), and it stays there on the next visit.
  */
 export function SpiritCorner({ open }: { open: boolean }) {
   const gazing = useSpiritGazing();
+  const spot = useSpiritSpot();
+  const button = useRef<HTMLButtonElement>(null);
+  const drag = useRef<{ id: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  // set when a drag ends, for the click that follows the release; the next press or a moment later clears it
+  const dragEnded = useRef(false);
+
+  // Where the student put it last time.
+  useLayoutEffect(() => {
+    spirit.setSpot(loadSpot());
+    return () => spirit.setFrame(null);
+  }, []);
+
+  // Tell the bubble where the spirit is in its room: now, after every move, and when the room resizes.
+  const measure = useCallback(() => {
+    const element = button.current;
+    const room = element?.offsetParent as HTMLElement | null;
+    if (!element || !room) return;
+    spirit.setFrame({ left: element.offsetLeft, top: element.offsetTop, size: element.offsetWidth, boxW: room.clientWidth, boxH: room.clientHeight });
+  }, []);
+  useLayoutEffect(measure, [measure, spot]);
+  useEffect(() => {
+    const room = button.current?.offsetParent;
+    if (!room) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, [measure]);
+
+  /** Put the spirit with its top-left here, kept inside its room. */
+  const moveTo = (element: HTMLElement, left: number, top: number) => {
+    const room = element.offsetParent as HTMLElement | null;
+    if (room) spirit.setSpot(pxToSpot(left, top, element.offsetWidth, room.clientWidth, room.clientHeight));
+  };
+  const settle = () => {
+    dragEnded.current = true;
+    setTimeout(() => (dragEnded.current = false), 100);
+    saveSpot(spirit.get().spot);
+  };
+  const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    dragEnded.current = false;
+    const element = event.currentTarget;
+    element.setPointerCapture(event.pointerId);
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: element.offsetLeft, top: element.offsetTop, moved: false };
+  };
+  const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const start = drag.current;
+    if (!start || start.id !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!start.moved && Math.hypot(dx, dy) < DRAG_FROM) return;
+    start.moved = true;
+    moveTo(event.currentTarget, start.left + dx, start.top + dy);
+  };
+  const onPointerEnd = (event: PointerEvent<HTMLButtonElement>) => {
+    const start = drag.current;
+    if (!start || start.id !== event.pointerId) return;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (start.moved) settle();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const by = { ArrowLeft: [-KEY_STEP, 0], ArrowRight: [KEY_STEP, 0], ArrowUp: [0, -KEY_STEP], ArrowDown: [0, KEY_STEP] }[event.key];
+    if (!event.altKey || !by) return;
+    event.preventDefault();
+    const element = event.currentTarget;
+    moveTo(element, element.offsetLeft + by[0], element.offsetTop + by[1]);
+    settle();
+  };
+
   return (
     <button
+      ref={button}
       type="button"
-      onClick={() => spirit.toggle()}
+      onClick={() => {
+        // the click that ends a drag is not a request to open the tutor
+        if (dragEnded.current) {
+          dragEnded.current = false;
+          return;
+        }
+        spirit.toggle();
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onKeyDown={onKeyDown}
       aria-label={open ? "Tutup tutor" : "Panggil tutor"}
       aria-expanded={open}
+      aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight"
+      title="Seret untuk memindahkan"
       data-gazing={gazing}
-      className="spirit-corner pointer-events-auto absolute right-2 top-1 z-30 size-[92px] rounded-full outline-none transition-transform duration-150 active:scale-[0.95] focus-visible:ring-2 focus-visible:ring-[#a594f5] sm:right-4"
+      data-moved={spot ? "true" : undefined}
+      style={
+        spot
+          ? { left: `calc((100% - ${SPIRIT_SIZE}px) * ${spot.fx})`, top: `calc((100% - ${SPIRIT_SIZE}px) * ${spot.fy})`, right: "auto" }
+          : undefined
+      }
+      className="spirit-corner pointer-events-auto absolute right-2 top-1 z-30 size-[92px] cursor-grab touch-none select-none rounded-full outline-none transition-transform duration-150 active:scale-[0.95] active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-[#a594f5] sm:right-4"
     >
       <span aria-hidden="true" className="absolute inset-3 rounded-full bg-[radial-gradient(circle,rgba(165,148,245,.45),rgba(165,148,245,0)_70%)]" />
       <Canvas

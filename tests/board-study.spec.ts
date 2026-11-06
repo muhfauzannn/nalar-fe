@@ -243,149 +243,46 @@ test("leaving the board while the tutor points leaves no stale gaze behind", asy
   expect(mock.errors).toEqual([]);
 });
 
-// The tutor's dock floats over the bottom of the board and moves nothing: not the page, not the reader,
-// not its scroll area. It is a little see-through, and its thread fades out toward the top.
-const alpha = (colour: string) => {
-  const match = /rgba?\(([^)]+)\)/.exec(colour);
-  const parts = match?.[1]?.split(",").map((part) => parseFloat(part)) ?? [];
-  return parts.length === 4 ? parts[3]! : 1;
-};
-const sameBox = (a: { x: number; y: number; width: number; height: number }, b: typeof a) => {
-  expect(a.x).toBeCloseTo(b.x, 0);
-  expect(a.y).toBeCloseTo(b.y, 0);
-  expect(a.width).toBeCloseTo(b.width, 0);
-  expect(a.height).toBeCloseTo(b.height, 0);
-};
-
-for (const [name, viewport] of [
-  ["a desktop", { width: 1280, height: 960 }],
-  ["a tablet", { width: 768, height: 1024 }],
-  ["a phone", { width: 390, height: 844 }],
-] as const) {
-  test(`the tutor's dock floats over the PDF and moves nothing on ${name}`, async ({ page }) => {
-    await page.setViewportSize(viewport);
-    const mock = await openBoard(page);
-    const parts = {
-      reader: page.locator("[data-board-reader] > *"),
-      sheet: page.locator("[data-board-reader] canvas"),
-      scroller: page.getByTestId("pdf-scroll-host"),
-      surface: page.locator("[data-classroom-surface]"),
-    };
-    const measure = async () => ({
-      reader: (await parts.reader.boundingBox())!,
-      sheet: (await parts.sheet.boundingBox())!,
-      scroller: (await parts.scroller.boundingBox())!,
-      surface: (await parts.surface.boundingBox())!,
-    });
-    await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
-    const before = await measure();
-    const roomBefore = await parts.scroller.evaluate((element) => element.scrollHeight - element.clientHeight);
-
-    await mock.summon();
-    // The dock rises in with a transform; look at it once it has settled.
-    await expect.poll(() => mock.bubble.evaluate((element) => getComputedStyle(element).transform)).toBe("none");
-    await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
-    const slim = (await mock.bubble.boundingBox())!;
-
-    // It floats (absolute, bottom of the screen), slim, and over the board: nothing under it has moved.
-    expect(await mock.bubble.evaluate((element) => getComputedStyle(element).position)).toBe("absolute");
-    expect(slim.height).toBeLessThan(viewport.height * 0.2);
-    expect(slim.y + slim.height).toBeGreaterThan(viewport.height - 40);
-    const open = await measure();
-    for (const key of ["reader", "sheet", "scroller", "surface"] as const) sameBox(open[key], before[key]);
-    // Scrolled to its end, the page has its bottom up above the dock.
-    const bottomClear = await parts.scroller.evaluate((element, top) => {
-      element.scrollTo(0, element.scrollHeight);
-      const sheet = element.querySelector("canvas")!.getBoundingClientRect();
-      element.scrollTo(0, 0);
-      return sheet.bottom <= top + 1;
-    }, slim.y);
-    expect(bottomClear).toBe(true);
-
-    // Its base is a little see-through, not solid.
-    const base = mock.bubble.locator("> div").last();
-    expect(alpha(await base.evaluate((element) => getComputedStyle(element).backgroundColor))).toBeLessThan(1);
-    expect(alpha(await base.evaluate((element) => getComputedStyle(element).backgroundColor))).toBeGreaterThan(0.5);
-
-    // Expanding it changes the dock, still nothing under it.
-    await mock.bubble.getByRole("button", { name: "Perluas percakapan" }).click();
-    await expect(mock.bubble.getByRole("button", { name: "Ciutkan percakapan" })).toHaveAttribute("aria-expanded", "true");
-    const expanded = await measure();
-    for (const key of ["reader", "sheet", "scroller", "surface"] as const) sameBox(expanded[key], before[key]);
-    await mock.bubble.getByRole("button", { name: "Ciutkan percakapan" }).click();
-
-    // Closing it leaves everything where it was.
-    await mock.bubble.getByRole("button", { name: "Tutup tutor" }).click();
-    await expect(mock.bubble).toHaveCount(0);
-    const after = await measure();
-    for (const key of ["reader", "sheet", "scroller", "surface"] as const) sameBox(after[key], before[key]);
-    expect(await parts.scroller.evaluate((element) => element.scrollHeight - element.clientHeight)).toBe(roomBefore);
-    expect(mock.errors).toEqual([]);
-  });
-}
-
-// A long answer, the kind the tutor really gives: four lines or so in the dock.
-const LONG_ANSWER =
-  "Pembilang adalah angka yang ada di atas garis pecahan. Angka itu menunjukkan berapa bagian yang kita ambil dari keseluruhan. Misalnya pada dua per lima, pembilangnya adalah dua, artinya kita mengambil dua bagian dari lima bagian yang sama besar. Coba tebak, kalau tiga per empat, berapa pembilangnya?";
-
-test("the tutor's words stay readable over the page: backed, light-on-dark-proof, at the bottom of the fading window", async ({ page }) => {
+test("the spirit can be dragged off the part of the page being read, and the bubble hangs from it there", async ({ page }) => {
   const mock = await openBoard(page);
   await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  const spirit = page.locator(".spirit-corner");
+  const home = (await spirit.boundingBox())!;
+
+  // In its corner the bubble covers the right of the page.
   await mock.summon();
+  await expect.poll(() => mock.bubble.evaluate((element) => getComputedStyle(element).transform)).toBe("none");
+  const covered = (await mock.bubble.boundingBox())!;
+  const probe = { x: covered.x + covered.width / 2, y: covered.y + 60 };
+  expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[aria-label="Tutor AI"]'), probe)).toBe(true);
+  await mock.bubble.getByRole("button", { name: "Tutup tutor" }).click();
+
+  // Drag the spirit to the bottom left: the tutor stays closed, and the page is free there.
+  const from = { x: home.x + home.width / 2, y: home.y + home.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(600, 500, { steps: 6 });
+  await page.mouse.move(110, 860, { steps: 6 });
+  await page.mouse.up();
+  await expect(spirit).toHaveAttribute("data-moved", "true");
+  await expect(mock.bubble).toHaveCount(0);
+
+  await mock.summon();
+  await expect.poll(() => mock.bubble.evaluate((element) => getComputedStyle(element).transform)).toBe("none");
+  const moved = (await spirit.boundingBox())!;
+  const bubble = (await mock.bubble.boundingBox())!;
+  // the bubble stands on the spirit, on screen, and the spot it used to cover is the PDF again
+  expect(bubble.y + bubble.height).toBeLessThanOrEqual(moved.y);
+  expect(bubble.x).toBeGreaterThanOrEqual(0);
+  expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[aria-label="Tutor AI"]'), probe)).toBe(false);
+  expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[data-classroom-surface]'), probe)).toBe(true);
+
+  // The conversation works from there, and the spirit still looks at what the tutor points at.
   await mock.ask("Apa itu pembilang?");
-  mock.send({ serverContent: { outputTranscription: { text: LONG_ANSWER }, turnComplete: true } });
-  const thread = mock.bubble.getByLabel("Transkrip percakapan saat ini");
-  const answer = thread.locator('[data-author="tutor"] [data-slot="bubble-content"]');
-  await expect(answer).toContainText("berapa pembilangnya?");
-
-  // where the window stops fading, read from its real mask: "black N%" means the top (100 - N)% fades
-  const fadeShare = async () => {
-    const mask = await thread.evaluate((element) => getComputedStyle(element).maskImage || getComputedStyle(element).webkitMaskImage);
-    const solid = /(\d+(?:\.\d+)?)%/.exec(mask ?? "");
-    return solid ? 1 - Number(solid[1]) / 100 : 1;
-  };
-  const readable = async () => {
-    const frame = (await thread.boundingBox())!;
-    const box = (await answer.boundingBox())!;
-    const look = await answer.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { background: style.backgroundColor, colour: style.color };
-    });
-    // 1.5rem of the window is tucked behind the dock's base; the top part of the window is the fade.
-    const fadeEnds = frame.y + frame.height * (await fadeShare());
-    const visibleEnds = frame.y + frame.height - 24;
-    return { box, fadeEnds, visibleEnds, look };
-  };
-  const dark = (colour: string) => (colour.match(/\d+/g) ?? []).slice(0, 3).every((part) => Number(part) < 90);
-
-  for (const mode of ["slim", "expanded"] as const) {
-    if (mode === "expanded") await mock.bubble.getByRole("button", { name: "Perluas percakapan" }).click();
-    // light and dark theme alike: the answer sits on its own light backing, in dark text
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate((name) => document.documentElement.classList.toggle("dark", name === "dark"), theme);
-      await expect.poll(async () => (await readable()).box.height).toBeGreaterThan(60);
-      const { box, fadeEnds, visibleEnds, look } = await readable();
-      // see-through, but light enough to read on: an almost opaque white
-      expect(alpha(look.background), `${mode}/${theme} backing`).toBeGreaterThan(0.85);
-      expect(alpha(look.background)).toBeLessThan(1);
-      expect(dark(look.colour), `${mode}/${theme} text colour ${look.colour}`).toBe(true);
-      // the whole answer is below the fade and above the dock's base
-      expect(box.y, `${mode}/${theme} answer under the fade`).toBeGreaterThanOrEqual(fadeEnds - 1);
-      expect(box.y + box.height, `${mode}/${theme} answer under the dock`).toBeLessThanOrEqual(visibleEnds + 1);
-    }
-  }
-
-  // The window is a gradient fading toward the top; its empty space lets the page under it be clicked and selected.
-  const frame = await thread.evaluate((element) => {
-    const style = getComputedStyle(element);
-    return { mask: style.maskImage || style.webkitMaskImage, events: style.pointerEvents };
-  });
-  expect(frame.mask).toContain("linear-gradient");
-  expect(frame.mask).toContain("to top");
-  // only the top quarter at most fades: the lines being read are not in it
-  expect(await fadeShare()).toBeLessThanOrEqual(0.25);
-  expect(await fadeShare()).toBeGreaterThan(0.05);
-  expect(frame.events).toBe("none");
+  const context = (await mock.call("read-1", "get_pdf_context")) as Context;
+  await mock.call("draw-1", "present_pdf_guidance", mock.guidance(context, [{ kind: "highlight", blockId: context.blocks[1]!.id }]));
+  await expect(spirit).toHaveAttribute("data-gazing", "true");
+  await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
   expect(mock.errors).toEqual([]);
 });
 

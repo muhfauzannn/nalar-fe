@@ -1,5 +1,5 @@
-import { ChevronDown, ChevronUp, Sparkles, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Sparkles, X } from "lucide-react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import {
   Select,
@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { useLabPointer } from "~/features/labs/pointer";
 import { cn } from "~/lib/utils";
 import type { TutorSource } from "../components/tutor-host";
 import {
@@ -22,7 +23,8 @@ import {
 import { useAiTutorLive } from "../hooks/use-ai-tutor-live";
 import type { AiTutorMode } from "../types";
 import type { ClassroomFocus } from "./classroom-focus";
-import { spirit, useSpiritExpanded, useSpiritOpen } from "./spirit-store";
+import { bubbleBoxFor, type BubbleKind } from "./spirit-spot";
+import { spirit, useSpiritFrame, useSpiritOpen, useSpiritSpot } from "./spirit-store";
 import { SpiritCorner } from "./tutor-spirit";
 
 // The classroom's AI tutor: the spirit in the room (or in the corner at a
@@ -35,29 +37,33 @@ const tutorModeItems: Array<{ label: string; value: AiTutorMode }> = [
   { label: "Umpan balik", value: "feedback" },
 ];
 
-// The conversation dock, shared by every tutor that talks from the spirit. It floats over the bottom of
-// the screen like a chat bar and moves nothing under it: a solid-ish base (title row, composer) with the
-// thread above it, see-through and fading out toward the top, so the page behind shows through. Slim by
-// default, with a small window onto the thread; expanding it makes that window taller.
-export const dockClass =
-  "spirit-bubble pointer-events-none absolute inset-x-2 bottom-3 z-30 mx-auto flex w-auto max-w-[40rem] flex-col text-[#18153a]";
-// The thread has no panel of its own: each line carries its own backing (see TutorThread `floating`), so only the
-// text is opaque and the page shows through everywhere else. The window fades out over its top fifth (older
-// lines), not over the lines being read, which sit at its bottom. Its empty space does not catch the pointer, so
-// the page under it can still be selected and clicked. It tucks 1.5rem behind the base (-mb-6 / pb-6).
-const threadFade =
-  "pointer-events-none -mb-6 shrink-0 pb-6 [&_[data-slot=message-scroller-item]]:pointer-events-auto [&_button]:pointer-events-auto [mask-image:linear-gradient(to_top,black_78%,transparent)] [-webkit-mask-image:linear-gradient(to_top,black_78%,transparent)]";
-/** The slim window onto the thread, and the tall one: the same thread, just more of it. */
-export const threadSlim = cn(threadFade, "h-[min(12rem,27dvh)]");
-export const threadFull = cn(threadFade, "h-[min(26rem,62dvh)]");
+// The conversation bubble under the spirit, shared by every tutor that talks from it.
+export const bubbleClass =
+  "spirit-bubble pointer-events-auto absolute right-2 top-[6.25rem] z-30 flex w-[min(23rem,calc(100%-1rem))] flex-col overflow-hidden rounded-[22px] border border-[#d9d0fb] bg-[linear-gradient(180deg,#fdfcff,#f5f2ff)] text-[#18153a] shadow-[0_18px_44px_rgba(94,74,196,.28)] sm:right-4";
+export const bubbleTall = "h-[min(30rem,calc(100%-7.5rem))]";
+// While the tutor points at a part of a lab the bubble folds down to its latest line and the
+// composer, so the part it points at (often on the right, under the bubble) stays in view.
+const bubbleCompact = "h-[min(13.5rem,calc(100%-7.5rem))]";
 
-/** The dock's base: the tutor's controls and the composer, a little see-through over the page. */
-export function DockBase({ children }: { children: ReactNode }) {
-  return (
-    <div className="pointer-events-auto relative z-10 overflow-hidden rounded-[22px] border border-[#d9d0fb] bg-[rgba(253,252,255,.92)] shadow-[0_18px_44px_rgba(94,74,196,.28)] backdrop-blur-md">
-      {children}
-    </div>
-  );
+/**
+ * Where the bubble goes once the student has dragged the spirit somewhere: it hangs from the spirit (below it, or
+ * above when the spirit sits low) and stays on screen. Undragged, this is undefined and the classes above place it
+ * under the spirit's corner, as they always did. The inline style replaces every one of their positions.
+ */
+export function useBubbleStyle(kind: BubbleKind): CSSProperties | undefined {
+  const spot = useSpiritSpot();
+  const frame = useSpiritFrame();
+  if (!spot || !frame) return undefined;
+  const box = bubbleBoxFor(frame, kind);
+  return {
+    left: box.left,
+    width: box.width,
+    right: "auto",
+    top: box.top ?? "auto",
+    bottom: box.bottom ?? "auto",
+    height: box.height ?? "auto",
+    maxHeight: box.maxHeight,
+  };
 }
 
 /**
@@ -74,13 +80,24 @@ export function SpiritTutor({
   boardTutor?: boolean;
 }) {
   const open = useSpiritOpen();
+  const pointed = useLabPointer();
+  const pointing = Boolean(source?.labParts && pointed);
+  const placed = useBubbleStyle(source ? (pointing ? "compact" : "tall") : "auto");
   // Leaving the classroom closes the conversation; the spirit waits for the next visit.
   useEffect(() => () => spirit.setOpen(false), []);
   return (
     <>
       {focus && <SpiritCorner open={open} />}
       {open && !boardTutor && (
-        <section aria-label="Tutor AI" className={dockClass}>
+        <section
+          aria-label="Tutor AI"
+          style={placed}
+          className={cn(
+            bubbleClass,
+            source && (pointing ? bubbleCompact : bubbleTall),
+            source && "transition-[height] duration-200 motion-reduce:transition-none",
+          )}
+        >
           {source ? <SpiritChat key={source.key} source={source} /> : <SpiritHint focus={focus} />}
         </section>
       )}
@@ -88,28 +105,15 @@ export function SpiritTutor({
   );
 }
 
-/** `expandable`: the dock has a thread that can be shown whole (the waiting hint has none). */
-export function BubbleHeader({ label, children, expandable = true }: { label: string; children?: ReactNode; expandable?: boolean }) {
-  const expanded = useSpiritExpanded();
+export function BubbleHeader({ label, children }: { label: string; children?: ReactNode }) {
   return (
-    <header className="flex items-center gap-1.5 px-3 pt-2">
+    <header className="flex items-center gap-2 border-b border-[#ebe6fb] px-3 py-2.5">
       <Sparkles className="size-4 shrink-0 text-[#7c6ad8]" aria-hidden="true" />
-      <p className="min-w-0 flex-1 truncate">
-        <span className="text-sm font-bold">Tutor</span>
-        <span className="text-[11.5px] text-[#5e5e72]"> · {label}</span>
-      </p>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-sm font-bold leading-tight">Tutor</h2>
+        <p className="truncate text-[11.5px] text-[#5e5e72]">{label}</p>
+      </div>
       {children}
-      {expandable ? (
-        <button
-          type="button"
-          onClick={() => spirit.setExpanded(!expanded)}
-          aria-label={expanded ? "Ciutkan percakapan" : "Perluas percakapan"}
-          aria-expanded={expanded}
-          className="grid size-8 shrink-0 place-items-center rounded-full text-[#5e5e72] transition-transform duration-150 hover:bg-[#efebfb] active:scale-[0.94]"
-        >
-          {expanded ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronUp className="size-4" aria-hidden="true" />}
-        </button>
-      ) : null}
       <button
         type="button"
         onClick={() => spirit.setOpen(false)}
@@ -124,7 +128,6 @@ export function BubbleHeader({ label, children, expandable = true }: { label: st
 
 function SpiritChat({ source }: { source: TutorSource }) {
   const [draft, setDraft] = useState("");
-  const expanded = useSpiritExpanded();
   const tutor = useAiTutorLive(source.target, source.liveContext, source.labParts);
   const connected = tutor.status === "ready" || tutor.status === "responding";
   const voiceOn = tutor.channel === "voice" && (connected || tutor.status === "connecting");
@@ -155,25 +158,6 @@ function SpiritChat({ source }: { source: TutorSource }) {
 
   return (
     <>
-      <TutorThread
-        className={expanded ? threadFull : threadSlim}
-        hideWhenEmpty={!expanded}
-        dense={!expanded}
-        floating
-        label="Percakapan dengan tutor"
-        messages={tutor.messages.filter((message) => message.author !== "system")}
-        liveQuestion={tutor.inputTranscript}
-        liveAnswer={tutor.outputTranscript}
-        thinking={tutor.status === "responding"}
-        empty={
-          <>
-            Aku sedang melihat {source.label.toLowerCase()}.
-            <br />
-            Tanya lewat teks atau suara.
-          </>
-        }
-      />
-      <DockBase>
       <BubbleHeader label={`Melihat: ${source.label}`}>
         <Select
           items={tutorModeItems}
@@ -195,7 +179,22 @@ function SpiritChat({ source }: { source: TutorSource }) {
           </SelectContent>
         </Select>
       </BubbleHeader>
-      <div className="p-2 pt-1">
+      <TutorThread
+        className="flex-1"
+        label="Percakapan dengan tutor"
+        messages={tutor.messages.filter((message) => message.author !== "system")}
+        liveQuestion={tutor.inputTranscript}
+        liveAnswer={tutor.outputTranscript}
+        thinking={tutor.status === "responding"}
+        empty={
+          <>
+            Aku sedang melihat {source.label.toLowerCase()}.
+            <br />
+            Tanya lewat teks atau suara.
+          </>
+        }
+      />
+      <div className="border-t border-[#ebe6fb] p-3">
         {voiceOn ? (
           <VoiceBar
             state={voiceState}
@@ -216,7 +215,6 @@ function SpiritChat({ source }: { source: TutorSource }) {
           voice={voiceStart}
         />
       </div>
-      </DockBase>
     </>
   );
 }
@@ -234,9 +232,9 @@ function SpiritHint({ focus }: { focus: ClassroomFocus | null }) {
             ? "Pilih percobaan dulu. Aku melihat misi dan pengaturanmu, lalu memberi petunjuk."
             : "Halo! Aku ikut ke mana pun kamu belajar di kelas ini. Datangi meja lab, kuis, atau buku tugas, lalu panggil aku.";
   return (
-    <DockBase>
-      <BubbleHeader label="Menunggumu di stasiun" expandable={false} />
-      <p className="mx-3 mb-3 mt-2 rounded-2xl bg-white/80 p-3 text-sm leading-relaxed ring-1 ring-[#ebe6fb]">{text}</p>
-    </DockBase>
+    <>
+      <BubbleHeader label="Menunggumu di stasiun" />
+      <p className={cn("m-4 rounded-2xl bg-white p-4 text-sm leading-relaxed ring-1 ring-[#ebe6fb]")}>{text}</p>
+    </>
   );
 }

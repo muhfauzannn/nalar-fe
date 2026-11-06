@@ -3,19 +3,17 @@ import { handwritingPaths } from "../lib/handwriting/ink-plan";
 import type { PdfGuidance } from "../lib/pdf-tutor";
 
 /** A separate writing surface keeps AI notes legible even on a full PDF page. */
-export function PdfTutorNotes({ guidance, revealedSteps = null, slim = false }: {
+export function PdfTutorNotes({ guidance, revealedSteps = null }: {
   guidance: PdfGuidance | null;
   /** Speech-led guidance: a note is written once the tutor reaches its step. */
   revealedSteps?: number | null;
-  /** A small dock: the notes get a short scrolling window instead of most of its height. */
-  slim?: boolean;
 }) {
   const notes = guidance?.actions.filter((action, index) =>
     action.kind === "text" && action.placement === "side" && action.text &&
     (revealedSteps === null || index < revealedSteps)) ?? [];
   if (!notes.length) return null;
   return (
-    <section className={`${slim ? "max-h-24" : "max-h-56"} shrink-0 space-y-2 overflow-y-auto border-b bg-secondary/25 p-3`} aria-label="Catatan tutor">
+    <section className="max-h-56 space-y-2 overflow-y-auto border-b bg-secondary/25 p-3" aria-label="Catatan tutor">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Catatan tutor · halaman {guidance?.page}</p>
       {notes.map((action, index) => <WrittenNote key={`${guidance?.turnId}-${index}`} text={action.text!} />)}
     </section>

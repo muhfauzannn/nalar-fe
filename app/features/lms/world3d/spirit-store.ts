@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { SpiritFrame, SpiritSpot } from "./spirit-spot";
 
 // The tutor spirit lives in two places (the room's scene and a small view of
 // its own at a station) while its conversation lives in the overlay. They meet
@@ -14,9 +15,11 @@ const state = {
   mood: "idle" as SpiritMood,
   level: () => 0,
   open: false,
-  /** The conversation dock shows the whole thread (true) or just a slim window onto it (false). */
-  expanded: false,
   gaze: null as SpiritGaze | null,
+  /** Where the student dragged the spirit to at a station; null while it is in its corner. */
+  spot: null as SpiritSpot | null,
+  /** The spirit's box at a station, so the conversation bubble can hang from it; null away from a station. */
+  frame: null as SpiritFrame | null,
 };
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((listener) => listener());
@@ -38,16 +41,24 @@ export const spirit = {
     state.gaze = point;
     if (was !== (point !== null)) notify();
   },
+  setSpot(spot: SpiritSpot | null) {
+    if (state.spot?.fx === spot?.fx && state.spot?.fy === spot?.fy) return;
+    state.spot = spot;
+    notify();
+  },
+  setFrame(frame: SpiritFrame | null) {
+    const was = state.frame;
+    if (
+      was === frame ||
+      (was && frame && was.left === frame.left && was.top === frame.top && was.size === frame.size && was.boxW === frame.boxW && was.boxH === frame.boxH)
+    )
+      return;
+    state.frame = frame;
+    notify();
+  },
   setOpen(open: boolean) {
     if (state.open === open) return;
     state.open = open;
-    // each visit starts slim
-    state.expanded = false;
-    notify();
-  },
-  setExpanded(expanded: boolean) {
-    if (state.expanded === expanded) return;
-    state.expanded = expanded;
     notify();
   },
   toggle() {
@@ -64,12 +75,17 @@ export function useSpiritOpen() {
   return useSyncExternalStore(subscribe, () => state.open, () => false);
 }
 
-/** Whether the conversation dock is showing its whole thread. */
-export function useSpiritExpanded() {
-  return useSyncExternalStore(subscribe, () => state.expanded, () => false);
-}
-
 /** Whether the spirit is looking at something the tutor points at. */
 export function useSpiritGazing() {
   return useSyncExternalStore(subscribe, () => state.gaze !== null, () => false);
+}
+
+/** Where the student put the spirit (null while it is in its corner). */
+export function useSpiritSpot() {
+  return useSyncExternalStore(subscribe, () => state.spot, () => null);
+}
+
+/** The spirit's box and the room it sits in, for the bubble that hangs from it. */
+export function useSpiritFrame() {
+  return useSyncExternalStore(subscribe, () => state.frame, () => null);
 }
