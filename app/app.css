@@ -455,19 +455,17 @@
   94% { transform: translateY(0) rotate(0); }
 }
 
-/* Keep the desktop workspace on its 3D surface; give touch-sized screens room to work.
-   --reserve-right / --reserve-bottom: the strip the tutor's bubble floats over (board-clearance.ts);
-   the surface leaves it free instead of lying under the bubble. */
+/* Keep the desktop workspace on its 3D surface; give touch-sized screens room to work. */
 .classroom-surface {
   left: var(--surface-left);
   top: var(--surface-top);
-  width: calc(var(--surface-width) - var(--reserve-right, 0px));
-  height: calc(var(--surface-height) - var(--reserve-bottom, 0px));
+  width: var(--surface-width);
+  height: var(--surface-height);
 }
 
 @media (max-width: 767px), (max-height: 500px) {
   .classroom-surface {
-    inset: 4.25rem calc(0.75rem + var(--reserve-right, 0px)) calc(0.75rem + var(--reserve-bottom, 0px)) 0.75rem;
+    inset: 4.25rem 0.75rem 0.75rem;
     width: auto;
     height: auto;
     border-radius: 0.75rem;
@@ -497,15 +495,15 @@
   }
 }
 
-/* The classroom tutor's bubble grows out of the spirit above it. */
+/* The classroom tutor's dock rises from the bottom edge. */
 .spirit-bubble {
-  transform-origin: top right;
+  transform-origin: bottom center;
   transition: opacity 180ms ease-out, transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 @starting-style {
   .spirit-bubble {
     opacity: 0;
-    transform: scale(0.94) translateY(-6px);
+    transform: scale(0.98) translateY(10px);
   }
 }
 @media (prefers-reduced-motion: reduce) {

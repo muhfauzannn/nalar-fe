@@ -50,6 +50,8 @@ export function TutorThread({
   thinking,
   empty,
   className,
+  hideWhenEmpty = false,
+  dense = false,
 }: {
   label: string;
   messages: TutorThreadMessage[];
@@ -58,8 +60,13 @@ export function TutorThread({
   thinking?: boolean;
   empty: ReactNode;
   className?: string;
+  /** A small window has no room for the empty-state text: show no thread at all until there is one. */
+  hideWhenEmpty?: boolean;
+  /** A small window: tighter spacing, so a question and the start of its answer fit together. */
+  dense?: boolean;
 }) {
   const isEmpty = messages.length === 0 && !liveQuestion && !liveAnswer && !thinking;
+  if (isEmpty && hideWhenEmpty) return null;
   return (
     <div className={cn("min-h-0", className)} aria-label={label} role="log">
       {isEmpty ? (
@@ -70,7 +77,7 @@ export function TutorThread({
         <MessageScrollerProvider autoScroll>
           <MessageScroller>
             <MessageScrollerViewport>
-              <MessageScrollerContent className="gap-5 px-4 py-4">
+              <MessageScrollerContent className={dense ? "gap-2 px-3 py-2" : "gap-5 px-4 py-4"}>
                 {messages.map((message) => (
                   <MessageScrollerItem
                     key={message.id}

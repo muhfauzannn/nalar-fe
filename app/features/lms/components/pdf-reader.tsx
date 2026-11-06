@@ -42,11 +42,13 @@ type Props = {
   revealedSteps?: number | null;
   cursorCue?: PdfCursorCue | null;
   pointerVisible?: boolean;
+  /** Something floats over the bottom of the reader: leave scroll room past the page, so its end can be scrolled clear of it. */
+  endRoom?: boolean;
   onPresentationTiming?: (turnId: string, remainingMs: number) => void;
   onContext: (context: PdfViewContext | null) => void;
 };
 
-export function PdfReader({ resourceId, title, fitContainer = false, guidance, revealedSteps = null, cursorCue, pointerVisible = true, onContext, onPresentationTiming }: Props) {
+export function PdfReader({ resourceId, title, fitContainer = false, guidance, revealedSteps = null, cursorCue, pointerVisible = true, endRoom = false, onContext, onPresentationTiming }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -555,7 +557,7 @@ export function PdfReader({ resourceId, title, fitContainer = false, guidance, r
             <Spinner /> Menyiapkan halaman…
           </div>
         ) : null}
-        <div className="flex min-w-full w-max justify-center p-5">
+        <div className={cn("flex min-w-full w-max justify-center p-5", endRoom && "pb-44")}>
           <div
             ref={pageHost}
             data-testid="pdf-page"

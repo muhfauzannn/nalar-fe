@@ -22,13 +22,12 @@ import { LessonLabs } from "../components/lesson-labs";
 import { TutorHostProvider, type TutorSource } from "../components/tutor-host";
 import { AssignmentPage } from "../pages/assignment-page";
 import { QuizPage } from "../pages/quiz-page";
-import { useBubbleClearance } from "./board-clearance";
 import { useSurfaceRect } from "./board-rect";
 import { BoardStudy } from "./board-study";
 import { boardPdf } from "./board-tutor";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
 import { card, Dock, Overlay, press, TopBar } from "./overlays";
-import { useSpiritBubble } from "./spirit-store";
+import { useSpiritOpen } from "./spirit-store";
 import { SpiritTutor } from "./spirit-tutor";
 import { useStageScene } from "./store";
 
@@ -399,16 +398,11 @@ function StationWorkspace({
   const rect = useSurfaceRect(focus);
   const [lastRect, setLastRect] = useState(rect);
   const navigate = useNavigate();
-  const panel = useRef<HTMLElement | null>(null);
+  const panel = useRef<HTMLElement>(null);
   const entered = useRef(false);
-  // The surface only exists once the camera has settled square to the station, hence state.
-  const [surface, setSurface] = useState<HTMLElement | null>(null);
-  const attach = useCallback((element: HTMLElement | null) => {
-    panel.current = element;
-    setSurface(element);
-  }, []);
-  // The tutor's bubble floats over the station, so the surface leaves free the strip it overlaps.
-  const clearance = useBubbleClearance(surface, useSpiritBubble());
+  // The tutor's dock floats over the bottom of the station without moving it; while it is open the
+  // station can scroll a little past its end, so what is at the bottom is reachable above the dock.
+  const dockOpen = useSpiritOpen();
   useEffect(() => {
     if (rect) setLastRect(rect);
   }, [rect]);
@@ -444,7 +438,7 @@ function StationWorkspace({
     );
   return (
     <section
-      ref={attach}
+      ref={panel}
       tabIndex={-1}
       aria-label={labels[focus]}
       data-classroom-surface={focus}
@@ -453,8 +447,6 @@ function StationWorkspace({
         "--surface-top": `${position.top}px`,
         "--surface-width": `${position.width}px`,
         "--surface-height": `${position.height}px`,
-        "--reserve-right": `${clearance.right}px`,
-        "--reserve-bottom": `${clearance.bottom}px`,
       } as CSSProperties}
       aria-busy={!rect}
       className={cn(
@@ -465,6 +457,7 @@ function StationWorkspace({
       )}
     >
       {children}
+      {dockOpen && !pdf ? <div aria-hidden="true" className="h-36 shrink-0" /> : null}
     </section>
   );
 }

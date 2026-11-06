@@ -14,8 +14,9 @@ const state = {
   mood: "idle" as SpiritMood,
   level: () => 0,
   open: false,
+  /** The conversation dock shows the whole thread (true) or just a slim window onto it (false). */
+  expanded: false,
   gaze: null as SpiritGaze | null,
-  bubble: null as HTMLElement | null,
 };
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((listener) => listener());
@@ -37,18 +38,16 @@ export const spirit = {
     state.gaze = point;
     if (was !== (point !== null)) notify();
   },
-  /**
-   * The conversation bubble while it is on screen (null otherwise). Whichever tutor draws
-   * it registers it here, so the station underneath can make room for it.
-   */
-  setBubble(element: HTMLElement | null) {
-    if (state.bubble === element) return;
-    state.bubble = element;
-    notify();
-  },
   setOpen(open: boolean) {
     if (state.open === open) return;
     state.open = open;
+    // each visit starts slim
+    state.expanded = false;
+    notify();
+  },
+  setExpanded(expanded: boolean) {
+    if (state.expanded === expanded) return;
+    state.expanded = expanded;
     notify();
   },
   toggle() {
@@ -65,9 +64,9 @@ export function useSpiritOpen() {
   return useSyncExternalStore(subscribe, () => state.open, () => false);
 }
 
-/** The tutor's bubble element while it is open, for the station that has to leave room for it. */
-export function useSpiritBubble() {
-  return useSyncExternalStore(subscribe, () => state.bubble, () => null);
+/** Whether the conversation dock is showing its whole thread. */
+export function useSpiritExpanded() {
+  return useSyncExternalStore(subscribe, () => state.expanded, () => false);
 }
 
 /** Whether the spirit is looking at something the tutor points at. */
