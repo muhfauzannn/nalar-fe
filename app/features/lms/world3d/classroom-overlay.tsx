@@ -26,6 +26,7 @@ import { useSurfaceRect } from "./board-rect";
 import { BoardStudy } from "./board-study";
 import { boardPdf } from "./board-tutor";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
+import { LabPicture } from "./lab-picture";
 import { card, Dock, Overlay, press, TopBar } from "./overlays";
 import { SpiritTutor } from "./spirit-tutor";
 import { useStageScene } from "./store";
@@ -309,6 +310,9 @@ export function ClassroomOverlay({
       )}
       <SpiritTutor source={tutorSource} focus={focus} boardTutor={pdfOnBoard !== null} />
     </Overlay>
+    {/* The real lab, off screen for a moment: its picture goes on the bench's screen in the room. Never while the
+        student is at the bench itself: a second copy of the lab would give the tutor two of every part to point at. */}
+    {focus !== "lab" && island.labs[0] && <LabPicture labKey={island.labs[0].labKey} />}
     </TutorHostProvider>
   );
 }

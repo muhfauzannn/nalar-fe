@@ -4,23 +4,28 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import * as THREE from "three";
 
+import { LABS } from "~/features/labs";
 import { SceneReady } from "~/features/loading/scene-ready";
 
 import { gameGsap, playSound } from "~/features/game-feel";
 import { studentResourceFileUrl } from "~/lib/files";
 
+import { postNames } from "../lib/game";
 import { loadPdfjs } from "../lib/pdfjs";
 import type { CourseData, IslandData, LessonData } from "../types";
 import ROOM from "./classroom-layout.json";
 import { setSurfaceRect, useSurfaceRect } from "./board-rect";
 import { boardPreviewScale } from "./board-preview";
 import { classroomUrl, type ClassroomFocus } from "./classroom-focus";
+import { dueText } from "./deadlines";
 import { createClassroomInstance } from "./classroom-model";
 import { classroomHomeFov, classroomHomePose, classroomSurface, stationAspect, stationPose, stationRect } from "./surface-projection";
 import { STILL } from "./ground";
 import { sketchOf, type Vec3 } from "./layout";
 import { Clickable, Sign, SignText } from "./signs";
 import { spirit } from "./spirit-store";
+import { paintBook, paintLab, paintQuiz, sizeFace } from "./station-paint";
+import { labPictureKey, useStationPicture } from "./station-pictures";
 import { preloadTutorSpirit, TutorSpirit } from "./tutor-spirit";
 
 // The course classroom (docs/world-concept/classroom-*.png): one room the
@@ -37,6 +42,13 @@ export function preloadClassroom() {
   useGLTF.preload(CLASSROOM_URL, false, true);
   preloadTutorSpirit();
 }
+
+/**
+ * The stations' signs float above their surfaces now that the surfaces carry the lab, the quiz and the book
+ * themselves (station-paint.ts): a sign over the picture would hide it. Raised from the spots the room's layout gives.
+ */
+const SIGN_RISE: Record<"lab" | "quiz" | "tugas", number> = { lab: 0.85, quiz: 0.8, tugas: 0.55 };
+const raised = (at: Vec3, by: number): Vec3 => [at[0], at[1] + by, at[2]];
 
 /** Where the tutor spirit floats while the student looks around the room: beside the board. */
 const SPIRIT_HOME: Vec3 = [-2.95, 2.35, -3.05];
@@ -98,10 +110,56 @@ function RoomCamera({ focus }: { focus: ClassroomFocus | null }) {
   return <PerspectiveCamera ref={ref} makeDefault fov={ROOM.camera.fov} near={0.05} far={60} position={DOOR.p} />;
 }
 
+/** What a station's surface shows: a key that changes when the picture would, and how to paint it (station-paint.ts). */
+type Face = { key: string; paint: (canvas: HTMLCanvasElement) => void };
+
+/**
+ * The texture for a station's face, painted at the surface's own shape so nothing is stretched. The shape is rounded
+ * to a twentieth so that a window being resized does not repaint it at every pixel.
+ */
+function useFaceTexture(face: Face | null, aspect: number) {
+  const invalidate = useThree((state) => state.invalidate);
+  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
+  const shape = Math.round(aspect * 20) / 20;
+  const key = face ? `${face.key}@${shape}` : "";
+  useEffect(() => {
+    if (!face) {
+      setTexture(null);
+      return;
+    }
+    let live = true;
+    void (async () => {
+      try {
+        await document.fonts.load('700 40px "Poppins"');
+      } catch {
+        // the system font does
+      }
+      if (!live) return;
+      const canvas = document.createElement("canvas");
+      sizeFace(canvas, shape);
+      face.paint(canvas);
+      const next = new THREE.CanvasTexture(canvas);
+      next.colorSpace = THREE.SRGBColorSpace;
+      next.anisotropy = 4;
+      setTexture((old) => {
+        old?.dispose();
+        return next;
+      });
+      invalidate();
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return texture;
+}
+
 /** Physical screens on the bench, quiz stand, and the opened assignment book. */
-function StationSurface({ station, active, onOpen }: { station: Exclude<ClassroomFocus, "papan">; active: boolean; onOpen?: () => void }) {
+function StationSurface({ station, active, onOpen, face }: { station: Exclude<ClassroomFocus, "papan">; active: boolean; onOpen?: () => void; face: Face | null }) {
   const { width, height } = useThree((state) => state.size);
   const surface = classroomSurface(station, active ? stationAspect(width, height) : undefined);
+  const texture = useFaceTexture(face, surface.width / surface.height);
   const frame = station === "lab" ? "#256b59" : station === "tugas" ? "#8a614a" : "#5e4ac4";
   return (
     <group position={surface.center} rotation={[surface.tilt, 0, 0]} onClick={(event) => { event.stopPropagation(); onOpen?.(); }}>
@@ -111,9 +169,10 @@ function StationSurface({ station, active, onOpen }: { station: Exclude<Classroo
       </mesh>
       <mesh>
         <planeGeometry args={[surface.width, surface.height]} />
-        <meshBasicMaterial color={station === "lab" ? "#edf8f4" : "#fffaf0"} toneMapped={false} />
+        {/* keyed: a material made without a map must be remade, not given one, for the shader to use it */}
+        <meshBasicMaterial key={texture ? "face" : "plain"} map={texture ?? undefined} color={texture ? "#ffffff" : station === "lab" ? "#edf8f4" : "#fffaf0"} toneMapped={false} />
       </mesh>
-      {station === "tugas" && !active && <mesh position={[0, 0, 0.005]}><planeGeometry args={[0.025, surface.height]} /><meshBasicMaterial color="#d6c8b5" /></mesh>}
+      {station === "tugas" && !active && !texture && <mesh position={[0, 0, 0.005]}><planeGeometry args={[0.025, surface.height]} /><meshBasicMaterial color="#d6c8b5" /></mesh>}
     </group>
   );
 }
@@ -256,6 +315,64 @@ function BoardFace({ lesson }: { lesson: LessonData | null }) {
   );
 }
 
+// ---- what the stations show ----------------------------------------------------------------------
+
+const FINISHED = new Set(["closed", "completed", "expired", "graded", "returned", "submitted"]);
+
+/**
+ * The faces of the lab bench's screen, the quiz board and the task book, from the course and island the page already
+ * has (station-paint.ts says what each shows). Each is the first of its kind, the one a click on the station opens.
+ */
+function useStationFaces(course: CourseData | null, island: IslandData | null) {
+  const lab = island?.labs[0];
+  const entry = lab ? LABS[lab.labKey] : undefined;
+  const picture = useStationPicture(lab ? labPictureKey(lab.labKey) : null);
+  const quiz = course?.quizzes[0];
+  const assignment = course?.assignments[0];
+  const building = assignment ? island?.buildings.find((item) => item.assignmentId === assignment.id) : undefined;
+  const others = Math.max(0, (course?.assignments.length ?? 0) - 1);
+  return useMemo(() => {
+    const now = Date.now();
+    const make = <T,>(data: T, paint: (canvas: HTMLCanvasElement, data: T) => void): Face => ({
+      key: JSON.stringify(data),
+      paint: (canvas) => paint(canvas, data),
+    });
+    // the lab's picture is a canvas, so its arrival (not its pixels) goes into the key
+    const labData = lab && entry ? { title: entry.title, subject: entry.subject, solved: Math.min(lab.solved, lab.challenges), total: lab.challenges || entry.challenges } : null;
+    const labFace: Face | null = labData
+      ? { key: JSON.stringify({ ...labData, picture: Boolean(picture) }), paint: (canvas) => paintLab(canvas, { ...labData, picture }) }
+      : null;
+    const quizFace = quiz
+      ? make(
+          {
+            title: quiz.title,
+            minutes: quiz.timeLimitMinutes,
+            due: quiz.dueAt ? dueText(quiz.dueAt, now) : null,
+            state: quiz.score !== null || FINISHED.has(quiz.attemptStatus ?? "") ? ("done" as const) : quiz.attemptStatus === "in_progress" ? ("running" as const) : ("new" as const),
+            score: quiz.score,
+          },
+          paintQuiz,
+        )
+      : null;
+    const bookFace = assignment
+      ? make(
+          {
+            title: assignment.title,
+            due: assignment.dueAt ? dueText(assignment.dueAt, now) : null,
+            state: FINISHED.has(assignment.submissionStatus ?? "") ? ("done" as const) : assignment.submissionStatus === "in_progress" ? ("working" as const) : ("new" as const),
+            // an assignment nobody has started has no building yet: its five posts, all still closed
+            posts: building
+              ? building.posts.map((post) => ({ name: postNames[post.stage], status: post.status }))
+              : Object.values(postNames).map((name) => ({ name, status: "locked" as const })),
+            more: others,
+          },
+          paintBook,
+        )
+      : null;
+    return { lab: labFace, kuis: quizFace, tugas: bookFace };
+  }, [lab, entry, picture, quiz, assignment, building, others]);
+}
+
 // ---- the room -------------------------------------------------------------------------------
 
 /** An invisible box that makes part of the room a button. */
@@ -334,6 +451,7 @@ export function Classroom({ courseId, focus, lesson, course, island, ready = fal
     book: (assignmentId: string) => { if (!focus) navigate(classroomUrl(courseId, { lessonId, focus: "tugas", assignmentId })); },
     quiz: () => quiz && navigate(classroomUrl(courseId, { lessonId, focus: "kuis", quizId: quiz })),
   };
+  const faces = useStationFaces(course, island);
   const show = focus === null;
   return (
     <group>
@@ -360,9 +478,9 @@ export function Classroom({ courseId, focus, lesson, course, island, ready = fal
 
       <primitive object={room} />
       <BoardFace lesson={lesson} />
-      <StationSurface station="lab" active={focus === "lab"} onOpen={show ? go.lab : undefined} />
-      <StationSurface station="kuis" active={focus === "kuis"} onOpen={show ? go.quiz : undefined} />
-      <StationSurface station="tugas" active={focus === "tugas"} onOpen={show ? () => course?.assignments[0] && go.book(course.assignments[0].id) : undefined} />
+      <StationSurface station="lab" active={focus === "lab"} onOpen={show ? go.lab : undefined} face={faces.lab} />
+      <StationSurface station="kuis" active={focus === "kuis"} onOpen={show ? go.quiz : undefined} face={faces.kuis} />
+      <StationSurface station="tugas" active={focus === "tugas"} onOpen={show ? () => course?.assignments[0] && go.book(course.assignments[0].id) : undefined} face={faces.tugas} />
       {course && island && <Books course={course} island={island} onOpen={go.book} />}
 
       {show && <>
@@ -375,16 +493,16 @@ export function Classroom({ courseId, focus, lesson, course, island, ready = fal
       <Sign position={s.materi.sign as Vec3} show={show && !narrow} onClick={go.board} label="Materi: baca di papan">
         <SignText small="Materi" strong={lesson?.title ?? "Papan tulis"} />
       </Sign>
-      <Sign position={s.lab.sign as Vec3} show={show && !narrow && Boolean(labLesson)} onClick={go.lab} label="Lab">
+      <Sign position={raised(s.lab.sign as Vec3, SIGN_RISE.lab)} show={show && !narrow && Boolean(labLesson)} onClick={go.lab} label="Lab">
         <SignText small="Lab" strong="Meja percobaan" />
       </Sign>
-      <Sign position={s.tugas.sign as Vec3} show={show && !narrow && Boolean(course?.assignments.length)} onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} label="Tugas">
+      <Sign position={raised(s.tugas.sign as Vec3, SIGN_RISE.tugas)} show={show && !narrow && Boolean(course?.assignments.length)} onClick={() => course?.assignments[0] && go.book(course.assignments[0].id)} label="Tugas">
         <SignText small="Tugas" strong={`${course?.assignments.length ?? 0} buku`} />
       </Sign>
       <Sign position={[SPIRIT_HOME[0], SPIRIT_HOME[1] + 0.75, SPIRIT_HOME[2]]} show={show && !narrow} onClick={() => spirit.toggle()} label="Panggil tutor">
         <SignText small="Tutor AI" strong="Panggil aku" />
       </Sign>
-      <Sign position={s.quiz.sign as Vec3} show={show && !narrow && Boolean(quiz)} onClick={go.quiz} label="Quiz">
+      <Sign position={raised(s.quiz.sign as Vec3, SIGN_RISE.quiz)} show={show && !narrow && Boolean(quiz)} onClick={go.quiz} label="Quiz">
         <SignText small="Quiz" strong={course?.quizzes[0]?.title ?? "Target"} />
       </Sign>
       {show && (
