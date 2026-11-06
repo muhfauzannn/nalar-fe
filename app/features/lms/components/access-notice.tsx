@@ -95,7 +95,7 @@ export function AccessNotice({
           render={<Link to={`/courses/${courseId}`} />}
         >
           <ArrowLeft data-icon="inline-start" />
-          Kembali ke pulau
+          Kembali ke kelas
         </Button>
 
         {syncing ? (

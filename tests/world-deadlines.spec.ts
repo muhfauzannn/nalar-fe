@@ -41,7 +41,7 @@ test("on a wide screen Tenggat opens as a card, the urgent group first, and a ro
   const urgent = rows(page).first();
   await expect(urgent).toHaveAttribute("data-tone", "soon");
   await expect(urgent).toContainText("Kuis Bab 1 — Gelombang");
-  await expect(urgent).toContainText("Pulau Fisika · Kuis");
+  await expect(urgent).toContainText("Kelas Fisika · Kuis");
   await expect(urgent).toContainText("Besok, 16.00");
   await expect(rows(page).nth(1)).toHaveAttribute("data-tone", "later");
   await expect(rows(page).nth(1)).toContainText("hari lagi");
@@ -70,14 +70,14 @@ test("an older API that sends no deadlines leaves the HUD as it was", async ({ p
 
 test("the island's sign carries the tag of its urgent work", async ({ page }) => {
   await visit(page, "?scene");
-  await expect(page.getByRole("button", { name: /Pulau Fisika.*Kuis besok · 16\.00/ }).first()).toBeAttached({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: /Kelas Fisika.*Kuis besok · 16\.00/ }).first()).toBeAttached({ timeout: 30_000 });
   // Only the island with urgent work has one.
-  await expect(page.getByRole("button", { name: /Pulau Matematika.*Kuis/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Kelas Matematika.*Kuis/ })).toHaveCount(0);
 });
 
 test("each island's sign sits over its own island, not all over the centre one", async ({ page }) => {
   await visit(page, "?scene");
-  const signs = page.getByRole("button", { name: /^Pulau (Fisika|Matematika|Kimia)/ });
+  const signs = page.getByRole("button", { name: /^Kelas (Fisika|Matematika|Kimia)/ });
   await expect(signs).toHaveCount(3, { timeout: 30_000 });
   await expect.poll(async () => {
     const spots = await signs.evaluateAll((items) => items.map((item) => item.getBoundingClientRect()).map((box) => [box.x + box.width / 2, box.y + box.height / 2]));

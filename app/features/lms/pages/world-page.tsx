@@ -85,7 +85,7 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
           <source media="(max-width: 767px)" srcSet="/game/world-map-portrait.webp" width={768} height={1152} />
           <img
             src="/game/world-map.webp"
-            alt="Dunia Bernalar: pulau-pulau melayang, satu untuk setiap course"
+            alt="Dunia Bernalar: kelas-kelas melayang, satu untuk setiap course"
             width={1440}
             height={960}
             className="block aspect-[2/3] w-full select-none object-cover md:aspect-[3/2]"
@@ -134,7 +134,7 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
         >
           <span className="flex items-center gap-1.5 text-sm font-semibold">
             <Plus className="size-4" aria-hidden="true" />
-            Pulau berikutnya
+            Kelas berikutnya
           </span>
           <span className="text-xs opacity-80 max-md:hidden">Gabung course lain</span>
         </Link>
@@ -161,24 +161,24 @@ export function WorldPage({ data, name }: { data: WorldData; name: string }) {
             <h2 id="tenggat-title" className="font-heading font-semibold">Tenggat</h2>
             <span className="text-xs text-muted-foreground">{data.upcoming.length} perlu diselesaikan</span>
           </div>
-          <DeadlineList items={data.upcoming} world3d={false} islands={new Map(data.islands.map((item) => [item.course.id, `Pulau ${item.course.subjectName}`]))} />
+          <DeadlineList items={data.upcoming} world3d={false} islands={new Map(data.islands.map((item) => [item.course.id, `Kelas ${item.course.subjectName}`]))} />
         </section>
       )}
 
-      <section aria-label="Pulau lainnya" className="flex flex-wrap items-center gap-2 max-md:px-3">
+      <section aria-label="Kelas lainnya" className="flex flex-wrap items-center gap-2 max-md:px-3">
           {more.map((island) => (
             <Link
               key={island.course.id}
               to={`/courses/${island.course.id}`}
               className="hidden items-center gap-2 rounded-2xl bg-card px-4 py-2.5 text-sm font-semibold text-card-foreground shadow-card ring-1 ring-border [@media(min-width:768px)_and_(pointer:fine)]:flex"
             >
-              Pulau {island.course.subjectName}
+              Kelas {island.course.subjectName}
               <ChevronRight className="size-4" aria-hidden="true" />
             </Link>
           ))}
           {data.islands.length === 0 && (
             <p className="w-full text-sm text-muted-foreground">
-              Belum ada pulau. Gabung course dengan kode dari gurumu untuk membuka pulau pertamamu.
+              Belum ada kelas. Gabung course dengan kode dari gurumu untuk membuka kelas pertamamu.
             </p>
           )}
           <Link
@@ -231,7 +231,7 @@ function IslandSign({
       style={at(anchor)}
     >
       {highlighted && <p className="text-[0.6875rem] text-[#c6c1f1] max-md:hidden">Sedang dijelajahi</p>}
-      <p className="truncate font-heading text-sm font-bold sm:text-base">Pulau {island.course.subjectName}</p>
+      <p className="truncate font-heading text-sm font-bold sm:text-base">Kelas {island.course.subjectName}</p>
       {current ? (
         <>
           <div className="my-1.5 flex gap-1 max-sm:hidden" aria-hidden="true">

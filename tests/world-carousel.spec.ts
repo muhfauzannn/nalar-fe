@@ -25,11 +25,11 @@ test("the carousel presents one course with previous and next controls", () => {
   const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(WorldIslandCarousel, { islands })));
   expect(html).toContain('href="/courses/course-a/kelas"');
   expect(html).not.toContain('href="/courses/course-b/kelas"');
-  expect(html).toContain('aria-label="Pulau sebelumnya"');
-  expect(html).toContain('aria-label="Pulau berikutnya"');
+  expect(html).toContain('aria-label="Kelas sebelumnya"');
+  expect(html).toContain('aria-label="Kelas berikutnya"');
   expect(html).toContain("Kelas A");
   expect(html).toContain("1 / 3");
-  expect(html).not.toContain("Pilih pulau");
+  expect(html).not.toContain("Pilih kelas");
 });
 
 test("the carousel is absent when there are no islands", () => {

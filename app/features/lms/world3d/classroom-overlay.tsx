@@ -141,7 +141,7 @@ export function ClassroomOverlay({
         crumbs={[
           { label: "Dunia", to: "/dunia" },
           {
-            label: `Pulau ${course.course.subjectName}`,
+            label: `Kelas ${course.course.subjectName}`,
             to: `/courses/${courseId}`,
           },
           focus ? { label: "Kelas", to: closeTo } : { label: "Kelas" },

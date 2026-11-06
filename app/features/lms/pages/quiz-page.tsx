@@ -468,7 +468,7 @@ function QuizReview({ data, returnTo }: { data: QuizData; returnTo?: string }) {
             render={<Link to={returnTo ?? `/courses/${data.quiz.courseId}`} />}
           >
             <ArrowLeft data-icon="inline-start" />
-            Kembali ke pulau
+            Kembali ke kelas
           </Button>
         </CardFooter>
       </Card>

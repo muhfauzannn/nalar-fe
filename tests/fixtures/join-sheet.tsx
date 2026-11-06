@@ -38,7 +38,7 @@ const router = createMemoryRouter(
         return { ok: false, error: "Kode kelas tidak ditemukan." };
       },
     },
-    { path: "/courses/course-a", Component: () => <p>Pulau Fisika</p> },
+    { path: "/courses/course-a", Component: () => <p>Kelas Fisika</p> },
   ],
   { initialEntries: [start] },
 );

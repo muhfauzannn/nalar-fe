@@ -242,7 +242,7 @@ export function LessonPage({ data: loaderData }: { data: LessonData }) {
                   render={<Link to={`/courses/${loaderData.courseId}`} />}
                 >
                   <ArrowLeft data-icon="inline-start" />
-                  Kembali ke pulau
+                  Kembali ke kelas
                 </Button>
               </CardFooter>
             </Card>

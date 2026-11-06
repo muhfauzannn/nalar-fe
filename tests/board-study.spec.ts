@@ -195,6 +195,35 @@ test("a plan for a page the student left is refused with the way back, and never
   expect(shown.ok).toBe(true);
 });
 
+test("a question sent while the last answer still arrives keeps its pointer and its own answer", async ({ page }) => {
+  const mock = await openBoard(page);
+  await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  await mock.summon();
+  await mock.ask("Apa itu pembilang?");
+  const context = (await mock.call("read-first", "get_pdf_context")) as Context;
+  await mock.call("draw-first", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "highlight", blockId: context.blocks[1]!.id, say: "pembilang itu" },
+  ]));
+  mock.send({ serverContent: { outputTranscription: { text: "Pembilang itu bagian yang" } } });
+  await mock.ask("maksudnya gimana?");
+  // What the provider still had in flight for the first answer, then its end, in two frames.
+  mock.send({ serverContent: { outputTranscription: { text: " SISA JAWABAN LAMA" } } });
+  mock.send({ serverContent: { interrupted: true } });
+  mock.send({ serverContent: { turnComplete: true } });
+  const drawn = await mock.call("draw-second", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "highlight", blockId: context.blocks[1]!.id, say: "maksudnya begini" },
+  ]));
+  expect(drawn.ok).toBe(true);
+  mock.send({ serverContent: { outputTranscription: { text: "Maksudnya begini, bagian yang dipilih." }, turnComplete: true } });
+  await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
+  const thread = mock.bubble.getByLabel("Transkrip percakapan saat ini");
+  await expect(thread.locator('[data-author="tutor"]').last()).toHaveText("Maksudnya begini, bagian yang dipilih.");
+  await expect(thread).not.toContainText("SISA JAWABAN LAMA");
+  // The stray end of the old answer did not count as an empty new one and retrigger the question.
+  expect(mock.texts.filter((text) => text === "maksudnya gimana?")).toHaveLength(1);
+  expect(mock.errors).toEqual([]);
+});
+
 test("the spirit looks at the spot the tutor points at, and faces front again when the pointer goes", async ({ page }) => {
   const mock = await openBoard(page);
   await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);

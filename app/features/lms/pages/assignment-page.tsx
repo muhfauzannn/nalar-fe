@@ -1158,7 +1158,7 @@ function SubmissionResult({ assignment, returnTo }: { assignment: AssignmentData
           </CardContent>
           <CardFooter>
             <Button type="button" variant="outline" className="w-full" render={<Link to={returnTo ?? `/courses/${assignment.courseId}`} />}>
-              {returnTo ? "Kembali ke kelas" : "Kembali ke pulau"}
+              {returnTo ? "Kembali ke kelas" : "Kembali ke kelas"}
             </Button>
           </CardFooter>
         </Card>

@@ -14,7 +14,7 @@ type Building = IslandData["buildings"][number];
 const statusName = { done: "menyala", current: "kamu di sini", locked: "terkunci" } as const;
 
 // Where each pad's name sits relative to the pad, so labels clear the path and
-// the hall (the canvas design "3D · Pulau").
+// the hall (the canvas design "3D · Kelas").
 const labelPlacement: Record<WorkflowStage, string> = {
   "1_independent_effort": "-translate-x-1/2 translate-y-[1.9rem]",
   "2_guided_questioning": "-translate-x-1/2 translate-y-[1.9rem]",
@@ -106,7 +106,7 @@ export function IslandJourney({
     >
       <img
         src="/game/island-journey.webp"
-        alt={`Pulau dengan lima pos menuju balai ${building.title}`}
+        alt={`Kelas dengan lima pos menuju balai ${building.title}`}
         width={768}
         height={1152}
         className="absolute inset-0 size-full select-none object-cover"
@@ -115,7 +115,7 @@ export function IslandJourney({
 
       <Link
         to={backTo}
-        aria-label="Kembali ke pulau"
+        aria-label="Kembali ke kelas"
         className="absolute left-4 top-4 flex size-12 items-center justify-center rounded-2xl bg-white/92 transition-transform duration-150 active:scale-95"
       >
         <ChevronLeft className="size-5" strokeWidth={2.4} />
@@ -126,7 +126,7 @@ export function IslandJourney({
       </span>
       {subject && (
         <div className="absolute left-[4.5rem] right-3 top-4 min-w-0 rounded-2xl bg-white/92 px-3 py-1.5 md:hidden">
-          <p className="truncate text-[0.6875rem] text-[#5e5e72]">Pulau {subject}</p>
+          <p className="truncate text-[0.6875rem] text-[#5e5e72]">Kelas {subject}</p>
           <p className="truncate text-sm font-bold">
             {building.title} · {building.posts.filter((post) => post.status === "done").length}/5
           </p>

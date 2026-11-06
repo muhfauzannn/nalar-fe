@@ -207,7 +207,7 @@ function LabsSection({ data }: { data: LessonEditorData }) {
           Lab interaktif
         </h2>
         <p className="text-sm text-muted-foreground">
-          Alat 3D dengan tantangan penerapan. Muncul di atas materi dan di wilayah modul pada pulau siswa.
+          Alat 3D dengan tantangan penerapan. Muncul di atas materi dan di wilayah modul pada kelas siswa.
         </p>
       </div>
       <ActionError error={attach.error ?? detach.error} />

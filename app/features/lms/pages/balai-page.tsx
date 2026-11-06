@@ -15,7 +15,7 @@ import type { BadgeProgress, EarnedPoint, IslandData, PointsData, PostStatus, Wo
 
 type Building = IslandData["buildings"][number];
 
-// Pad states as the canvas design "3D · Pulau" draws them.
+// Pad states as the canvas design "3D · Kelas" draws them.
 const padStyle: Record<PostStatus, { row: string; dot: string; tag: string; tagClass: string }> = {
   done: { row: "", dot: "bg-[#4bd29f] border-[#18153a]", tag: "Menyala", tagClass: "text-[#0f6e56]" },
   current: { row: "bg-[#dff7ee]", dot: "bg-white border-[#4bd29f]", tag: "Kamu di sini", tagClass: "text-[#0f6e56]" },
@@ -83,9 +83,9 @@ export function BalaiPage({
       {!selected ? (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <img src="/game/academy.webp" alt="" width={304} height={360} className="h-40 w-auto" />
-          <p className="font-heading text-lg font-semibold">Balai ini tidak ada di Pulau {data.course.subjectName}</p>
+          <p className="font-heading text-lg font-semibold">Balai ini tidak ada di Kelas {data.course.subjectName}</p>
           <Link to={backTo} className="text-sm font-medium underline underline-offset-4">
-            Kembali ke pulau
+            Kembali ke kelas
           </Link>
         </div>
       ) : (
@@ -120,7 +120,7 @@ export function BalaiPage({
   );
 }
 
-// The canvas "Pulau (HP)": on phones the post you are on sits in a card that
+// The canvas "Kelas (HP)": on phones the post you are on sits in a card that
 // overlaps the bottom of the island, with one button to open it.
 function CurrentPostCard({ building, onOpen }: { building: Building; onOpen: (stage: WorkflowStage) => void }) {
   const index = building.posts.findIndex((post) => post.status === "current");
@@ -161,7 +161,7 @@ function Header({ building, data }: { building: Building; data: IslandData }) {
   return (
     <div className="rounded-[1.75rem] bg-white p-6">
       <p className="text-[0.8125rem] text-[#5e5e72]">
-        Pulau {data.course.subjectName} · Balai {position} dari {data.buildings.length}
+        Kelas {data.course.subjectName} · Balai {position} dari {data.buildings.length}
       </p>
       <h1 className="mb-3 mt-1 font-heading text-2xl font-bold text-balance sm:text-3xl">{building.title}</h1>
       <div className="mb-2 flex gap-1" role="img" aria-label={`${lit} dari 5 pos menyala`}>
@@ -298,7 +298,7 @@ function IslandStats({ data }: { data: IslandData }) {
         <img src="/game/coin.webp" alt="" width={125} height={128} className="size-11 shrink-0" />
         <div>
           <p className="font-heading text-2xl font-semibold tabular-nums">{data.points.total}</p>
-          <p className="text-xs text-[#5e5e72]">Poin Nalar di pulau ini</p>
+          <p className="text-xs text-[#5e5e72]">Poin Nalar di kelas ini</p>
         </div>
       </div>
       <div className="flex flex-col justify-center gap-2 rounded-[1.5rem] bg-white/80 p-4">

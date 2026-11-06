@@ -54,7 +54,7 @@ export function IslandPage({ course, island }: { course: CourseData; island: Isl
               </Link>{" "}
               · {course.course.name}
             </p>
-            <h1 className="mt-1 font-heading text-2xl font-bold text-balance sm:text-3xl">Pulau {course.course.subjectName}</h1>
+            <h1 className="mt-1 font-heading text-2xl font-bold text-balance sm:text-3xl">Kelas {course.course.subjectName}</h1>
             {course.teachers.length > 0 && (
               <p className="mt-1 text-sm text-[#5e5e72]">Pemandu: {course.teachers.join(", ")}</p>
             )}
@@ -78,7 +78,7 @@ export function IslandPage({ course, island }: { course: CourseData; island: Isl
             <span className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#f6f3fd] pl-1.5 pr-4 font-heading font-semibold">
               <img src="/game/coin.webp" alt="" width={125} height={128} className="size-8" />
               <span className="tabular-nums">{island.points.total}</span>
-              <span className="sr-only">Poin Nalar di pulau ini</span>
+              <span className="sr-only">Poin Nalar di kelas ini</span>
             </span>
             <span id="bridge-chip" className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#f6f3fd] px-3.5 text-sm font-semibold">
               <Users className="size-4" aria-hidden="true" />
@@ -99,7 +99,7 @@ export function IslandPage({ course, island }: { course: CourseData; island: Isl
         {districts.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-[1.75rem] bg-white/70 py-14 text-center">
             <img src="/game/library.webp" alt="" width={315} height={360} className="h-32 w-auto" />
-            <p className="font-heading font-semibold">Pulau ini masih kosong</p>
+            <p className="font-heading font-semibold">Kelas ini masih kosong</p>
             <p className="text-sm text-[#5e5e72]">Gurumu belum menerbitkan materi atau tugas.</p>
           </div>
         ) : (

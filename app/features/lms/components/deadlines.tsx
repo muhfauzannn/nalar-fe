@@ -9,7 +9,7 @@ import { useNow } from "../hooks/use-now";
 import type { UpcomingWork } from "../types";
 import { deadlineHref, dueText, splitDeadlines, URGENT_HOURS } from "../world3d/deadlines";
 
-/** "Pulau Fisika" for a course the student has an island for, else the course's own name. */
+/** "Kelas Fisika" for a course the student has an island for, else the course's own name. */
 export type IslandNames = Map<string, string>;
 
 function Row({ item, now, world3d, islands, compact, onPick }: { item: UpcomingWork; now: number; world3d: boolean; islands: IslandNames; compact: boolean; onPick?: () => void }) {

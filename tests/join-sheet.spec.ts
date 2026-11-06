@@ -70,7 +70,7 @@ test("a right code leaves for the course's island and the sheet goes away", asyn
   await page.getByRole("button", { name: "Buka gabung" }).click();
   await page.getByLabel("Kode kelas").fill("k7m2-qx9p");
   await page.getByRole("button", { name: "Gabung", exact: true }).click();
-  await expect(page.getByText("Pulau Fisika")).toBeVisible();
+  await expect(page.getByText("Kelas Fisika")).toBeVisible();
   await expect(sheet(page)).toHaveCount(0);
 });
 
@@ -99,7 +99,7 @@ test.describe("on a phone", () => {
 
   test("the carousel's join slot opens the sheet in place", async ({ page }) => {
     await visit(page);
-    await page.getByRole("button", { name: "Pulau berikutnya" }).tap();
+    await page.getByRole("button", { name: "Kelas berikutnya" }).tap();
     await page.getByRole("button", { name: "Gabung course baru" }).tap();
     await expect(sheet(page)).toBeVisible();
     await expect(url(page)).toHaveText("/dunia?gabung=");

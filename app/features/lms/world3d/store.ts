@@ -3,7 +3,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import type { CourseData, EarnedPoint, IslandData, LessonData, WorkflowStage, WorldData } from "../types";
 import { classroomFocus, type ClassroomFocus } from "./classroom-focus";
 
-// What the persistent 3D world shows. The world routes (Dunia, Pulau, Balai)
+// What the persistent 3D world shows. The world routes (Dunia, Kelas, Balai)
 // write their loader data and their shot here; the canvas in the student shell
 // reads it, so moving between them is the camera flying, not a page swap. Data
 // from earlier routes is kept, so the other islands stay in the sky.

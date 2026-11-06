@@ -593,7 +593,7 @@ function SimpleIsland({ island, index, showSign, active, tag }: { island: WorldI
   const go = () => navigate(classroomUrl(island.courseId));
   return (
     <group position={island.position}>
-      <Clickable onClick={go} label={`Pulau ${island.subject}`}>
+      <Clickable onClick={go} label={`Kelas ${island.subject}`}>
         <HexBoard tiles={SMALL_TILES} seed={seed} dressing="light" />
         <Decor tiles={SMALL_FREE} seed={seed + 1} houses={HOUSES.slice(0, 1)} />
         <Piece name={LANDMARKS[index % LANDMARKS.length]!} ry={0.6} scale={TILE * 1.25} />
@@ -606,8 +606,8 @@ function SimpleIsland({ island, index, showSign, active, tag }: { island: WorldI
 function WorldSign({ island, show, active, onClick, height, tag }: { island: WorldIsland; show: boolean; active: boolean; onClick: () => void; height: number; tag?: string }) {
   return (
     // A tag makes the sign taller; it rises with it so it does not sit on the island's marker.
-    <Sign position={[0, height + (tag ? 0.7 : 0), 0]} show={show} onClick={onClick} dark={active} label={`Pulau ${island.subject}, ${island.hallsDone} dari ${island.halls} balai tuntas${tag ? `, ${tag}` : ""}`}>
-      <SignText small={active ? "Sedang dijelajahi" : island.halls ? `${island.hallsDone}/${island.halls} balai tuntas` : island.name} strong={`Pulau ${island.subject}`} tag={tag} />
+    <Sign position={[0, height + (tag ? 0.7 : 0), 0]} show={show} onClick={onClick} dark={active} label={`Kelas ${island.subject}, ${island.hallsDone} dari ${island.halls} balai tuntas${tag ? `, ${tag}` : ""}`}>
+      <SignText small={active ? "Sedang dijelajahi" : island.halls ? `${island.hallsDone}/${island.halls} balai tuntas` : island.name} strong={`Kelas ${island.subject}`} tag={tag} />
     </Sign>
   );
 }
@@ -624,7 +624,7 @@ function JoinIsland({ position, show }: { position: Vec3; show: boolean }) {
         <mesh position={[0, 0.8, 0]} material={mist}><sphereGeometry args={[4.2, 16, 10]} /></mesh>
       </Clickable>
       <Sign position={[0, 6.5, 0]} show={show} onClick={() => openJoin()} label="Gabung course baru">
-        <SignText small="Pulau berikutnya" strong="Gabung course" />
+        <SignText small="Kelas berikutnya" strong="Gabung course" />
       </Sign>
     </group>
   );

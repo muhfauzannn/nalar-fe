@@ -91,7 +91,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
   const upcoming = data.upcoming;
   const soon = upcoming ? splitDeadlines(upcoming, now).soon : [];
   const mostUrgent = soon[0] ?? null;
-  const islandNames = useMemo(() => new Map(data.islands.map((island) => [island.course.id, `Pulau ${island.course.subjectName}`])), [data.islands]);
+  const islandNames = useMemo(() => new Map(data.islands.map((island) => [island.course.id, `Kelas ${island.course.subjectName}`])), [data.islands]);
   const href = mostUrgent
     ? deadlineHref(mostUrgent, true)
     : active
@@ -151,9 +151,9 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
               </>
             ) : (
               <>
-                <p className="text-xs text-[#5e5e72]">{!active ? "Belum ada pulau" : current ? "Lanjutkan perjalanan" : "Semua balai tuntas"}</p>
+                <p className="text-xs text-[#5e5e72]">{!active ? "Belum ada kelas" : current ? "Lanjutkan perjalanan" : "Semua balai tuntas"}</p>
                 <p className="truncate text-[15px] font-bold">
-                  {current?.post ? `Pos ${current.post.index} · ${postNames[current.post.stage]}` : current ? current.title : active ? `Pulau ${active.course.subjectName}` : "Gabung course dari gurumu"}
+                  {current?.post ? `Pos ${current.post.index} · ${postNames[current.post.stage]}` : current ? current.title : active ? `Kelas ${active.course.subjectName}` : "Gabung course dari gurumu"}
                 </p>
               </>
             )}
@@ -178,7 +178,7 @@ export function WorldOverlay({ data, name }: { data: WorldData; name: string }) 
   );
 }
 
-// ---- Pulau ---------------------------------------------------------------------------
+// ---- Kelas ---------------------------------------------------------------------------
 
 const placeName = { library: "Perpustakaan", lab: "Lab", arena: "Arena latihan" } as const;
 type PlaceKey = keyof typeof placeName;
@@ -195,7 +195,7 @@ export function IslandOverlay({ course, island }: { course: CourseData; island: 
   );
   return (
     <Overlay>
-      <TopBar back={valid ? `/courses/${courseId}` : "/dunia"} crumbs={[{ label: "Dunia", to: "/dunia" }, valid ? { label: `Pulau ${course.course.subjectName}`, to: `/courses/${courseId}` } : { label: `Pulau ${course.course.subjectName}` }, ...(valid ? [{ label: placeName[valid] }] : [])]} />
+      <TopBar back={valid ? `/courses/${courseId}` : "/dunia"} crumbs={[{ label: "Dunia", to: "/dunia" }, valid ? { label: `Kelas ${course.course.subjectName}`, to: `/courses/${courseId}` } : { label: `Kelas ${course.course.subjectName}` }, ...(valid ? [{ label: placeName[valid] }] : [])]} />
       <Dock>
         {valid ? (
           <PlaceCard
@@ -207,7 +207,7 @@ export function IslandOverlay({ course, island }: { course: CourseData; island: 
           />
         ) : stops.length === 0 ? (
           <div className={cn(card, "w-full max-w-[26rem] p-4 text-center")}>
-            <p className="font-semibold">Pulau ini masih kosong</p>
+            <p className="font-semibold">Kelas ini masih kosong</p>
             <p className="text-sm text-[#5e5e72]">Gurumu belum menerbitkan materi atau tugas.</p>
           </div>
         ) : (
@@ -321,14 +321,14 @@ export function BalaiOverlay({
     setMoment(next ? { badge: next } : null);
   }
 
-  const crumbs = [{ label: "Dunia", to: "/dunia" }, { label: `Pulau ${island.course.subjectName}`, to: `/courses/${courseId}` }, { label: building?.title ?? "Balai" }];
+  const crumbs = [{ label: "Dunia", to: "/dunia" }, { label: `Kelas ${island.course.subjectName}`, to: `/courses/${courseId}` }, { label: building?.title ?? "Balai" }];
   if (!building) {
     return (
       <Overlay>
         <TopBar back={`/courses/${courseId}`} crumbs={crumbs} />
         <Dock>
           <div className={cn(card, "w-full max-w-[26rem] p-4 text-center")}>
-            <p className="font-semibold">Balai ini tidak ada di Pulau {island.course.subjectName}</p>
+            <p className="font-semibold">Balai ini tidak ada di Kelas {island.course.subjectName}</p>
           </div>
         </Dock>
       </Overlay>

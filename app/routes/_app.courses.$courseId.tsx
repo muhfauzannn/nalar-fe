@@ -32,7 +32,7 @@ export function HydrateFallback() {
 }
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "Pulau | NALAR" }];
+  return [{ title: "Kelas | NALAR" }];
 }
 
 export default function CourseIslandRoute({ loaderData }: Route.ComponentProps) {

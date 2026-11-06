@@ -28,7 +28,7 @@ export function CoursesPage({
   return (
     <div className="flex flex-col gap-10 lg:gap-12">
       <PageHeader
-        title="Semua pulau"
+        title="Semua kelas"
         meta={
           archivedCourses > 0 && <Badge variant="outline">{archivedCourses} diarsipkan</Badge>
         }

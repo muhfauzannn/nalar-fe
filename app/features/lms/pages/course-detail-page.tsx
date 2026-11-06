@@ -62,7 +62,7 @@ export function CourseDetailPage({ data: loaderData }: { data: CourseData }) {
   return (
     <div className="flex flex-col gap-8 lg:gap-10">
       <PageHeader
-        crumbs={[{ label: "Dunia", to: "/dunia" }, { label: "Pulau", to: `/courses/${loaderData.course.id}` }]}
+        crumbs={[{ label: "Dunia", to: "/dunia" }, { label: "Kelas", to: `/courses/${loaderData.course.id}` }]}
         eyebrow={
           <>
             <Badge variant="mint">{loaderData.course.subjectName}</Badge>
@@ -144,9 +144,9 @@ function IslandBanner({ courseId, subjectName }: { courseId: string; subjectName
         className="h-20 w-auto shrink-0 transition-transform duration-200 group-hover:-translate-y-1 sm:h-24"
       />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="font-heading text-lg font-semibold">Pulau {subjectName}</span>
+        <span className="font-heading text-lg font-semibold">Kelas {subjectName}</span>
         <span className="text-sm opacity-80">
-          Kembali ke tampilan pulau: wilayah per modul, lab, arena, dan balai.
+          Kembali ke tampilan kelas: wilayah per modul, lab, arena, dan balai.
         </span>
       </span>
       <ArrowRight className="size-5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />

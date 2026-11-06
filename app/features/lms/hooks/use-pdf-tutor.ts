@@ -100,6 +100,8 @@ export function usePdfTutor(
   const responding = useRef(false);
   const toolContinuation = useRef(false);
   const replacingTurn = useRef(false);
+  // A typed question cut in on an answer: until this time, what arrives is that answer's tail.
+  const oldAnswerUntil = useRef(0);
   const toolQueue = useRef<Promise<void>>(Promise.resolve());
   const typedQuestion = useRef<string | null>(null);
   const recoveryAttempts = useRef(0);
@@ -250,6 +252,7 @@ export function usePdfTutor(
     setRecoveryNotice(null);
     toolContinuation.current = false;
     replacingTurn.current = false;
+    oldAnswerUntil.current = 0;
     if (responseTimer.current) clearTimeout(responseTimer.current);
     turn.current = null;
     speakingInput.current = false;
@@ -440,6 +443,21 @@ export function usePdfTutor(
           [...cancelledCalls.current].slice(-100),
         );
       const server = message.serverContent;
+      // The provider ends an answer a moment after the question that replaces it was sent. The
+      // words still arriving are that answer's, and its "interrupted" must not cancel the new
+      // question (and drop its pointer and its answer). A tool call can only be the new answer's.
+      if (oldAnswerUntil.current) {
+        if (message.toolCall || Date.now() > oldAnswerUntil.current) oldAnswerUntil.current = 0;
+        else if (server) {
+          if (server.interrupted || server.turnComplete) {
+            oldAnswerUntil.current = 0;
+            replacingTurn.current = false;
+            // Its turnComplete can come in a frame of its own: that is no empty new answer.
+            generationTailPending.current = !server.turnComplete;
+          }
+          return;
+        }
+      }
       if (server?.turnComplete && generationTailPending.current) {
         generationTailPending.current = false;
         // generationComplete already committed that answer. Its delayed playback
@@ -1028,6 +1046,7 @@ export function usePdfTutor(
       }
       setError(null);
       replacingTurn.current = responding.current || generationTailPending.current;
+      oldAnswerUntil.current = replacingTurn.current && hasAnswer.current ? Date.now() + 2_500 : 0;
       beginTurn();
       // Not speech: a sound on the microphone must start a new turn, not extend this one.
       speakingInput.current = false;
