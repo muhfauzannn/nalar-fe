@@ -57,6 +57,23 @@ test("a skipped step is passed over when a later one is heard, and steps without
   expect(cues.done).toBe(true);
 });
 
+test("a step the tutor rephrased does not wait for the end of the answer", () => {
+  const cues = new SpokenCues(["kata yang tidak pernah terucap", "kata lain yang juga hilang"]);
+  // About three seconds of speech for the first step, about seven more for the next.
+  expect(cues.hear("Bayangkan ada satu pizza utuh.", null, null)).toEqual([]);
+  expect(cues.hear(" Nah pizza itu dipotong jadi delapan.", null, null)).toEqual([{ revealed: 1, at: null }]);
+  expect(cues.hear(" Terus kamu makan tiga potong sambil nonton film seru sampai malam, enak banget kan rasanya kalau begitu ya.", null, null))
+    .toEqual([{ revealed: 2, at: null }]);
+  expect(cues.done).toBe(true);
+});
+
+test("a step reached on its own words restarts the wait for the next one", () => {
+  const cues = new SpokenCues(["langkah satu", "kata yang hilang"]);
+  const filler = "bla ".repeat(20);
+  expect(cues.hear(`${filler}langkah satu `, null, null)).toEqual([{ revealed: 1, at: null }]);
+  expect(cues.hear("bla bla", null, null)).toEqual([]);
+});
+
 test("words reused much later do not jump over several steps", () => {
   const cues = new SpokenCues(["satu", "dua", "tiga", "empat"]);
   expect(cues.hear("Ada empat hal.", null, null)).toEqual([]);

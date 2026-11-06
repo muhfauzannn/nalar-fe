@@ -10,6 +10,7 @@ type Context = {
   page: number;
   revision: number;
   turnId: string;
+  viewport: { height: number };
   blocks: Array<{ id: string; text: string }>;
 };
 
@@ -142,6 +143,56 @@ test("the spirit reads the PDF on the board, answers in the bubble and points at
   await expect(thread.locator('[data-author="student"]')).toHaveText("Apa itu pembilang?");
   await expect(thread.locator('[data-author="tutor"]')).toHaveText("Pembilang adalah angka di atas garis.");
   expect(mock.errors).toEqual([]);
+});
+
+test("the page glides to a step below the board's edge, and scrolling keeps the pointer up", async ({ page }) => {
+  const mock = await openBoard(page);
+  await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  await mock.summon();
+  await mock.ask("Apa itu pembilang?");
+  const host = page.getByTestId("pdf-scroll-host");
+  const scroll = () => host.evaluate((element) => element.scrollTop);
+  const context = (await mock.call("read-low", "get_pdf_context")) as Context;
+  // The page is taller than the board: the plan points below what is on screen.
+  expect(context.viewport.height).toBeLessThan(0.95);
+  const drawn = await mock.call("draw-low", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "point", x: 0.5, y: 0.97, say: "lihat bagian bawah" },
+  ]));
+  expect(drawn.ok).toBe(true);
+  expect(await scroll()).toBe(0);
+  mock.send({ serverContent: { outputTranscription: { text: "Nah, lihat bagian bawah halaman ini ya." } } });
+  await expect.poll(scroll, SETTLE).toBeGreaterThan(0);
+  const pointer = page.locator("[data-tutor-pointer]");
+  await expect(pointer).toBeVisible();
+  // The student scrolling back neither puts the hand down nor breaks the next step.
+  await host.evaluate((element) => element.scrollBy({ top: -40 }));
+  await page.waitForTimeout(300);
+  await expect(pointer).toBeVisible();
+  const again = await mock.call("draw-next", "move_pdf_cursor", {
+    page: context.page, x: 0.5, y: 0.9, caption: "Masih di sini", holdSeconds: 2,
+  });
+  expect(again.ok).toBe(true);
+  expect(mock.errors).toEqual([]);
+});
+
+test("a plan for a page the student left is refused with the way back, and never apologises", async ({ page }) => {
+  const mock = await openBoard(page);
+  await expect(page.locator(".pdf-study-text-layer")).toContainText("Pembilang", SETTLE);
+  await mock.summon();
+  await mock.ask("Apa itu pembilang?");
+  const context = (await mock.call("read-old", "get_pdf_context")) as Context;
+  const refused = await mock.call("draw-old", "present_pdf_guidance", {
+    ...mock.guidance(context, [{ kind: "point", x: 0.5, y: 0.5, say: "lihat ini" }]),
+    page: context.page + 1,
+  });
+  expect(refused.ok).toBe(false);
+  expect(refused.error).toContain("get_pdf_context");
+  expect(refused.responseInstruction).toContain("Jangan meminta maaf");
+  // One refusal does not close the turn: the same plan for the open page shows.
+  const shown = await mock.call("draw-new", "present_pdf_guidance", mock.guidance(context, [
+    { kind: "point", x: 0.5, y: 0.5, say: "lihat ini" },
+  ]));
+  expect(shown.ok).toBe(true);
 });
 
 test("the spirit looks at the spot the tutor points at, and faces front again when the pointer goes", async ({ page }) => {

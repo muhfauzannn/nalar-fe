@@ -526,7 +526,7 @@ test("mobile reader stays inside the viewport and PDF failures have a retry", as
   expect(mock.errors).toEqual([]);
 });
 
-test("committed ink remains anchored on zoom and rotation while stale commands are rejected", async ({
+test("committed ink remains anchored on zoom and rotation, and a zoom never costs the next step", async ({
   page,
 }) => {
   const mock = await setup(page);
@@ -550,12 +550,12 @@ test("committed ink remains anchored on zoom and rotation while stale commands a
   expect(
     (
       await mock.call(
-        "stale-zoom",
+        "after-zoom",
         "present_pdf_guidance",
         mock.guidance(context),
       )
     ).ok,
-  ).toBe(false);
+  ).toBe(true);
   await page.getByRole("button", { name: "Putar PDF" }).click();
   await expect(page.getByRole("button", { name: "Putar PDF" })).toBeEnabled();
   await expect(page.getByTestId("tutor-highlight")).toHaveCSS("visibility", "visible");
