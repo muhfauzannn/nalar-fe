@@ -11,7 +11,7 @@ import { ActionError, useAction, useOnSuccess } from "./action-feedback";
 import { optimisticOrder, useFlip } from "../lib/motion";
 import { ListItem } from "./list-item";
 import { ReorderControls } from "./reorder-controls";
-import { StatusMenu } from "./status-menu";
+import { publicationChoices, StatusMenu } from "./status-menu";
 
 /**
  * The course's material: modules in order, each with its lessons. What is already there comes first;
@@ -88,6 +88,7 @@ function ModuleBlock({
         <span className="flex-1" />
         <StatusMenu
           status={module.status}
+          choices={publicationChoices(module.status)}
           noun={`modul ${module.title}`}
           pending={status.pending}
           onChange={(next) => status.submit({ intent: "module-status", moduleId: module.id, status: next })}
@@ -210,6 +211,7 @@ function LessonRow({
       <span className="relative z-10">
         <StatusMenu
           status={lesson.status}
+          choices={publicationChoices(lesson.status)}
           noun={`lesson ${lesson.title}`}
           pending={status.pending}
           onChange={(next) => status.submit({ intent: "lesson-status", lessonId: lesson.id, status: next })}

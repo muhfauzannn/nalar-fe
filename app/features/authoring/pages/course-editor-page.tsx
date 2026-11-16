@@ -1,4 +1,4 @@
-import { BookOpenText, ClipboardList, KeyRound, NotebookPen, Plus, Settings2, Users, X } from "lucide-react";
+import { KeyRound, Plus, Users, X } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 
@@ -7,7 +7,6 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { ChipCount } from "~/components/ui/chip";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
@@ -15,10 +14,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import { formatDateTime } from "~/features/lms/lib/format";
 import { ActionError, useAction, useResetOnSuccess } from "../components/action-feedback";
-import { ConfirmAction } from "../components/confirm-action";
 import { CourseContentTab } from "../components/course-content-tab";
+import { SaveBar, useFormPart } from "../components/editor-kit";
+import { StatusMenu, type StatusChoice } from "../components/status-menu";
+import { Sticker } from "~/features/labs/craft/stickers/Sticker";
+import { buku, catatan, dokumen, small } from "~/features/labs/craft/stickers/editor-icons";
+import type { Icon } from "~/features/labs/craft/stickers/fun";
+import { BENGKEL, gir } from "~/features/labs/craft/stickers/icons";
 import { JoinCodeCard } from "../components/join-code-card";
-import { StatusBadge } from "../components/status-badge";
 import { WorkRow } from "../components/work-row";
 import { formatJoinCode } from "../lib/form";
 import type {
@@ -35,6 +38,26 @@ import type {
 // details, status) is the last tab. "overview" stays the class tab's id so old ?tab=overview links work.
 const TABS = ["content", "quizzes", "assignments", "overview"] as const;
 type TabName = (typeof TABS)[number];
+// the same stickers and lavender chosen tab as the lesson editor's tabs
+const TAB_ICONS: Record<TabName, Icon> = { content: small(buku), quizzes: small(catatan), assignments: small(dokumen), overview: small(gir) };
+const TAB_CLASS =
+  "h-11 gap-1 pl-2.5 data-active:bg-brand-lavender-soft data-active:text-brand-lavender-foreground data-active:ring-2 data-active:ring-brand-lavender";
+
+function TabSticker({ tab, current }: { tab: TabName; current: TabName }) {
+  return (
+    <span className="-my-1.5 size-8 shrink-0" aria-hidden="true">
+      <Sticker icon={TAB_ICONS[tab]} palette={BENGKEL} loop={tab === current} replayOnHover label="" />
+    </span>
+  );
+}
+
+/** Live needs nothing; going back to draft only while no student has joined; an archive can go live again. */
+function courseChoices(status: PublicationStatus, studentCount: number): StatusChoice<PublicationStatus>[] {
+  const draft = { value: "draft" as const, label: status === "draft" ? "Draf" : "Kembali ke draf", disabled: status !== "draft" && studentCount > 0 };
+  if (status === "draft") return [draft, { value: "published", label: "Terbitkan" }];
+  if (status === "published") return [{ value: "published", label: "Terbit" }, draft, { value: "archived", label: "Arsipkan" }];
+  return [{ value: "archived", label: "Arsip" }, { value: "published", label: "Terbitkan lagi" }, draft];
+}
 
 export function CourseEditorPage({
   data,
@@ -61,6 +84,7 @@ export function CourseEditorPage({
     window.history.replaceState(window.history.state, "", url);
   }
   const { course } = data;
+  const status = useAction();
   const lessonCount = data.modules.reduce((sum, module) => sum + module.lessons.length, 0);
 
   return (
@@ -69,7 +93,13 @@ export function CourseEditorPage({
         crumbs={[{ label: "Kelola course", to: "/manage" }]}
         eyebrow={
           <>
-            <StatusBadge status={course.status} />
+            <StatusMenu
+              status={course.status}
+              noun="course"
+              pending={status.pending}
+              choices={courseChoices(course.status, data.studentCount)}
+              onChange={(next) => status.submit({ intent: "course-status", status: next })}
+            />
             <Badge variant="outline">{course.subjectName}</Badge>
           </>
         }
@@ -93,7 +123,7 @@ export function CourseEditorPage({
         }
         actions={
           course.status !== "published" ? (
-            <PublishCourse status={course.status} ready={lessonCount > 0} />
+            <PublishCourse status={course.status} ready={lessonCount > 0} action={status} />
           ) : undefined
         }
       />
@@ -101,20 +131,20 @@ export function CourseEditorPage({
       <Tabs value={tab} onValueChange={selectTab}>
         {/* The strip bleeds to the screen edge on a phone and scrolls sideways when the four do not fit. */}
         <TabsList variant="chips" className="-mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsTrigger value="content">
-            <BookOpenText aria-hidden="true" />
+          <TabsTrigger value="content" className={TAB_CLASS}>
+            <TabSticker tab="content" current={tab} />
             Materi <ChipCount>{data.modules.length}</ChipCount>
           </TabsTrigger>
-          <TabsTrigger value="quizzes">
-            <ClipboardList aria-hidden="true" />
+          <TabsTrigger value="quizzes" className={TAB_CLASS}>
+            <TabSticker tab="quizzes" current={tab} />
             Kuis <ChipCount>{data.quizzes.length}</ChipCount>
           </TabsTrigger>
-          <TabsTrigger value="assignments">
-            <NotebookPen aria-hidden="true" />
+          <TabsTrigger value="assignments" className={TAB_CLASS}>
+            <TabSticker tab="assignments" current={tab} />
             Assignment <ChipCount>{data.assignments.length}</ChipCount>
           </TabsTrigger>
-          <TabsTrigger value="overview">
-            <Settings2 aria-hidden="true" />
+          <TabsTrigger value="overview" className={TAB_CLASS}>
+            <TabSticker tab="overview" current={tab} />
             Kelas
           </TabsTrigger>
         </TabsList>
@@ -132,11 +162,8 @@ export function CourseEditorPage({
         </TabsContent>
 
         <TabsContent value="overview" className="mt-5 grid items-start gap-6 lg:grid-cols-2">
-          <div className="flex flex-col gap-6">
-            <JoinCodeCard joinCode={course.joinCode} courseStatus={course.status} />
-            <CourseStatusCard status={course.status} studentCount={data.studentCount} />
-          </div>
-          <CourseDetailsCard course={course} subjects={subjects} />
+          <JoinCodeCard joinCode={course.joinCode} courseStatus={course.status} />
+          <CourseDetails course={course} subjects={subjects} />
         </TabsContent>
       </Tabs>
     </div>
@@ -144,8 +171,15 @@ export function CourseEditorPage({
 }
 
 /** The one step left before students can join: shown in the header only while the course is not live. */
-function PublishCourse({ status, ready }: { status: PublicationStatus; ready: boolean }) {
-  const { pending, error, submit } = useAction();
+function PublishCourse({
+  status,
+  ready,
+  action: { pending, error, submit },
+}: {
+  status: PublicationStatus;
+  ready: boolean;
+  action: ReturnType<typeof useAction>;
+}) {
   return (
     <div className="flex flex-col items-start gap-1.5 md:items-end">
       <Button type="button" variant="mint" size="touch" loading={pending} onClick={() => submit({ intent: "course-status", status: "published" })}>
@@ -154,47 +188,6 @@ function PublishCourse({ status, ready }: { status: PublicationStatus; ready: bo
       {!ready && status === "draft" ? <p className="text-xs text-muted-foreground">Belum ada lesson. Siswa akan melihat course kosong.</p> : null}
       <ActionError error={error} />
     </div>
-  );
-}
-
-/** Archiving and going back to draft: rare, so they live with the class settings, not in the header. */
-function CourseStatusCard({ status, studentCount }: { status: PublicationStatus; studentCount: number }) {
-  const { pending, error, submit } = useAction();
-  const change = (next: PublicationStatus) => submit({ intent: "course-status", status: next });
-  if (status === "archived") return null;
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-[1.0625rem] font-bold">Status course</CardTitle>
-        <CardDescription>
-          {status === "published"
-            ? "Course terbit: siswa bisa bergabung dan mengerjakan isinya."
-            : "Course masih draf: belum terlihat siswa."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <ActionError error={error} />
-        <div className="flex flex-wrap gap-2">
-          {status === "published" ? (
-            <ConfirmAction
-              label="Arsipkan course"
-              title="Arsipkan course ini?"
-              description="Siswa masih bisa melihat isinya, tapi tidak ada yang bisa bergabung atau mengumpulkan tugas baru."
-              confirmLabel="Arsipkan"
-              variant="outline"
-              size="touch"
-              disabled={pending}
-              onConfirm={() => change("archived")}
-            />
-          ) : null}
-          {status === "published" && studentCount === 0 ? (
-            <Button type="button" variant="ghost" size="touch" disabled={pending} onClick={() => change("draft")}>
-              Kembali ke draf
-            </Button>
-          ) : null}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -243,7 +236,8 @@ function ListWithCreate({
 const moduleTitle = (modules: ManagedModule[], id: string | null) =>
   id ? (modules.find((module) => module.id === id)?.title ?? null) : null;
 
-function CourseDetailsCard({
+/** Name, subject and description; saved from the floating bar like every other editor form. */
+function CourseDetails({
   course,
   subjects,
 }: {
@@ -251,52 +245,39 @@ function CourseDetailsCard({
   subjects: Subject[];
 }) {
   const { fetcher, pending, error } = useAction();
+  const form = useRef<HTMLFormElement>(null);
+  const version = `${course.name}|${course.description}|${course.subjectId}`;
+  const part = useFormPart(form, version);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-[1.0625rem] font-bold">Detail course</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <fetcher.Form
-          method="post"
-          key={`${course.name}|${course.description}|${course.subjectId}`}
-          className="flex flex-col gap-4"
-        >
-          <input type="hidden" name="intent" value="course-update" />
-          <ActionError error={error} />
-          <Field>
-            <FieldLabel htmlFor="course-name">Nama course</FieldLabel>
-            <Input id="course-name" name="name" variant="soft" required maxLength={120} defaultValue={course.name} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="course-subject">Mata pelajaran</FieldLabel>
-            <NativeSelect id="course-subject" name="subjectId" variant="soft" defaultValue={course.subjectId}>
-              {subjects.map((subject) => (
-                <NativeSelectOption key={subject.id} value={subject.id}>
-                  {subject.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="course-description">Deskripsi</FieldLabel>
-            <Textarea
-              id="course-description"
-              name="description"
-              variant="soft"
-              rows={4}
-              maxLength={2000}
-              defaultValue={course.description ?? ""}
-            />
-          </Field>
-          <div className="flex justify-end">
-            <Button type="submit" variant="mint" size="xl" loading={pending} className="w-full sm:w-auto">
-              Simpan perubahan
-            </Button>
-          </div>
-        </fetcher.Form>
-      </CardContent>
-    </Card>
+    <section aria-labelledby="course-details-title" className="flex flex-col gap-4 rounded-3xl p-1">
+      <div>
+        <h2 id="course-details-title" className="font-heading text-xl font-semibold tracking-tight">Detail course</h2>
+        <p className="text-sm text-muted-foreground">Yang dilihat siswa di daftar course dan di pulau kelasnya.</p>
+      </div>
+      <fetcher.Form ref={form} method="post" key={version} className="flex flex-col gap-4">
+        <input type="hidden" name="intent" value="course-update" />
+        <ActionError error={error} />
+        <Field>
+          <FieldLabel htmlFor="course-name" className="font-semibold">Nama course</FieldLabel>
+          <Input id="course-name" name="name" variant="soft" required maxLength={120} defaultValue={course.name} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="course-subject" className="font-semibold">Mata pelajaran</FieldLabel>
+          <NativeSelect id="course-subject" name="subjectId" variant="soft" defaultValue={course.subjectId}>
+            {subjects.map((subject) => (
+              <NativeSelectOption key={subject.id} value={subject.id}>
+                {subject.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="course-description" className="font-semibold">Deskripsi</FieldLabel>
+          <Textarea id="course-description" name="description" variant="soft" rows={4} maxLength={2000} defaultValue={course.description ?? ""} />
+        </Field>
+      </fetcher.Form>
+      <SaveBar parts={[part]} pending={pending} error={error} />
+    </section>
   );
 }
 

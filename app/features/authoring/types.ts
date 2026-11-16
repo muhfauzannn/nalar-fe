@@ -126,6 +126,7 @@ export type QuizEditorData = {
   quiz: {
     id: string;
     courseId: string;
+    courseName: string;
     moduleId: string | null;
     title: string;
     instructions: string | null;
@@ -159,6 +160,7 @@ export type AssignmentEditorData = {
   assignment: {
     id: string;
     courseId: string;
+    courseName: string;
     moduleId: string | null;
     title: string;
     instructions: string;

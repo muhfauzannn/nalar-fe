@@ -1,4 +1,4 @@
-import { Check, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 
@@ -7,7 +7,6 @@ import { MathText } from "~/components/math-text";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { chipClass } from "~/components/ui/chip";
-import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
 import { LabWorkshop } from "~/features/labs/craft/lab-workshop";
 import { Sticker } from "~/features/labs/craft/stickers/Sticker";
@@ -18,10 +17,11 @@ import { formatFileSize, manageResourceFileUrl } from "~/lib/files";
 import { cn } from "~/lib/utils";
 import { ActionError, useAction } from "../components/action-feedback";
 import { ConfirmAction } from "../components/confirm-action";
+import { SaveBar } from "../components/editor-kit";
+import { publicationChoices, StatusMenu } from "../components/status-menu";
 import { ListItem } from "../components/list-item";
 import { ReorderControls } from "../components/reorder-controls";
 import { ResourceForm } from "../components/resource-form";
-import { publicationStatusLabel } from "../lib/form";
 import { optimisticOrder, useFlip } from "../lib/motion";
 import type { LessonEditorData, ManagedResource, PublicationStatus } from "../types";
 
@@ -49,20 +49,7 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
   const [draft, setDraft] = useState(lesson.content ?? "");
   const dirty = title !== lesson.title || status !== lesson.status || draft !== (lesson.content ?? "");
   const tab = useTab();
-  const saved = useSavedFlash(save.pending, save.error);
   const form = useRef<HTMLFormElement>(null);
-
-  // Ctrl/Cmd+S saves, the way every editor does
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        if (dirty) form.current?.requestSubmit();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [dirty]);
 
   const discard = () => {
     setTitle(lesson.title);
@@ -81,21 +68,15 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
         ]}
         eyebrow={
           <>
-            <NativeSelect
-              aria-label="Status lesson"
+            <StatusMenu
+              status={status}
+              noun="lesson"
+              size="md"
               form={FORM_ID}
               name="status"
-              size="sm"
-              value={status}
-              onChange={(event) => setStatus(event.target.value as PublicationStatus)}
-              className="w-auto"
-            >
-              {(["draft", "published", "archived"] as PublicationStatus[]).map((value) => (
-                <NativeSelectOption key={value} value={value}>
-                  {publicationStatusLabel[value]}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              choices={publicationChoices(lesson.status)}
+              onChange={setStatus}
+            />
             <Badge variant="outline" className="max-w-full truncate">
               {lesson.moduleTitle}
             </Badge>
@@ -166,38 +147,11 @@ export function LessonEditorPage({ data }: { data: LessonEditorData }) {
         <ResourcesPanel data={data} />
       </Panel>
 
-      {(dirty || save.pending || saved) && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
-          <div
-            role="status"
-            className="enter-up pointer-events-auto flex items-center gap-2 rounded-full bg-foreground py-1.5 pr-1.5 pl-4 text-sm text-background shadow-lg"
-          >
-            {saved && !dirty ? (
-              <span className="flex items-center gap-1.5 py-1.5 pr-2.5">
-                <Check className="size-4 text-brand-mint" aria-hidden="true" />
-                Tersimpan
-              </span>
-            ) : (
-              <>
-                <span className="pr-1">Ada perubahan</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="text-background hover:bg-background/10 hover:text-background"
-                  onClick={discard}
-                  disabled={save.pending}
-                >
-                  Batalkan
-                </Button>
-                <Button type="submit" form={FORM_ID} size="sm" variant="mint" loading={save.pending}>
-                  Simpan
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <SaveBar
+        parts={[{ dirty, save: () => form.current?.requestSubmit(), discard }]}
+        pending={save.pending}
+        error={save.error}
+      />
     </div>
   );
 }
@@ -222,22 +176,6 @@ function useTab() {
       window.history.replaceState(window.history.state, "", next === "materi" ? window.location.pathname + window.location.search : `#${next}`);
     },
   };
-}
-
-/** "Tersimpan" for two seconds after a save that went through. */
-function useSavedFlash(pending: boolean, error: string | null) {
-  const [saved, setSaved] = useState(false);
-  const was = useRef(pending);
-  useEffect(() => {
-    if (was.current && !pending && !error) {
-      setSaved(true);
-      const timer = setTimeout(() => setSaved(false), 2000);
-      was.current = pending;
-      return () => clearTimeout(timer);
-    }
-    was.current = pending;
-  }, [pending, error]);
-  return saved;
 }
 
 function Panel({ id, current, children }: { id: Tab; current: Tab; children: ReactNode }) {

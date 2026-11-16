@@ -48,7 +48,7 @@ const editor: CourseEditorData = {
 };
 const locked = query.has("locked");
 const quiz: QuizEditorData = {
-  quiz: { id: "q1", courseId: "c1", moduleId: null, title: "Kuis Bab 1 — Gelombang", instructions: "Kerjakan dengan tenang.", status: locked ? "published" : "draft", availableAt: null, dueAt: null, closesAt: null, timeLimitMinutes: 30 },
+  quiz: { id: "q1", courseId: "c1", courseName: courses[0]!.name, moduleId: null, title: "Kuis Bab 1 — Gelombang", instructions: "Kerjakan dengan tenang.", status: locked ? "published" : "draft", availableAt: null, dueAt: null, closesAt: null, timeLimitMinutes: 30 },
   questions: query.has("tanpasoal")
     ? []
     : [

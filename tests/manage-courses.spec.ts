@@ -249,3 +249,18 @@ test("a course with no module opens straight on the first module's form", async 
   await expect(page.getByText("Mulai dengan modul pertama")).toBeVisible();
   await expect(page.getByLabel("Judul modul")).toBeVisible();
 });
+
+test("the quiz editor works like the others: course in the crumbs, one status pill, settings saved from the bar", async ({ page }) => {
+  await visit(page, "?at=/manage/quizzes/q1");
+  await expect(page.getByRole("link", { name: "Fisika Kelas XI — Gelombang dan Optik" })).toHaveAttribute("href", "/manage/courses/c1?tab=quizzes");
+  const pill = page.getByLabel("Status kuis");
+  await expect(pill).toHaveValue("draft");
+  await expect(page.getByRole("button", { name: /^Arsipkan|^Tutup kuis|^Kembali ke draf/ })).toHaveCount(0);
+  // no save button until something changes
+  await expect(page.getByRole("button", { name: "Simpan", exact: true })).toHaveCount(0);
+  await page.getByLabel("Judul", { exact: true }).fill("Kuis Bab 1 — revisi");
+  await expect(page.getByRole("status").filter({ hasText: "Ada perubahan" })).toBeVisible();
+  await page.getByRole("button", { name: "Batalkan" }).click();
+  await expect(page.getByLabel("Judul", { exact: true })).toHaveValue("Kuis Bab 1 — Gelombang");
+  await expect(page.getByRole("button", { name: "Simpan", exact: true })).toHaveCount(0);
+});
