@@ -118,7 +118,7 @@ test("creating a course goes to its editor and the sheet goes away", async ({ pa
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Fisika Kelas XI");
 });
 
-test("the editor's four tabs stay on one row and are thumb-sized", async ({ page }) => {
+test("the editor's four tabs stay on one row, are thumb-sized, and open on Materi", async ({ page }) => {
   await visit(page, "?at=/manage/courses/c1");
   const tabs = page.getByRole("tab");
   await expect(tabs).toHaveCount(4);
@@ -138,6 +138,9 @@ test("the class code is one tap to copy, and its buttons are thumb-sized", async
     Object.defineProperty(navigator, "clipboard", { value: { writeText: async (text: string) => ((window as unknown as { copied: string }).copied = text) } });
   });
   await visit(page, "?at=/manage/courses/c1");
+  // the header names the code and takes you to the Kelas tab, where it is managed
+  await page.getByRole("button", { name: /Kode K7M2-QX9P/ }).click();
+  await expect(page.getByRole("tab", { name: /Kelas/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("join-code")).toHaveText("K7M2-QX9P");
   const copy = page.getByRole("button", { name: "Salin kode" });
   expect(await heightOf(copy)).toBeGreaterThanOrEqual(44);
@@ -155,6 +158,9 @@ test("the course editor lists its quizzes and assignments as rows that open thei
   await expect(rows.first()).toContainText("3 soal");
   await expect(rows.first().getByRole("link", { name: "Buka editor" })).toHaveAttribute("href", "/manage/quizzes/q1");
   expect(await heightOf(rows.first().getByRole("link", { name: "Buka editor" }))).toBeGreaterThanOrEqual(44);
+  // the form waits behind "Kuis baru" while there are quizzes to show
+  await expect(page.getByLabel("Judul kuis")).toHaveCount(0);
+  await page.getByRole("button", { name: "Kuis baru" }).click();
   expect(await heightOf(page.getByLabel("Judul kuis"))).toBeGreaterThanOrEqual(44);
 
   await page.getByRole("tab", { name: /^Assignment/ }).click();
@@ -216,4 +222,30 @@ test("a quiz students already took is locked: no way to edit or move its questio
   await expect(page.getByRole("button", { name: "Ubah" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Naikkan/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tambah soal" })).toHaveCount(0);
+});
+
+test("Materi lists modules and lessons first; adding is a quiet + that opens a one-line form", async ({ page }) => {
+  await visit(page, "?at=/manage/courses/c1");
+  await expect(page.getByRole("tab", { name: /^Materi/ })).toHaveAttribute("aria-selected", "true");
+  const modules = page.getByTestId("module-card");
+  await expect(modules).toHaveCount(2);
+  const first = modules.first();
+  await expect(first.getByTestId("lesson-row")).toHaveCount(2);
+  await expect(first.getByRole("link", { name: "Apa itu gelombang?" })).toHaveAttribute("href", "/manage/lessons/l1");
+  // one status control per row instead of a badge and two buttons
+  await expect(first.getByLabel("Status lesson Apa itu gelombang?")).toHaveValue("published");
+  await expect(first.getByRole("button", { name: /Jadikan draf|Terbitkan|Arsipkan/ })).toHaveCount(0);
+
+  await expect(page.getByLabel("Judul lesson baru")).toHaveCount(0);
+  await first.getByRole("button", { name: "Tambah lesson" }).click();
+  await expect(first.getByLabel("Judul lesson baru")).toBeFocused();
+  await expect(page.getByLabel("Judul modul")).toHaveCount(0);
+  await page.getByRole("button", { name: "Tambah modul" }).click();
+  await expect(page.getByRole("form", { name: "Modul baru" })).toBeVisible();
+});
+
+test("a course with no module opens straight on the first module's form", async ({ page }) => {
+  await visit(page, "?at=/manage/courses/c1&tanpamodul");
+  await expect(page.getByText("Mulai dengan modul pertama")).toBeVisible();
+  await expect(page.getByLabel("Judul modul")).toBeVisible();
 });

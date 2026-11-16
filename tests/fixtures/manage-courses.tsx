@@ -29,7 +29,15 @@ const subjects = [
 const editor: CourseEditorData = {
   course: { id: "c1", name: courses[0]!.name, description: courses[0]!.description, status: "published", subjectId: "s1", subjectName: "Fisika", joinCode: "K7M2QX9P" },
   studentCount: 37,
-  modules: [],
+  modules: query.has("tanpamodul") ? [] : [
+    { id: "m1", title: "Bab 1 — Gelombang", description: "Gelombang mekanik dan sifat-sifatnya.", position: 0, status: "published", lessons: [
+      { id: "l1", moduleId: "m1", title: "Apa itu gelombang?", content: null, position: 1, status: "published", resources: [{ id: "r1", type: "link", title: "Video", content: null, url: "https://example.com", file: null, position: 0 }], labs: [{ id: "lab1", labKey: "mesin-gelombang" }] },
+      { id: "l2", moduleId: "m1", title: "Periode dan frekuensi", content: null, position: 2, status: "draft", resources: [], labs: [] },
+    ] },
+    { id: "m2", title: "Bab 2 — Bunyi", description: null, position: 1, status: "draft", lessons: [
+      { id: "l3", moduleId: "m2", title: "Cepat rambat bunyi", content: null, position: 3, status: "draft", resources: [], labs: [] },
+    ] },
+  ],
   quizzes: [
     { id: "q1", title: "Kuis Bab 1 — Gelombang", status: "published", moduleId: null, dueAt: null, closesAt: null, questionCount: 3, attemptCount: 31 },
     { id: "q2", title: "Kuis Bab 2", status: "draft", moduleId: null, dueAt: null, closesAt: null, questionCount: 0, attemptCount: 0 },
