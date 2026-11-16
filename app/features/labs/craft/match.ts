@@ -1,6 +1,9 @@
 // "Rakit lab": the teacher describes a tool or drops a photo and the workshop appears to build a lab for it.
-// For now nothing is generated. The request is matched against the labs Bernalar already ships, by the words
-// a teacher would use for each one (its tools, its concepts, its story). A new lab joins by adding an entry here.
+// For now nothing is generated. The request is matched against the labs Bernalar already ships: by Gemini on
+// the server (POST /api/manage/labs/match, which also reads photos), or, when that is unreachable, by the words
+// a teacher would use for each lab (its tools, its concepts, its story) listed here. A new lab joins by adding
+// an entry here and in the server's catalog.
+import { http } from "~/lib/http";
 
 export type LabRecipe = {
   /** The parts the workshop "assembles", in order, shown while it crafts. */
@@ -44,7 +47,46 @@ export const RECIPES: Record<string, LabRecipe> = {
   },
 };
 
-export type CraftMatch = { key: string; score: number; hits: string[] };
+/** `reason` is Gemini's one line on why the lab fits; local matches carry the words they matched in `hits`. */
+export type CraftMatch = { key: string; score: number; hits: string[]; reason?: string };
+
+export type CraftAnswer = { matches: CraftMatch[]; seen: string };
+
+/**
+ * Asks the server which labs fit a description or a photo. Falls back to the local word list when the
+ * server cannot answer (no network, Gemini down), so the workshop always comes back with something honest.
+ */
+export async function askWorkshop(request: { text: string } | { file: File }, keys: string[]): Promise<CraftAnswer> {
+  try {
+    const body = "text" in request ? { text: request.text, keys } : { image: await shrink(request.file), keys };
+    const answer = await http.post<{ seen: string; matches: Array<{ key: string; reason: string }> }>("/api/manage/labs/match", body);
+    return {
+      seen: answer.seen,
+      matches: answer.matches.map((match, index) => ({ key: match.key, score: 1 / (index + 1), hits: [], reason: match.reason })),
+    };
+  } catch (error) {
+    console.warn("Bengkel lab: pencocokan server gagal, memakai daftar kata lokal", error);
+    const matches = "text" in request ? matchText(request.text, keys) : await matchImage(request.file, keys);
+    return { matches, seen: "" };
+  }
+}
+
+/** A photo as a JPEG at most 768px on its long side, base64, small enough to send in a JSON body. */
+async function shrink(file: File): Promise<{ mimeType: "image/jpeg"; data: string }> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 768 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas tidak tersedia");
+  // a transparent PNG would turn black as JPEG: lay it on white first
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const url = canvas.toDataURL("image/jpeg", 0.82);
+  return { mimeType: "image/jpeg", data: url.slice(url.indexOf(",") + 1) };
+}
 
 const normalize = (text: string) =>
   text
@@ -83,8 +125,8 @@ export function confidence(match: CraftMatch | undefined, best: number): number 
 }
 
 /**
- * A photo, for now, is read by its file name, plus its dominant colour as a tie-breaker so the same photo always
- * lands on the same lab. Real recognition comes later; the workshop UI does not change when it does.
+ * Offline fallback for a photo: read by its file name, plus its dominant colour as a tie-breaker so the same
+ * photo always lands on the same lab. Only used when the server's recognition cannot be reached.
  */
 export async function matchImage(file: File, keys: string[]): Promise<CraftMatch[]> {
   const byName = matchText(file.name.replace(/\.[a-z0-9]+$/i, ""), keys);

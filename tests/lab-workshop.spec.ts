@@ -25,3 +25,39 @@ test("a photo is matched too, and an unknown tool says so instead of forging som
   await page.getByRole("button", { name: "Rakit" }).click();
   await expect(page.getByText("Belum ada cetak biru untuk “kincir angin”")).toBeVisible({ timeout: 15_000 });
 });
+
+test("the server's answer wins: its reason is shown, and a photo goes up as a small JPEG", async ({ page }) => {
+  const sent: Array<Record<string, unknown>> = [];
+  await page.route("**/api/manage/labs/match", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    sent.push(body);
+    await route.fulfill({
+      json: body.image
+        ? { seen: "labu erlenmeyer", matches: [{ key: "reaktor-tumbukan", reason: "Labu kaca seperti tabung reaktor di lab ini." }] }
+        : { seen: "pembiasan cahaya", matches: [] },
+    });
+  });
+  await page.goto(PAGE);
+  // a 1600px photo, so the browser has something to shrink
+  await page.locator("input[type=file]").setInputFiles({
+    name: "IMG_2041.png",
+    mimeType: "image/png",
+    buffer: await page.evaluate(async () => {
+      const canvas = Object.assign(document.createElement("canvas"), { width: 1600, height: 1200 });
+      canvas.getContext("2d")!.fillRect(0, 0, 10, 10);
+      const blob = await new Promise<Blob>((done) => canvas.toBlob((b) => done(b!), "image/png"));
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    }).then((bytes) => Buffer.from(bytes)),
+  });
+  await expect(page.getByRole("heading", { name: "Reaktor tumbukan" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Labu kaca seperti tabung reaktor di lab ini.")).toBeVisible();
+  const image = sent[0].image as { mimeType: string; data: string };
+  expect(image.mimeType).toBe("image/jpeg");
+  expect(image.data.length).toBeLessThan(200_000);
+  expect(sent[0].keys).toHaveLength(4);
+
+  await page.getByRole("button", { name: "Rakit lagi" }).click();
+  await page.getByLabel("Alat atau konsep lab").fill("pembiasan cahaya");
+  await page.getByRole("button", { name: "Rakit" }).click();
+  await expect(page.getByText("Belum ada cetak biru untuk “pembiasan cahaya”")).toBeVisible({ timeout: 15_000 });
+});

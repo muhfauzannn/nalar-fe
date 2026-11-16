@@ -7,7 +7,7 @@ import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { LABS } from "~/features/labs";
 import { rasterizeSvg } from "~/features/lms/world3d/lab-picture";
 
-import { IDEAS, RECIPES, matchImage, matchText, type CraftMatch } from "./match";
+import { IDEAS, RECIPES, askWorkshop, type CraftMatch } from "./match";
 import { Sticker } from "./stickers/Sticker";
 import { BENGKEL, bengkel, gir } from "./stickers/icons";
 import "./workshop.css";
@@ -20,7 +20,7 @@ type Phase =
   | { at: "idle" }
   | { at: "crafting"; request: Request; step: number; steps: string[] }
   | { at: "done"; request: Request; matches: CraftMatch[]; shown: string }
-  | { at: "none"; request: Request };
+  | { at: "none"; request: Request; seen: string };
 
 /** How long the forge "works", per step: long enough to watch, short enough to not be a wait. */
 const STEP_MS = 650;
@@ -58,24 +58,24 @@ export function LabWorkshop({
   }, [keys.join(), phase]);
 
   async function craft(request: Request) {
-    const matching = "text" in request ? Promise.resolve(matchText(request.text, keys)) : matchImage(request.file, keys);
     const quick = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const first = (await matching)[0];
+    const pause = () => new Promise((done) => setTimeout(done, quick ? 220 : STEP_MS));
+    const opening = "text" in request ? "Membaca permintaanmu" : "Memindai foto alat";
+    // the forge starts at once; the parts it "forges" are known once the server has answered
+    setPhase({ at: "crafting", request, step: 0, steps: [opening, "Mencari cetak biru"] });
+    const [answer] = await Promise.all([askWorkshop(request, keys), pause()]);
+    const first = answer.matches[0];
     const parts = first ? (RECIPES[first.key]?.parts ?? []) : [];
-    const steps = [
-      "text" in request ? "Membaca permintaanmu" : "Memindai foto alat",
-      ...parts.map((part) => `Menempa ${part.toLowerCase()}`),
-      first ? "Menguji misi lab" : "Mencari cetak biru",
-    ];
-    setPhase({ at: "crafting", request, step: 0, steps });
+    const steps = [opening, ...parts.map((part) => `Menempa ${part.toLowerCase()}`), first ? "Menguji misi lab" : "Mencari cetak biru"];
     for (let step = 1; step <= steps.length; step++) {
-      await new Promise((done) => setTimeout(done, quick ? 220 : STEP_MS));
-      setPhase((now) => (now.at === "crafting" && now.request === request ? { ...now, step } : now));
+      setPhase((now) => (now.at === "crafting" && now.request === request ? { ...now, step, steps } : now));
+      await pause();
     }
-    const matches = await matching;
     setPhase((now) => {
       if (now.at !== "crafting" || now.request !== request) return now;
-      return matches.length ? { at: "done", request, matches, shown: matches[0].key } : { at: "none", request };
+      return first
+        ? { at: "done", request, matches: answer.matches, shown: first.key }
+        : { at: "none", request, seen: answer.seen };
     });
   }
 
@@ -200,7 +200,9 @@ export function LabWorkshop({
 
         {phase.at === "none" && (
           <Scene key="none" art={<Sticker icon={gir} palette={BENGKEL} label="Roda gigi bengkel" />}>
-            <h3 className="font-heading text-xl font-semibold tracking-tight">Belum ada cetak biru untuk “{asked(phase.request)}”</h3>
+            <h3 className="font-heading text-xl font-semibold tracking-tight">
+              Belum ada cetak biru untuk “{"text" in phase.request ? phase.request.text : phase.seen || "foto ini"}”
+            </h3>
             <p className="mt-1 max-w-md text-sm text-muted-foreground">
               Coba sebut alatnya (mikroskop, meriam, reaktor) atau konsepnya (osmosis, laju reaksi, sinus).
             </p>
@@ -300,7 +302,7 @@ function Result({
         <Badge variant="mint">{lab.subject}</Badge>
       </div>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        {match && match.hits.length > 0 ? `Cocok dengan ${match.hits.slice(0, 3).join(", ")}. ` : ""}
+        {match?.reason ? `${match.reason} ` : match && match.hits.length > 0 ? `Cocok dengan ${match.hits.slice(0, 3).join(", ")}. ` : ""}
         {LABS[shown]?.challenges ?? 3} misi, dengan cerita pembuka.
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-2">
