@@ -22,6 +22,7 @@ import {
   decodeTutorAudio,
   LevelMeter,
   TutorAudioProgressGuard,
+  tidyTutorTranscript,
   TUTOR_INPUT_MIME_TYPE,
   tutorAudioSeconds,
 } from "../lib/tutor-audio";
@@ -43,6 +44,9 @@ const CUE_LEAD_SECONDS = 0.25;
 const POINTER_LINGER_MS = 5_000;
 // How long a question may go without anything from the tutor before the turn is given up on.
 const RESPONSE_TIMEOUT_MS = 45_000;
+// After the voice looped and was cut, the model may keep streaming that loop for minutes. Once
+// its transcript has also been quiet this long, the turn is closed with what was written.
+const RUNAWAY_SETTLE_MS = 4_000;
 
 type ConnectionStatus = "idle" | "connecting" | "ready" | "responding" | "error";
 
@@ -152,9 +156,9 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string, labP
     watchdogRef.current = null;
   }, []);
   // Every sign of life from the tutor starts the wait over: it is silence that is timed, not length.
-  const armWatchdog = useCallback(() => {
+  const armWatchdog = useCallback((ms = RESPONSE_TIMEOUT_MS) => {
     clearWatchdog();
-    watchdogRef.current = setTimeout(() => onResponseTimeoutRef.current(), RESPONSE_TIMEOUT_MS);
+    watchdogRef.current = setTimeout(() => onResponseTimeoutRef.current(), ms);
   }, [clearWatchdog]);
 
   useEffect(() => {
@@ -214,6 +218,16 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string, labP
     setIsTutorSpeaking(false);
   }, []);
 
+  // The voice looped ("Haloooo…"): silence what is queued too, and stop waiting on the loop.
+  const cutRunawayRef = useRef<() => void>(() => {});
+  cutRunawayRef.current = () => {
+    stopPlayback();
+    if (statusRef.current === "responding") armWatchdog(RUNAWAY_SETTLE_MS);
+    if (audioRunawayReportedRef.current) return;
+    audioRunawayReportedRef.current = true;
+    setError("Suara tutor terhenti karena audio tidak sesuai dengan teks. Jawaban teks tetap tersedia.");
+  };
+
   const playPcm = useCallback(async (base64: string, mimeType: string, playbackEpoch: number) => {
     if (channelRef.current !== "voice" || playbackEpoch !== playbackEpochRef.current || audioProgressRef.current.isBlocked) return;
     let context = outputContextRef.current;
@@ -229,10 +243,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string, labP
     const { samples, rate } = decodeTutorAudio(base64, mimeType);
     if (samples.length === 0) return;
     if (!audioProgressRef.current.allowAudio(samples.length / rate)) {
-      if (!audioRunawayReportedRef.current) {
-        audioRunawayReportedRef.current = true;
-        setError("Suara tutor terhenti karena audio tidak sesuai dengan teks. Jawaban teks tetap tersedia.");
-      }
+      cutRunawayRef.current();
       return;
     }
     const audioBuffer = context.createBuffer(1, samples.length, rate);
@@ -312,7 +323,7 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string, labP
   }, [tickCues]);
 
   const finalizeTutorTurn = useCallback(async () => {
-    const content = outputTextRef.current.replace(/\s+/g, " ").trim();
+    const content = tidyTutorTranscript(outputTextRef.current).replace(/\s+/g, " ").trim();
     const studentEventId = activeStudentEventRef.current;
     const replyEventId = replyEventRef.current;
     const wasRedirected = activeWasRedirectedRef.current;
@@ -518,8 +529,8 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string, labP
       const outputText = serverContent?.outputTranscription?.text;
       if (outputText && activeStudentEventRef.current) {
         outputTextRef.current += outputText;
-        audioProgressRef.current.noteTranscript(outputText);
-        setOutputTranscript(outputTextRef.current);
+        if (audioProgressRef.current.noteTranscript(outputText)) cutRunawayRef.current();
+        setOutputTranscript(tidyTutorTranscript(outputTextRef.current));
         setIsTutorSpeaking(true);
       }
       const audioParts = serverContent?.modelTurn?.parts?.filter(
@@ -540,7 +551,12 @@ export function useAiTutorLive(target: AiTutorTarget, liveContext?: string, labP
       }
       // After the audio of this message is counted: the words are placed on what has arrived.
       if (outputText && activeStudentEventRef.current) hearCues(outputText);
-      if (statusRef.current === "responding" && (message.toolCall || outputText || (audioParts?.length ?? 0) > 0)) armWatchdog();
+      // Once the voice was cut, its audio is no sign of life: only new words are.
+      if (statusRef.current === "responding") {
+        if (audioProgressRef.current.isBlocked) {
+          if (message.toolCall || (outputText && audioProgressRef.current.lastChunkSpoke)) armWatchdog(RUNAWAY_SETTLE_MS);
+        } else if (message.toolCall || outputText || (audioParts?.length ?? 0) > 0) armWatchdog();
+      }
       if (outputText || (audioParts?.length ?? 0) > 0) {
         toolTurnPendingRef.current = false;
       }

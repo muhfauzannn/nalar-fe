@@ -26,27 +26,64 @@ export function tutorAudioSeconds(base64: string, mimeType: string) {
   return Math.max(0, Math.floor(bytes / 2)) / rate;
 }
 
-/** Stops native audio that keeps arriving after its spoken transcript has stalled. */
+// Three or more of the same letter in a row never happens in Indonesian ("maaf" has two).
+const ELONGATED = /(\p{L})\1{2,}/gu;
+
+/** The transcript as it should be read: a stretched "Halooooo" becomes "Halo". */
+export function tidyTutorTranscript(text: string) {
+  return text.replace(ELONGATED, "$1");
+}
+
+/**
+ * Stops native audio that has fallen into a loop. Seen with Gemini native audio: a reply that
+ * opens with "Halo" turns into "Haloooooo…" and never moves on. Its transcript then either
+ * stalls, stretches the same letter, or repeats the same word; none of these count as words
+ * spoken, so the audio budget stops growing and the voice is cut.
+ */
 export class TutorAudioProgressGuard {
+  private transcript = "";
   private transcriptLength = 0;
   private audioSeconds = 0;
   private lastTranscriptAudioSeconds = 0;
   private blocked = false;
+  // The words of the loop, and whether the latest chunk said anything beyond them.
+  private loopWords = new Set<string>();
+  private spoke = false;
 
   get isBlocked() { return this.blocked; }
+  /** The latest transcript chunk carried words that are not the loop's. */
+  get lastChunkSpoke() { return this.spoke; }
 
   reset() {
+    this.loopWords.clear();
+    this.spoke = false;
+    this.transcript = "";
     this.transcriptLength = 0;
     this.audioSeconds = 0;
     this.lastTranscriptAudioSeconds = 0;
     this.blocked = false;
   }
 
+  /** Counts the words in a transcript chunk; returns true when this chunk shows a loop. */
   noteTranscript(text: string) {
-    const length = text.trim().length;
-    if (!length) return;
-    this.transcriptLength += length;
+    if (!text) return false;
+    this.transcript += text;
+    this.spoke = wordsOf(text).some((word) => word.length > 1 && !this.loopWords.has(word));
+    // Chunks split words anywhere ("Hal" + "oooo"), so the loop is looked for at the end of it all.
+    const tail = this.transcript.slice(-120);
+    if (/(\p{L})\1{2,}/u.test(tail.slice(-text.length - 2)) || repeatsLastWord(tail)) {
+      for (const word of wordsOf(tail).slice(-4)) this.loopWords.add(word);
+      this.spoke = false;
+      if (this.blocked) return false;
+      this.blocked = true;
+      return true;
+    }
+    // Progress is measured on the tidied text, so a stretched letter adds nothing.
+    const length = spokenLength(this.transcript);
+    if (length <= this.transcriptLength) return false;
+    this.transcriptLength = length;
     this.lastTranscriptAudioSeconds = this.audioSeconds;
+    return false;
   }
 
   allowAudio(seconds: number) {
@@ -63,6 +100,22 @@ export class TutorAudioProgressGuard {
     this.audioSeconds = next;
     return true;
   }
+}
+
+function wordsOf(text: string) {
+  return tidyTutorTranscript(text).toLowerCase().match(/\p{L}+/gu) ?? [];
+}
+
+function spokenLength(text: string) {
+  return tidyTutorTranscript(text).replace(/[^\p{L}\p{N}]/gu, "").length;
+}
+
+/** "halo halo halo halo": the same word four times running is a loop, not an answer. */
+function repeatsLastWord(text: string) {
+  const words = text.toLowerCase().match(/\p{L}+/gu) ?? [];
+  if (words.length < 4) return false;
+  const last = words.slice(-4);
+  return last.every((word) => word === last[0]);
 }
 
 /** Microphone → 16 kHz PCM encoder worklet. Returns the worklet node. */
@@ -119,7 +172,21 @@ export class TutorAudioOutput {
     this.received = 0;
     this.played = [];
   }
-  noteTranscript(text: string) { this.progress.noteTranscript(text); }
+  get isBlocked() { return this.progress.isBlocked; }
+  /** The latest transcript chunk said something beyond the loop the voice fell into. */
+  get lastChunkSpoke() { return this.progress.lastChunkSpoke; }
+
+  noteTranscript(text: string) {
+    if (this.progress.noteTranscript(text)) this.cutRunaway();
+  }
+
+  /** The voice looped: what is already queued is silenced too, not only what comes next. */
+  private cutRunaway() {
+    this.stop();
+    if (this.runawayReported) return;
+    this.runawayReported = true;
+    this.onRunaway?.();
+  }
 
   /** Seconds of this turn's audio received so far, including what has not played yet. */
   receivedSeconds() {
@@ -166,10 +233,7 @@ export class TutorAudioOutput {
     const { samples, rate } = decodeTutorAudio(base64, mimeType);
     if (!samples.length) return;
     if (!this.progress.allowAudio(samples.length / rate)) {
-      if (!this.runawayReported) {
-        this.runawayReported = true;
-        this.onRunaway?.();
-      }
+      this.cutRunaway();
       return;
     }
     const buffer = this.context.createBuffer(1, samples.length, rate);

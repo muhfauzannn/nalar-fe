@@ -31,6 +31,7 @@ import {
   TUTOR_INPUT_MIME_TYPE,
   TutorAudioOutput,
   type TutorMicrophone,
+  tidyTutorTranscript,
 } from "../lib/tutor-audio";
 
 import { canPublishPdfContext, pdfOutputText, pdfQuestionContent, pdfResponseEnded } from "../lib/pdf-tutor-turn";
@@ -286,7 +287,7 @@ export function usePdfTutor(
       lines.push({ id: `${active.id}:student`, author: "student", content: question });
       setInputTranscript("");
     }
-    const answer = outputRef.current.replace(/\s+/g, " ").trim();
+    const answer = tidyTutorTranscript(outputRef.current).replace(/\s+/g, " ").trim();
     if (answer) {
       outputRef.current = "";
       lines.push({ id: crypto.randomUUID(), author: "tutor", content: answer });
@@ -295,8 +296,21 @@ export function usePdfTutor(
     if (lines.length) setMessages((current) => [...current, ...lines]);
   }, []);
 
+  const markProgressRef = useRef<() => void>(() => {});
   const markProgress = useCallback(() => {
     if (responseTimer.current) clearTimeout(responseTimer.current);
+    // The voice looped ("Haloooo…") and was cut; the model may stream that loop for minutes.
+    // Once nothing new has been said for a moment, the answer written so far is the answer.
+    if (audioRef.current?.isBlocked && hasAnswer.current) {
+      responseTimer.current = setTimeout(() => {
+        if (!mounted.current || !responding.current) return;
+        trace("audio-runaway-settled");
+        commitTurn();
+        cancelTurn(false);
+        setStatus(microphoneRef.current ? "listening" : "paused");
+      }, 4_000);
+      return;
+    }
     responseTimer.current = setTimeout(() => {
       if (!mounted.current || !responding.current) return;
       trace("response-timeout");
@@ -312,6 +326,7 @@ export function usePdfTutor(
       setStatus(microphoneRef.current ? "listening" : "paused");
     }, 45_000);
   }, [cancelTurn, commitTurn, report, trace]);
+  markProgressRef.current = markProgress;
 
   const disconnect = useCallback(async () => {
     generation.current++;
@@ -628,8 +643,14 @@ export function usePdfTutor(
       // the view revision either: turning the page must not mute an answer in progress.
       const outputText = pdfOutputText(server);
       if (active) {
+        // Counted first, so a voice that has just looped is cut before more of it is queued.
+        if (outputText) audioRef.current?.noteTranscript(outputText);
         const hasOutput = !!outputText ||
           !!server?.modelTurn?.parts?.some((part) => !part.thought && (part.text || part.inlineData));
+        // After a cut voice, its looping audio is no sign of progress: only new words are.
+        const progressed = audioRef.current?.isBlocked
+          ? !!outputText && audioRef.current.lastChunkSpoke
+          : hasOutput;
         if (hasOutput) {
           replacingTurn.current = false;
           hasAnswer.current ||= !!outputText || (voiceRef.current &&
@@ -638,12 +659,11 @@ export function usePdfTutor(
           trace("model-output");
           speakingInput.current = false;
           toolContinuation.current = false;
-          markProgress();
+          if (progressed) markProgress();
         }
         if (outputText) {
           outputRef.current += outputText;
-          setOutputTranscript(outputRef.current);
-          audioRef.current?.noteTranscript(outputText);
+          setOutputTranscript(tidyTutorTranscript(outputRef.current));
         }
         for (const part of server?.modelTurn?.parts ?? []) {
           if (
@@ -925,6 +945,8 @@ export function usePdfTutor(
         if (!mounted.current || currentGeneration !== generation.current) return;
         setError("Suara tutor terhenti karena audio tidak sesuai dengan teks. Jawaban teks tetap tersedia.");
         trace("audio-runaway-stopped");
+        // Stop waiting on the loop: the turn closes once no new words follow.
+        if (responding.current) markProgressRef.current();
       });
       await audioRef.current.prepare();
       const abort = new AbortController();
