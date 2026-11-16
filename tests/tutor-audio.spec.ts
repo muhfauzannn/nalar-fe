@@ -34,7 +34,7 @@ test("cuts a stretched greeting as soon as its transcript shows it, across chunk
   const guard = new TutorAudioProgressGuard();
   expect(guard.noteTranscript("Hal")).toBe(false);
   expect(guard.allowAudio(0.5)).toBe(true);
-  expect(guard.noteTranscript("ooo")).toBe(true);
+  expect(guard.noteTranscript("oooooo")).toBe(true);
   expect(guard.isBlocked).toBe(true);
   expect(guard.allowAudio(0.5)).toBe(false);
   // More of the loop is not progress; real words after it are.
@@ -56,14 +56,21 @@ test("punctuation and spaces add no audio budget", () => {
 
 test("cuts the same word said over and over", () => {
   const guard = new TutorAudioProgressGuard();
-  expect(guard.noteTranscript("Halo, halo, ")).toBe(false);
-  expect(guard.noteTranscript("halo, halo")).toBe(true);
+  expect(guard.noteTranscript("Halo, halo, halo, ")).toBe(false);
+  expect(guard.noteTranscript("halo, halo, halo")).toBe(true);
   expect(guard.isBlocked).toBe(true);
 });
 
-test("leaves ordinary Indonesian alone and tidies stretched words for reading", () => {
+test("leaves ordinary answers alone and tidies stretched words for reading", () => {
   const guard = new TutorAudioProgressGuard();
-  expect(guard.noteTranscript("Maaf, tunggu sebentar. Saat ini ada 1000 siswa. ")).toBe(false);
+  // Seen from real Gemini: the Roman numerals of chemistry once cut a normal answer.
+  for (const chunk of [
+    "Maaf, tunggu sebentar. Saat ini ada 1000 siswa. ",
+    "Menurut aturan IUPAC, nama senyawa FeCl3 adalah besi(III)",
+    " klorida, sedangkan FeCl2 adalah besi(II) klorida. ",
+    "Hmmm, coba buka www.contoh.id. Misalnya x, x, x, x, x, dan x. ",
+  ]) expect(guard.noteTranscript(chunk)).toBe(false);
   expect(guard.isBlocked).toBe(false);
   expect(tidyTutorTranscript("Halooooo, maaf ya")).toBe("Halo, maaf ya");
+  expect(tidyTutorTranscript("besi(III) klorida, Hmm, www")).toBe("besi(III) klorida, Hmm, www");
 });

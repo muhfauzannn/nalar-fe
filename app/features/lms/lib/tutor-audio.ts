@@ -26,8 +26,12 @@ export function tutorAudioSeconds(base64: string, mimeType: string) {
   return Math.max(0, Math.floor(bytes / 2)) / rate;
 }
 
-// Three or more of the same letter in a row never happens in Indonesian ("maaf" has two).
-const ELONGATED = /(\p{L})\1{2,}/gu;
+// Real text has up to three of the same letter in a row: "maaf", "Hmm", "www", and the Roman
+// numerals of chemistry ("besi(III) klorida"). Four or more is a stretched sound.
+const ELONGATED = /(\p{L})\1{3,}/gu;
+// A loop is only called on a long stretch, so nothing a tutor really writes is ever cut.
+const LOOPING_LETTER = /(\p{L})\1{5,}/u;
+const LOOPING_WORDS = 6;
 
 /** The transcript as it should be read: a stretched "Halooooo" becomes "Halo". */
 export function tidyTutorTranscript(text: string) {
@@ -71,8 +75,8 @@ export class TutorAudioProgressGuard {
     this.spoke = wordsOf(text).some((word) => word.length > 1 && !this.loopWords.has(word));
     // Chunks split words anywhere ("Hal" + "oooo"), so the loop is looked for at the end of it all.
     const tail = this.transcript.slice(-120);
-    if (/(\p{L})\1{2,}/u.test(tail.slice(-text.length - 2)) || repeatsLastWord(tail)) {
-      for (const word of wordsOf(tail).slice(-4)) this.loopWords.add(word);
+    if (LOOPING_LETTER.test(tail.slice(-text.length - 5)) || repeatsLastWord(tail)) {
+      for (const word of wordsOf(tail).slice(-LOOPING_WORDS)) this.loopWords.add(word);
       this.spoke = false;
       if (this.blocked) return false;
       this.blocked = true;
@@ -110,12 +114,13 @@ function spokenLength(text: string) {
   return tidyTutorTranscript(text).replace(/[^\p{L}\p{N}]/gu, "").length;
 }
 
-/** "halo halo halo halo": the same word four times running is a loop, not an answer. */
+/** "halo halo halo halo halo halo": the same word over and over is a loop, not an answer. */
 function repeatsLastWord(text: string) {
   const words = text.toLowerCase().match(/\p{L}+/gu) ?? [];
-  if (words.length < 4) return false;
-  const last = words.slice(-4);
-  return last.every((word) => word === last[0]);
+  if (words.length < LOOPING_WORDS) return false;
+  const last = words.slice(-LOOPING_WORDS);
+  // Single letters repeat in real answers ("x, x, x"), so only whole words count.
+  return last[0].length > 1 && last.every((word) => word === last[0]);
 }
 
 /** Microphone → 16 kHz PCM encoder worklet. Returns the worklet node. */
